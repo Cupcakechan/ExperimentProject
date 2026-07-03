@@ -27,3 +27,17 @@
   copy-paste file content flush-left (or as downloadable files), never
   inside indented list blocks.
 - Route: GI candidate (delivery formatting rule).
+
+## 2026-07-03 — legs detached: CapsuleGeometry has no length subdivisions
+- What broke / what happened: the critter's legs met the belly with a hard
+  boundary — no fillet — while tail/head (joining near end caps) blended fine.
+- Root cause: a snapped shell can only express fillets where vertices exist;
+  three r170 CapsuleGeometry's cylindrical wall has ZERO interior rings
+  (MEASURED empirically against node_modules source), so the belly had no
+  vertices to bend toward the legs.
+- Verification gap it exposed: no probe tied mesh density to the technique's
+  core requirement (fillets need vertices).
+- Plug shipped: custom cylinder+hemispheres capsule builder with
+  CAPSULE_RINGS_PER_UNIT (config) + suite probe asserting interior belly rings.
+- Route: project-only (three-version-specific measured fact; the general rule
+  "the artifact wins — measure it" already lives in the skill).

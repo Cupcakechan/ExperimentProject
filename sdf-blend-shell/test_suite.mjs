@@ -91,6 +91,22 @@ const solidCount = CREATURE.filter((p) => !p.paint).length;
 assert(seen.size === solidCount, `aPrim covers all ${solidCount} SOLID primitives (saw ${seen.size})`);
 assert([...seen].every((i) => !CREATURE[i].paint), 'no paint prim got a mesh (aPrim indices are all solid)');
 
+// Regression probe for the detached-legs defect: the body's cylindrical
+// wall must have interior vertex rings (three's CapsuleGeometry had ZERO,
+// so the belly could not bend into the leg fillets). Body axis is baked
+// along X, so rings show up as distinct interior x values. Expected with
+// len 1.0 x 14 rings/unit: 13 interior rings; assert a loose floor of 5.
+const bodyIdx = CREATURE.findIndex((p) => p.id === 'body');
+const pos = geo.getAttribute('position');
+const interiorX = new Set();
+for (let i = 0; i < pos.count; i++) {
+  if (aPrim.array[i] === bodyIdx) {
+    const x = pos.getX(i);
+    if (x > -0.4999 && x < 0.4999) interiorX.add(x.toFixed(3));
+  }
+}
+assert(interiorX.size >= 5, `body belly has interior vertex rings (saw ${interiorX.size}, need >= 5) — fillets have vertices to bend`);
+
 // Material: uniform arrays are padded to exactly MAX_PRIMS, count is honest.
 const mat = createBlendMaterial(CREATURE);
 assert(mat.uniforms.uA.value.length === MAX_PRIMS, 'uA padded to MAX_PRIMS');

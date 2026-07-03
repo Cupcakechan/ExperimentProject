@@ -8,8 +8,28 @@
 
 import * as THREE from 'three';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
+import { CAPSULE_RINGS_PER_UNIT } from '../config.js';
 
-const UP = new THREE.Vector3(0, 1, 0); // CapsuleGeometry's built-in axis
+const UP = new THREE.Vector3(0, 1, 0); // our capsules are authored along +Y
+const RADIAL_SEGS = 16;
+
+// three r170's CapsuleGeometry has NO subdivisions along its length
+// (MEASURED: zero vertex rings on the cylindrical wall) — and a snapped
+// shell can only show fillets where vertices exist to bend, so limbs
+// joining a long capsule mid-cylinder looked detached. Build capsules
+// ourselves: an open cylinder with explicit rings + two hemisphere caps,
+// authored along +Y and centered at the origin like CapsuleGeometry was.
+function capsuleGeometry(r, len) {
+  const rings = Math.max(1, Math.round(len * CAPSULE_RINGS_PER_UNIT));
+  const tube = new THREE.CylinderGeometry(r, r, len, RADIAL_SEGS, rings, true);
+  const top = new THREE.SphereGeometry(r, RADIAL_SEGS, 8, 0, Math.PI * 2, 0, Math.PI / 2);
+  top.translate(0, len / 2, 0);
+  const bottom = new THREE.SphereGeometry(r, RADIAL_SEGS, 8, 0, Math.PI * 2, Math.PI / 2, Math.PI / 2);
+  bottom.translate(0, -len / 2, 0);
+  const merged = mergeGeometries([tube, top, bottom], false);
+  [tube, top, bottom].forEach((g) => g.dispose());
+  return merged;
+}
 
 function primGeometry(prim) {
   const a = new THREE.Vector3(...prim.a);
@@ -22,12 +42,12 @@ function primGeometry(prim) {
     return geo;
   }
 
-  // CapsuleGeometry is authored along +Y and centered at the origin,
-  // so: build at the right length, rotate Y onto the a→b direction,
+  // Capsules are authored along +Y and centered at the origin, so:
+  // build at the right length, rotate Y onto the a→b direction,
   // then move to the segment midpoint.
   const dir = new THREE.Vector3().subVectors(b, a);
   const len = dir.length();
-  const geo = new THREE.CapsuleGeometry(prim.r, len, 6, 16);
+  const geo = capsuleGeometry(prim.r, len);
   const quat = new THREE.Quaternion().setFromUnitVectors(UP, dir.normalize());
   const mid = new THREE.Vector3().addVectors(a, b).multiplyScalar(0.5);
   const bake = new THREE.Matrix4().compose(mid, quat, new THREE.Vector3(1, 1, 1));

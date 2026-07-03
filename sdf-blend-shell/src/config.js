@@ -50,3 +50,9 @@ export const ORBIT_TARGET = [0, 0.6, 0]; // roughly the critter's center of mass
 // merely TOUCHING another primitive's surface don't flicker between states.
 export const TUCK_DEPTH = 0.02;
 export const BURY_EPS = 0.005;
+// Mesh density along a capsule's length (rings per world unit). three r170's
+// CapsuleGeometry has NO length subdivisions (measured: zero interior rings),
+// so limbs joining a long body mid-cylinder had no vertices to bend into the
+// blend fillet — buildShell constructs capsules from cylinder + hemispheres
+// using this. Raise it if a join on a LONG capsule still looks starved.
+export const CAPSULE_RINGS_PER_UNIT = 14;

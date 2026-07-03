@@ -1,6 +1,6 @@
 # PROJECT_HANDOFF — SDF Blend-Shell Experiment
 
-_Last updated: 2026-07-03 (tuck browser-confirmed; CRITTER pass delivered — limbs from data + painted eyes, awaiting browser confirmation)_
+_Last updated: 2026-07-03 (critter browser-tested: eyes work, legs were detached; ring-density fix delivered, awaiting browser confirmation)_
 
 ## What this is
 An experiment replicating the "SDF blend-shell" character technique from a
@@ -46,7 +46,17 @@ the `sdf-blend-shell\` subfolder. Git commands run from the CONTAINER root.
   MAX_PRIMS 8 -> 12 (cost note: every field eval loops MAX_PRIMS, now
   per-pixel). Old torso/head/arm creature replaced (lives in git history).
   Suite ALL PASS (burial + eye-visibility probes recomputed, hand-computed,
-  for the new geometry). NOT yet browser-confirmed.
+  for the new geometry).
+- Browser result: eyes visible and glued to the skin; head/tail joins clean;
+  LEGS DETACHED (hard boundary at the belly). Diagnosed + fixed (this pass):
+  three r170 CapsuleGeometry has ZERO length subdivisions (measured), so the
+  belly had no vertices to bend into leg fillets. buildShell now constructs
+  capsules as cylinder + hemispheres with CAPSULE_RINGS_PER_UNIT (config, 14)
+  rings; suite probes interior belly rings (14 measured). NOT yet
+  browser-confirmed. See LESSONS.md.
+- Eye upgrade queued (Daniel likes the reference's white-eyeball look):
+  data-only option = two paint prims per eye (white sclera + dark pupil);
+  3D option = kCap round.
 - Cost note: shading is now ~5 field evaluations per pixel (was per-vertex).
   Fine on desktop; would need measuring before any mobile claim.
 - History quirk (accepted, left alone): Stage A commit appears twice
@@ -59,9 +69,11 @@ the `sdf-blend-shell\` subfolder. Git commands run from the CONTAINER root.
   `color` optional (SHELL_COLOR fallback); `paint: true` = color-only decal
   prim (eyes): tints skin, no surface/mesh/burial. A paint prim must poke
   through its host's skin: |offset| + r > host.r (suite-checked).
-- `src/render/buildShell.js` — one three.js geometry per primitive, baked into
-  WORLD space, merged into a single geometry. Bakes `aPrim` (per-vertex
-  primitive index).
+- `src/render/buildShell.js` — one geometry per SOLID primitive (paint prims
+  skipped), baked into WORLD space, merged. Bakes `aPrim` (per-vertex REGISTRY
+  index). Capsules are built as cylinder + 2 hemispheres with
+  CAPSULE_RINGS_PER_UNIT rings along the length (three's CapsuleGeometry has
+  none — see LESSONS.md).
 - `src/render/blendMaterial.js` — the heart: FIELD_GLSL (sdCapsule +
   polynomial smin + mapSDF + sdfNormal + blendColor and their uniforms) is
   ONE shared chunk injected into BOTH shaders. Vertex: optional uAnimMat
