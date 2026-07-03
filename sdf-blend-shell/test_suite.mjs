@@ -308,29 +308,68 @@ assert(buryT(-BURY_EPS - BURY_BAND) === 1, 'buryT at full depth = 1 (fully tucke
 assert(Math.abs(buryT(-BURY_EPS - BURY_BAND / 2) - 0.5) < 1e-9, 'buryT at half depth = 0.5 exactly (hand-computed)');
 assert(buryT(0.1) === 0, 'exposed verts never tuck (buryT = 0)');
 
-// Roam: deterministic, bounded, alive, resettable.
+// Roam: deterministic, seeded, bounded, separated, resettable.
 const { createRoam } = await import('./src/roam.js');
-const { ROAM_SOFT_RADIUS, ROAM_SPEED, BOB_AMPLITUDE, BOB_SPEED } = await import('./src/config.js');
+const { ROAM_SPEED, ROAM_HARD_RADIUS, ROAM_SEP_RADIUS, GROUND_RADIUS, BOB_AMPLITUDE, BOB_SPEED } = await import('./src/config.js');
 assert(ROAM_SPEED > 0 && BOB_AMPLITUDE > 0 && BOB_SPEED > 0, 'roam/bob constants are live');
-const roamA = createRoam();
-const roamB = createRoam();
+assert(GROUND_RADIUS > ROAM_HARD_RADIUS, `the ground outreaches the roamers (${GROUND_RADIUS} > ${ROAM_HARD_RADIUS}) — nobody walks off the world`);
+
+// Determinism + reset (same seed = same path, forever).
+const roamA = createRoam(0);
+const roamB = createRoam(0);
 let poseA = null;
 let poseB = null;
-let maxR = 0;
-for (let i = 0; i < 5000; i++) {
+for (let i = 0; i < 2000; i++) {
   poseA = roamA.update(1 / 60);
   poseB = roamB.update(1 / 60);
-  maxR = Math.max(maxR, Math.hypot(poseA.x, poseA.z));
 }
-assert(poseA.x === poseB.x && poseA.z === poseB.z && poseA.heading === poseB.heading, 'roam is deterministic (two instances, identical 5000-step paths)');
-assert(maxR > 0.2, `roam is not inert (max radius ${maxR.toFixed(2)} > 0.2 over ~83s)`);
-assert(maxR < ROAM_SOFT_RADIUS + 0.6, `steering bounds the wander (max radius ${maxR.toFixed(2)} < ${ROAM_SOFT_RADIUS} + 0.6)`);
+assert(poseA.x === poseB.x && poseA.z === poseB.z && poseA.heading === poseB.heading, 'roam is deterministic (same seed, identical 2000-step paths)');
 assert(Number.isFinite(poseA.heading), 'heading stays finite');
 roamA.reset();
 const fresh = roamA.update(1 / 60);
-const roamC = createRoam();
-const freshC = roamC.update(1 / 60);
+const freshC = createRoam(0).update(1 / 60);
 assert(fresh.x === freshC.x && fresh.z === freshC.z, 'reset() restores the exact initial state');
+
+// Seeds diverge — the field must not wander in unison.
+let s0 = createRoam(0);
+let s1 = createRoam(1);
+let p0 = null;
+let p1 = null;
+for (let i = 0; i < 300; i++) {
+  p0 = s0.update(1 / 60);
+  p1 = s1.update(1 / 60);
+}
+assert(Math.hypot(p0.x - p1.x, p0.z - p1.z) > 0.3, 'different seeds walk different paths');
+
+// Separation heading term is not inert: a close neighbor changes the path.
+const lone = createRoam(0);
+const crowded = createRoam(0);
+const loneP = lone.update(1 / 60);
+const crowdedP = crowded.update(1 / 60, [{ x: loneP.x - 0.1, z: loneP.z }]);
+assert(loneP.heading !== crowdedP.heading || loneP.x !== crowdedP.x, 'a neighbor inside SEP_RADIUS alters the update');
+
+// The field simulation, MEASURED (3 seeded roamers, mutual separation,
+// ~100 simulated seconds): closest approach 1.234, max radius exactly
+// 2.400 (the hard clamp). Thresholds set from measurement with margin.
+const fieldRoams = [createRoam(0), createRoam(1), createRoam(2)];
+const fieldPos = fieldRoams.map(() => ({ x: 0, z: 0 }));
+let minPair = Infinity;
+let fieldMaxR = 0;
+for (let i = 0; i < 6000; i++) {
+  fieldRoams.forEach((r, j) => {
+    const p = r.update(1 / 60, fieldPos.filter((_, k) => k !== j));
+    fieldPos[j] = { x: p.x, z: p.z };
+    fieldMaxR = Math.max(fieldMaxR, Math.hypot(p.x, p.z));
+  });
+  for (let a = 0; a < 3; a++) {
+    for (let b = a + 1; b < 3; b++) {
+      minPair = Math.min(minPair, Math.hypot(fieldPos[a].x - fieldPos[b].x, fieldPos[a].z - fieldPos[b].z));
+    }
+  }
+}
+assert(minPair > 1.0, `actors never touch (closest approach ${minPair.toFixed(3)} > 1.0, MEASURED 1.234)`);
+assert(fieldMaxR <= ROAM_HARD_RADIUS + 1e-9, `hard clamp holds (max radius ${fieldMaxR.toFixed(3)} <= ${ROAM_HARD_RADIUS})`);
+assert(ROAM_SEP_RADIUS > 1.0, 'personal space exceeds the touch threshold');
 
 // World-space lighting: the fragment shader must rotate the creature-space
 // SDF normal by the model matrix, or the light turns with the roamer.

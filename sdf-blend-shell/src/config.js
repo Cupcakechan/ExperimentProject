@@ -37,8 +37,8 @@ export const COLOR_POW = 2.0;
 // Scene / camera
 export const BACKGROUND_COLOR = 0x14161a;
 export const CAMERA_FOV = 50;
-export const CAMERA_START = [-1.6, 1.3, 3.2]; // x, y, z — angled toward the face
-export const ORBIT_TARGET = [0, 0.6, 0]; // roughly the critter's center of mass
+export const CAMERA_START = [-2.8, 2.4, 5.4]; // x, y, z — pulled back to frame the field
+export const ORBIT_TARGET = [0, 0.45, 0]; // center of the field
 // Buried-geometry tuck (seam fix). A vertex starting inside a DIFFERENT
 // primitive sinks this far beneath the skin instead of z-fighting the mesh
 // that owns that patch of surface. BURY_EPS is the dead-zone so vertices
@@ -55,23 +55,26 @@ export const CAPSULE_RINGS_PER_UNIT = 14;
 // paint prim's surface its color fades to nothing. Small = crisp cartoon
 // edges (the reference look); larger = airbrushed.
 export const PAINT_EDGE = 0.02;
+
 // Toon outline: a second draw of the shell snapped to the surface this far
 // OUTSIDE the skin (world units), flat-colored, back faces only. Keep it
 // SMALLER than the thinnest solid prim radius or the ink swallows thin
 // parts (suite-enforced per creature).
 export const OUTLINE_WIDTH = 0.035;
 export const OUTLINE_COLOR = 0x0d0f12;
+
 // Burial ramp width (world units of depth): the tuck fades IN over this
 // band instead of switching on at BURY_EPS. Binary tucking made 0.055-tall
 // triangle cliffs at every burial boundary, whose back faces flashed as
 // black slivers in the ink pass. Bigger = softer creases; smaller = crisper.
 export const BURY_BAND = 0.04;
+
 // Roaming (root motion): the whole creature drifts around the stage.
 // Heading integrates a sum-of-sines turn rate (deterministic — no RNG),
 // plus a steering term that bends it back toward center beyond the soft
 // radius. Speeds are world units / second; turn params are rad/s.
 export const ROAM_SPEED = 0.35;
-export const ROAM_SOFT_RADIUS = 0.9; // beyond this, steering ramps in
+export const ROAM_SOFT_RADIUS = 1.8; // beyond this, steering ramps in (field-sized)
 export const ROAM_STEER_GAIN = 2.2;
 export const ROAM_TURN_A = 1.2;
 export const ROAM_TURN_W1 = 0.7;
@@ -82,3 +85,25 @@ export const ROAM_TURN_PHASE = 2.0;
 // Idle bob: subtle whole-body rise/fall while roaming (no stepping yet).
 export const BOB_AMPLITUDE = 0.035;
 export const BOB_SPEED = 4.0;
+
+// The field (all creatures share one stage). Separation steering: each
+// roamer turns away from any neighbor inside SEP_RADIUS, gain scaled by
+// how deep the intrusion is — same proportional-steering pattern as the
+// boundary. Spawns sit on a ring so nobody starts inside anybody.
+export const ROAM_SEP_RADIUS = 1.4;
+export const ROAM_SEP_GAIN = 3.0;
+// Heading steering alone cannot GUARANTEE separation (measured: two
+// roamers reached 0.008 apart) — the positional push is the guarantee:
+// units/second of shove per unit of intrusion depth.
+export const ROAM_SEP_PUSH = 2.5;
+export const ROAM_SPAWN_RADIUS = 1.1;
+// Hard clamp: steering fights (boundary vs separation) let a roamer
+// overshoot to r=3.29 (measured) — past the 2.9 ground disc. Nobody
+// exceeds this radius, ever.
+export const ROAM_HARD_RADIUS = 2.4;
+
+// Ground disc: a flat, unlit stage floor (toon look wants flat). Radius
+// must exceed the roamers' hard extent (soft radius + overshoot) so nobody
+// ever wanders off the edge of the world — suite-enforced.
+export const GROUND_RADIUS = 2.9;
+export const GROUND_COLOR = 0x1b1f24;

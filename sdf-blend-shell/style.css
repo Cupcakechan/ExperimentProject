@@ -36,23 +36,3 @@ canvas {
   vertical-align: middle;
   margin: 0 8px;
 }
-
-.creature-row {
-  margin-bottom: 8px;
-}
-
-#controls button {
-  font: 12px/1 system-ui, sans-serif;
-  color: #9aa3ad;
-  background: #1e2127;
-  border: 1px solid #2c313a;
-  border-radius: 4px;
-  padding: 5px 10px;
-  margin-right: 6px;
-  cursor: pointer;
-}
-
-#controls button.active {
-  color: #e8ecf1;
-  border-color: #4fd1a5; /* the project's mint — active creature reads at a glance */
-}

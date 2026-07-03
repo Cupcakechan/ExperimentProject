@@ -1,6 +1,6 @@
 # PROJECT_HANDOFF — SDF Blend-Shell Experiment
 
-_Last updated: 2026-07-03 (roam browser-confirmed + pushed; STAGE 2 per-prim plumbing delivered — parity pass, awaiting browser confirmation)_
+_Last updated: 2026-07-03 (stage 2 browser-confirmed + pushed; THE FIELD delivered — all creatures on one stage, awaiting browser confirmation)_
 
 ## What this is
 An experiment replicating the "SDF blend-shell" character technique from a
@@ -142,12 +142,21 @@ the `sdf-blend-shell\` subfolder. Git commands run from the CONTAINER root.
   moves, non-animated prims stay identity, peak movement unchanged).
   Uniform budget note: 12 mat4s = 48 vec4 slots on top of the prim arrays
   — fine on desktop (1024+), would need auditing for a mobile claim.
-  ZERO visible change expected in the browser. NOT yet browser-confirmed.
-- FIELD queued (Daniel's ask, after this stage): all creatures roaming ONE
-  shared stage simultaneously — N rigs, one roam instance each with
-  per-creature PHASE OFFSETS (deterministic variation, or they wander in
-  unison), camera pulled back, switcher becomes creature-focus or goes
-  away. Its own options round when stage 2 confirms.
+  Browser-confirmed ("all set") and pushed (`4b05142`).
+- THE FIELD delivered (this pass, Option 2 of the field round): all three
+  creatures roam ONE stage. actors[] in main.js (rig + skin/ink materials +
+  seeded roam + animIdx + bob phase each; nothing switches, nothing
+  disposes); ground disc (CircleGeometry, MeshBasicMaterial — flat/unlit,
+  GROUND_RADIUS 2.9); switcher/keys REMOVED, slider drives all six
+  materials; camera pulled back. roam.js: createRoam(seed) — seeded spawn
+  ring + wander phase; separation = heading steering (polite turning) PLUS
+  a positional push (the GUARANTEE) + hard radius clamp 2.4.
+  MEASURED (artifact-wins, twice): heading-only separation failed at 0.008
+  apart and steering fights overshot to r=3.29 (off the disc) — the push +
+  clamp fixed both; re-measured closest approach 1.234, max radius exactly
+  2.400; suite encodes the MEASURED thresholds and simulates the 3-actor
+  field every run. Separation reads last-frame positions (1-frame lag,
+  order-independent). NOT yet browser-confirmed.
 - Deep Research question answered: deferred as low-ROI for blob critters;
   conditional next steps noted — the original poster's public demo/code
   (primary source) and targeted stylized-proportion research IF creatures
@@ -196,17 +205,17 @@ the `sdf-blend-shell\` subfolder. Git commands run from the CONTAINER root.
   pose in lockstep. Today's content is still the single-prim wave (sine,
   ABSOLUTE from rest, cannot drift); IK (stage 3) writes many prims per
   frame through the same helper. Registry never mutated.
-- `src/ui/controls.js` — DOM layer: creature switcher buttons + the `uK`
-  slider; callbacks in (onSelect/onK), returns { setActive } — a uniform
-  no-op interface when headless, so callers never guard.
+- `src/ui/controls.js` — DOM layer: the `uK` slider only (switcher removed
+  with the gallery); onK callback drives every actor's two materials.
 - `src/config.js` — all tunables: BLEND_K 0.25 (slider 0.02–0.6), SNAP_ITERS 5,
   MAX_PRIMS 12, COLOR_SOFT 0.015, COLOR_POW 2.0, wave: 'tail' about X,
   0.6 rad @ 2.5, TUCK_DEPTH 0.02, BURY_EPS 0.005, colors, camera (start
   [-1.6,1.3,3.2], target [0,0.6,0]).
-- `src/main.js` — scene/camera/OrbitControls/loop + GALLERY STATE:
-  setCreature(i) disposes the old shell + outline (shared geometry disposed
-  ONCE) and rebuilds both; keys 1..N mirror the buttons; slider k persists
-  and feeds BOTH materials; loop calls updateAnim for skin AND ink.
+- `src/main.js` — scene/camera/OrbitControls/loop + THE FIELD: actors[]
+  built once (per creature: shared geometry, skin+ink materials, rig,
+  createRoam(index), animIdx, bob phase, last-frame pos for the others'
+  separation); ground disc; loop per actor: updateAnim x2, roam.update(dt,
+  others), rig transform + phase-offset bob.
 
 ## Gotchas (project-specific)
 - **No backticks inside the GLSL template literals** (see LESSONS.md).
@@ -220,11 +229,12 @@ the `sdf-blend-shell\` subfolder. Git commands run from the CONTAINER root.
   pattern (see LESSONS.md).
 
 ## Open items / next steps
-1. **Daniel:** verify stage 2 — a PARITY pass: everything must look and
-   move EXACTLY as before (waves, roam, ink, eyes, slider, switching).
-   Any visible difference is a defect.
+1. **Daniel:** verify the field — three creatures roaming one stage,
+   veering politely around each other, never touching, never leaving the
+   ground disc; slider melts all three at once; performance smooth.
 2. On confirmation: git checkpoint (from `Experiment Project\` root).
-   Then the FIELD (options round), then STAGE 3 (IK stepping).
+   Then STAGE 3: IK foot stepping (its own options round — the legs
+   finally stop sliding). Terrarium (population play) remains queued.
 3. Queued menu (each its own options round): IK leg stepping (multi-pass,
    staged), more practice creatures exercising the kCap vocabulary
    (antennae, thin ears, 3D-geometry eyes are now legal), OUTLINE_WIDTH /
