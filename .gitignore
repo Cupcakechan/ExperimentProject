@@ -1,16 +1,4 @@
-# Dependencies / caches (three.js comes from the CDN import map; node_modules
-# only ever exists locally if we install something for a test probe)
 node_modules/
-package.json
-package-lock.json
-
-# Editor / IDE
-.vscode/
-
-# OS cruft
-.DS_Store
-Thumbs.db
-
-# Ad-hoc test probes (throwaway), EXCEPT the committed module-health suite
-test_*.mjs
-!test_suite.mjs
+   .vscode/
+   .DS_Store
+   Thumbs.db
