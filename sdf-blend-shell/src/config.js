@@ -44,3 +44,9 @@ export const BACKGROUND_COLOR = 0x14161a;
 export const CAMERA_FOV = 50;
 export const CAMERA_START = [0, 1.1, 3.8]; // x, y, z
 export const ORBIT_TARGET = [0, 0.25, 0]; // roughly the creature's center of mass
+// Buried-geometry tuck (seam fix). A vertex starting inside a DIFFERENT
+// primitive sinks this far beneath the skin instead of z-fighting the mesh
+// that owns that patch of surface. BURY_EPS is the dead-zone so vertices
+// merely TOUCHING another primitive's surface don't flicker between states.
+export const TUCK_DEPTH = 0.02;
+export const BURY_EPS = 0.005;

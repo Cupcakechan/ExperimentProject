@@ -1,6 +1,6 @@
 # PROJECT_HANDOFF — SDF Blend-Shell Experiment
 
-_Last updated: 2026-07-03 (Stage B browser-confirmed + polish pass delivered: per-pixel shading, awaiting browser confirmation)_
+_Last updated: 2026-07-03 (per-pixel polish browser-confirmed; buried-geometry tuck delivered, awaiting browser confirmation)_
 
 ## What this is
 An experiment replicating the "SDF blend-shell" character technique from a
@@ -34,10 +34,14 @@ the `sdf-blend-shell\` subfolder. Git commands run from the CONTAINER root.
 ## Current state
 - Stage A + Stage B browser-confirmed and pushed (`95e09ab`, `54fcc20`);
   gitignore housekeeping done (package files untracked, flush-left patterns).
-- Polish pass code complete (only `blendMaterial.js` changed); suite ALL PASS.
-  NOT yet confirmed in a real browser (GLSL only truly compiles there).
-  Expected visible change: toon band edges become smooth curves instead of
-  wobbling along the tessellation; color gradients get pixel-crisp.
+- Per-pixel polish browser-confirmed and pushed. It exposed the next defect:
+  a faint stitched seam at glancing angles near the head — DOUBLE COVERAGE
+  (buried mesh patches snapping onto skin another mesh owns, z-fighting).
+- Fix delivered (this pass): buried-geometry tuck, the post's own trick.
+  Vertices starting > BURY_EPS inside a DIFFERENT primitive sink TUCK_DEPTH
+  beneath the surface after snapping. Checked against live uniforms, so it
+  holds mid-wave. Suite ALL PASS (40 probes incl. hand-computed burial
+  distances). NOT yet browser-confirmed.
 - Cost note: shading is now ~5 field evaluations per pixel (was per-vertex).
   Fine on desktop; would need measuring before any mobile claim.
 - History quirk (accepted, left alone): Stage A commit appears twice
@@ -67,7 +71,7 @@ the `sdf-blend-shell\` subfolder. Git commands run from the CONTAINER root.
   live uniform update, graceful no-op if the container is missing.
 - `src/config.js` — all tunables: BLEND_K 0.25 (slider 0.02–0.6), SNAP_ITERS 5,
   MAX_PRIMS 8, COLOR_SOFT 0.015, COLOR_POW 2.0, WAVE_AMPLITUDE 0.5 rad,
-  WAVE_SPEED 1.6, colors, camera.
+  WAVE_SPEED 1.6, TUCK_DEPTH 0.02, BURY_EPS 0.005, colors, camera.
 - `src/main.js` — scene/camera/OrbitControls/loop; wires `uAnimPrim`, calls
   `updateAnim(material, clock.getElapsedTime())` per frame;
   `frustumCulled = false` on the shell.
@@ -84,10 +88,11 @@ the `sdf-blend-shell\` subfolder. Git commands run from the CONTAINER root.
   pattern (see LESSONS.md).
 
 ## Open items / next steps
-1. **Daniel:** run the polish pass in the browser — band edges must be smooth
-   curves (compare mid-wave and at slider extremes), console clean.
-2. On confirmation: git checkpoint (from `Experiment Project\` root), then
-   the exploration phase — Daniel wants to build on and refine this. Menu to
-   present (each its own options round): toon outline via SDF offset surface,
-   second creature from pure data / multi-creature, thin-part blend-radius
-   caps, IK stepping.
+1. **Daniel:** verify the tuck fix in the browser — find the angle that showed
+   the seam on the head; it must be gone, including mid-wave at the shoulder.
+2. On confirmation: git checkpoint (from `Experiment Project\` root).
+3. Then the CREATURE-SHAPING pass (Daniel's ask: legs, arms, eyes — a real
+   critter). Options round required; key design question flagged: eyes as
+   blended prims dissolve into the head at current k — needs per-prim blend
+   caps or non-blended decal prims. Menu beyond that (each its own round):
+   toon outline via SDF offset surface, multi-creature from data, IK stepping.

@@ -7,6 +7,13 @@
 // primitive meshes converge onto the SAME surface, so seams
 // cease to exist.
 //
+// Buried-geometry tuck: a vertex that STARTS inside a DIFFERENT
+// primitive would otherwise snap onto the same surface another
+// mesh already covers — two coincident triangle layers z-fight as
+// a faint stitched seam at glancing angles. Such vertices instead
+// sink TUCK_DEPTH beneath the skin, hidden. Checked against live
+// uniforms, so it stays correct while the arm swings into the body.
+//
 // Polish pass (per-pixel shading): normals and colors are now
 // computed in the FRAGMENT shader. Previously they were computed
 // per-vertex and linearly interpolated across triangles, so the
@@ -18,7 +25,7 @@
 // ============================================================
 
 import * as THREE from 'three';
-import { BLEND_K, SNAP_ITERS, MAX_PRIMS, SHELL_COLOR, COLOR_SOFT, COLOR_POW } from '../config.js';
+import { BLEND_K, SNAP_ITERS, MAX_PRIMS, SHELL_COLOR, COLOR_SOFT, COLOR_POW, TUCK_DEPTH, BURY_EPS } from '../config.js';
 
 // NOTE: three.js auto-prepends 'position', the matrices, and precision
 // headers to ShaderMaterial shaders (never redeclare those) — but CUSTOM
@@ -104,6 +111,8 @@ attribute float aPrim;
 
 uniform mat4 uAnimMat;
 uniform int uAnimPrim;
+uniform float uTuck;
+uniform float uBuryEps;
 
 varying vec3 vPos;
 
@@ -113,12 +122,23 @@ void main() {
   // Geometry is baked in world space, so 'position' is already a world point
   // sitting on its OWN primitive's REST surface.
   vec3 p = position;
+  int own = int(aPrim + 0.5); // +0.5 makes the float->int cast robust
 
-  // If this vertex belongs to the animated primitive, rigidly follow it
-  // first (aPrim is a float attribute; +0.5 makes the int cast robust).
-  if (int(aPrim + 0.5) == uAnimPrim) {
+  // If this vertex belongs to the animated primitive, rigidly follow it first.
+  if (own == uAnimPrim) {
     p = (uAnimMat * vec4(p, 1.0)).xyz;
   }
+
+  // Burial check BEFORE snapping: does this vertex start inside a
+  // primitive that is not its own? Then another mesh owns this patch of
+  // skin, and this vertex must hide beneath it instead of z-fighting it.
+  float dOther = 1e9;
+  for (int i = 0; i < MAX_PRIMS; i++) {
+    if (i < uCount && i != own) {
+      dOther = min(dOther, sdCapsule(p, uA[i], uB[i], uR[i]));
+    }
+  }
+  bool buried = dOther < -uBuryEps;
 
   // Slide onto the combined surface: step along the gradient by the
   // signed distance. Converges in a few iterations because we start close.
@@ -126,8 +146,13 @@ void main() {
     p -= sdfNormal(p) * mapSDF(p);
   }
 
-  // Hand the snapped surface point to the fragment shader; interpolated
-  // points stay close enough to the surface for field evaluation.
+  // Buried vertices tuck themselves under the skin (the post's trick).
+  if (buried) {
+    p -= sdfNormal(p) * uTuck;
+  }
+
+  // Hand the surface point to the fragment shader; interpolated points
+  // stay close enough to the surface for field evaluation.
   vPos = p;
   gl_Position = projectionMatrix * modelViewMatrix * vec4(p, 1.0);
 }
@@ -185,6 +210,8 @@ export function createBlendMaterial(prims) {
       uColorPow: { value: COLOR_POW },
       uAnimMat: { value: new THREE.Matrix4() }, // identity = rest pose
       uAnimPrim: { value: -1 }, // -1 = nothing animated until main.js wires it
+      uTuck: { value: TUCK_DEPTH },
+      uBuryEps: { value: BURY_EPS },
     },
     vertexShader: VERT,
     fragmentShader: FRAG,

@@ -135,5 +135,28 @@ const moved = mat.uniforms.uB.value[ANIM_PRIM_INDEX].distanceTo(restB);
 assert(moved > 0.01, `updateAnim(peak) moves b (moved ${moved.toFixed(3)} > 0.01) — the wave is not inert`);
 assert(WAVE_AMPLITUDE > 0 && WAVE_SPEED > 0, 'wave constants are live');
 
+// Burial classification (JS mirror of the shader's tuck check, using the
+// torso from the registry). Hand-computed distances:
+//   head-bottom (-0.95,0.25,0): |(-0.4,0.25,0)| - 0.5 = -0.0283  -> buried
+//   head-top    (-0.95,0.95,0): |(-0.4,0.95,0)| - 0.5 = +0.5308  -> exposed
+//   arm root    ( 0.45,0.25,0): |(0,0.25,0)|    - 0.5 = -0.25    -> deeply buried
+function sdCapsule(p, a, b, r) {
+  const pa = [p[0] - a[0], p[1] - a[1], p[2] - a[2]];
+  const ba = [b[0] - a[0], b[1] - a[1], b[2] - a[2]];
+  const bb = Math.max(ba[0] * ba[0] + ba[1] * ba[1] + ba[2] * ba[2], 1e-8);
+  const h = Math.min(Math.max((pa[0] * ba[0] + pa[1] * ba[1] + pa[2] * ba[2]) / bb, 0), 1);
+  const d = [pa[0] - ba[0] * h, pa[1] - ba[1] * h, pa[2] - ba[2] * h];
+  return Math.hypot(d[0], d[1], d[2]) - r;
+}
+const { TUCK_DEPTH, BURY_EPS } = await import('./src/config.js');
+const torso = CREATURE.find((p) => p.id === 'torso');
+const dHeadBottom = sdCapsule([-0.95, 0.25, 0], torso.a, torso.b, torso.r);
+const dHeadTop = sdCapsule([-0.95, 0.95, 0], torso.a, torso.b, torso.r);
+const dArmRoot = sdCapsule([0.45, 0.25, 0], torso.a, torso.b, torso.r);
+assert(Math.abs(dHeadBottom - -0.0283) < 1e-3 && dHeadBottom < -BURY_EPS, 'head-bottom is buried in torso (d = -0.0283, hand-computed)');
+assert(Math.abs(dHeadTop - 0.5308) < 1e-3 && dHeadTop > -BURY_EPS, 'head-top is exposed (d = +0.5308, hand-computed)');
+assert(Math.abs(dArmRoot - -0.25) < 1e-9 && dArmRoot < -BURY_EPS, 'arm root is deeply buried (d = -0.25 exactly, hand-computed)');
+assert(TUCK_DEPTH > 0 && BURY_EPS > 0 && TUCK_DEPTH > BURY_EPS, 'tuck constants sane (depth > dead-zone > 0)');
+
 console.log(failures === 0 ? '\nALL PASS' : `\n${failures} FAILURE(S)`);
 process.exit(failures === 0 ? 0 : 1);
