@@ -7,21 +7,38 @@
 // primitive meshes converge onto the SAME surface, so seams
 // cease to exist. Normals come from the SDF gradient, not from
 // the mesh, so lighting is continuous across every join.
+//
+// Stage B adds:
+//   - per-primitive colors, blended by SDF proximity (vColor)
+//   - an animated primitive: its vertices are rigidly moved by
+//     uAnimMat BEFORE snapping (selected via the aPrim attribute),
+//     so they start near the moved surface and converge as usual.
 // ============================================================
 
 import * as THREE from 'three';
-import { BLEND_K, SNAP_ITERS, MAX_PRIMS, SHELL_COLOR } from '../config.js';
+import { BLEND_K, SNAP_ITERS, MAX_PRIMS, SHELL_COLOR, COLOR_SOFT, COLOR_POW } from '../config.js';
 
-// NOTE: three.js auto-prepends `attribute vec3 position`, the matrices,
-// and precision headers to ShaderMaterial shaders — we must not redeclare them.
+// NOTE: three.js auto-prepends 'position', the matrices, and precision
+// headers to ShaderMaterial shaders (never redeclare those) — but CUSTOM
+// attributes like aPrim must be declared by us.
+// NOTE: no backticks inside these template literals — a backtick in a GLSL
+// comment terminates the JS string early (already bitten once; suite catches it).
 const VERT = /* glsl */ `
+attribute float aPrim;
+
 uniform vec3 uA[MAX_PRIMS];
 uniform vec3 uB[MAX_PRIMS];
 uniform float uR[MAX_PRIMS];
+uniform vec3 uColors[MAX_PRIMS];
 uniform int uCount;
 uniform float uK;
+uniform float uColorSoft;
+uniform float uColorPow;
+uniform mat4 uAnimMat;
+uniform int uAnimPrim;
 
 varying vec3 vNormal;
+varying vec3 vColor;
 
 // Distance from point p to a capsule (segment a-b, radius r).
 // A sphere is the degenerate case a == b (the max() guards divide-by-zero).
@@ -66,10 +83,33 @@ vec3 sdfNormal(vec3 p) {
   );
 }
 
+// Per-primitive colors weighted by proximity: on the shell every primitive
+// distance is >= 0 (smin <= min), so the touching primitive gets a huge
+// weight and distant ones fade — soft gradients at every join, for free.
+vec3 blendColor(vec3 p) {
+  vec3 c = vec3(0.0);
+  float wsum = 0.0;
+  for (int i = 0; i < MAX_PRIMS; i++) {
+    if (i < uCount) {
+      float d = max(sdCapsule(p, uA[i], uB[i], uR[i]), 0.0);
+      float w = 1.0 / pow(d + uColorSoft, uColorPow);
+      c += uColors[i] * w;
+      wsum += w;
+    }
+  }
+  return c / max(wsum, 1e-6);
+}
+
 void main() {
   // Geometry is baked in world space, so 'position' is already a world point
-  // sitting on its OWN primitive's surface — i.e. already close to the target.
+  // sitting on its OWN primitive's REST surface.
   vec3 p = position;
+
+  // If this vertex belongs to the animated primitive, rigidly follow it
+  // first (aPrim is a float attribute; +0.5 makes the int cast robust).
+  if (int(aPrim + 0.5) == uAnimPrim) {
+    p = (uAnimMat * vec4(p, 1.0)).xyz;
+  }
 
   // Slide onto the combined surface: step along the gradient by the
   // signed distance. Converges in a few iterations because we start close.
@@ -78,13 +118,14 @@ void main() {
   }
 
   vNormal = sdfNormal(p);
+  vColor = blendColor(p);
   gl_Position = projectionMatrix * modelViewMatrix * vec4(p, 1.0);
 }
 `;
 
 const FRAG = /* glsl */ `
-uniform vec3 uColor;
 varying vec3 vNormal;
+varying vec3 vColor;
 
 void main() {
   vec3 n = normalize(vNormal);
@@ -95,7 +136,7 @@ void main() {
   // If lighting shows ANY visible line at a primitive join, the experiment failed.
   float toon = floor(diff * 3.0 + 0.5) / 3.0;
 
-  vec3 col = uColor * (0.35 + 0.65 * toon);
+  vec3 col = vColor * (0.35 + 0.65 * toon);
   gl_FragColor = vec4(col, 1.0);
 }
 `;
@@ -109,11 +150,14 @@ export function createBlendMaterial(prims) {
   const uA = [];
   const uB = [];
   const uR = [];
+  const uColors = [];
   for (let i = 0; i < MAX_PRIMS; i++) {
     const prim = prims[i];
     uA.push(new THREE.Vector3(...(prim ? prim.a : [0, 0, 0])));
     uB.push(new THREE.Vector3(...(prim ? prim.b ?? prim.a : [0, 0, 0])));
     uR.push(prim ? prim.r : 0.0);
+    // ?? guard: a registry entry without a color must never break the shader.
+    uColors.push(new THREE.Color(prim ? prim.color ?? SHELL_COLOR : 0x000000));
   }
 
   return new THREE.ShaderMaterial({
@@ -122,9 +166,13 @@ export function createBlendMaterial(prims) {
       uA: { value: uA },
       uB: { value: uB },
       uR: { value: uR },
+      uColors: { value: uColors },
       uCount: { value: Math.min(prims.length, MAX_PRIMS) },
       uK: { value: BLEND_K },
-      uColor: { value: new THREE.Color(SHELL_COLOR) },
+      uColorSoft: { value: COLOR_SOFT },
+      uColorPow: { value: COLOR_POW },
+      uAnimMat: { value: new THREE.Matrix4() }, // identity = rest pose
+      uAnimPrim: { value: -1 }, // -1 = nothing animated until main.js wires it
     },
     vertexShader: VERT,
     fragmentShader: FRAG,

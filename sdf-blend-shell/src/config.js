@@ -7,6 +7,11 @@
 // where primitives meet. 0.05 is nearly a hard union; 0.5 is very blobby.
 export const BLEND_K = 0.25;
 
+// Slider range for uK (Stage B). Min stays above 0 — smin divides by k.
+export const K_MIN = 0.02;
+export const K_MAX = 0.6;
+export const K_STEP = 0.01;
+
 // How many times each vertex slides toward the blended surface per frame.
 // 5 converges cleanly for shapes this size; raise it only if you see vertices
 // visibly hovering off the surface.
@@ -16,8 +21,23 @@ export const SNAP_ITERS = 5;
 // FEWER primitives than this, never more.
 export const MAX_PRIMS = 8;
 
-// Single shell color for Stage A (per-primitive colors arrive in Stage B).
+// Fallback color for any primitive that omits its own (guards hand-authored
+// registry entries — a colorless prim must never break the shader).
 export const SHELL_COLOR = 0x4fd1a5;
+
+// Color blending by SDF proximity (Stage B). Weight = 1 / (d + SOFT)^POW.
+// SOFT is the "contact sharpness" floor: smaller = crisper color ownership
+// right at a primitive's surface. POW is how fast influence falls off with
+// distance: higher = narrower color gradients at the joins.
+export const COLOR_SOFT = 0.015;
+export const COLOR_POW = 2.0;
+
+// Procedural wave (Stage B): which primitive moves, and how.
+// The prim's endpoint b rotates around its endpoint a — a shoulder joint.
+export const ANIM_PRIM_ID = 'arm';
+export const WAVE_AXIS = [0, 0, 1]; // rotate in the XY plane (arm waves up/down)
+export const WAVE_AMPLITUDE = 0.5; // radians each way from rest pose
+export const WAVE_SPEED = 1.6; // wave frequency (radians of phase per second)
 
 // Scene / camera
 export const BACKGROUND_COLOR = 0x14161a;

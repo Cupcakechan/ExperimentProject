@@ -64,9 +64,10 @@ delete globalThis.document;
 console.log('Section 1: logic probes');
 
 const { CREATURE } = await import('./src/data/creature.js');
-const { MAX_PRIMS, BLEND_K } = await import('./src/config.js');
+const { MAX_PRIMS, BLEND_K, COLOR_SOFT, COLOR_POW, WAVE_AMPLITUDE, WAVE_SPEED } = await import('./src/config.js');
 const { buildShellGeometry } = await import('./src/render/buildShell.js');
 const { createBlendMaterial } = await import('./src/render/blendMaterial.js');
+const { rotateAboutPivot, updateAnim, ANIM_PRIM_INDEX } = await import('./src/anim.js');
 
 // Registry shape: every primitive must be renderable by buildShell + shader.
 for (const prim of CREATURE) {
@@ -74,6 +75,7 @@ for (const prim of CREATURE) {
   assert(Array.isArray(prim.a) && prim.a.length === 3, `${prim.id}: a is [x,y,z]`);
   assert(prim.b === undefined || (Array.isArray(prim.b) && prim.b.length === 3), `${prim.id}: b is [x,y,z] or omitted`);
   assert(typeof prim.r === 'number' && prim.r > 0, `${prim.id}: r > 0`);
+  assert(prim.color === undefined || typeof prim.color === 'number', `${prim.id}: color is a hex number or omitted`);
 }
 assert(CREATURE.length <= MAX_PRIMS, `creature fits shader capacity (${CREATURE.length} <= ${MAX_PRIMS})`);
 assert(BLEND_K > 0, 'BLEND_K > 0 (smin divides by k)');
@@ -82,7 +84,7 @@ assert(BLEND_K > 0, 'BLEND_K > 0 (smin divides by k)');
 const geo = buildShellGeometry(CREATURE);
 assert(geo !== null && geo.getAttribute('position').count > 0, 'merged geometry has vertices');
 const aPrim = geo.getAttribute('aPrim');
-assert(aPrim !== undefined, 'aPrim attribute exists (Stage B dependency)');
+assert(aPrim !== undefined, 'aPrim attribute exists (animated verts follow their prim)');
 const seen = new Set(aPrim.array);
 assert(seen.size === CREATURE.length, `aPrim covers all ${CREATURE.length} primitives (saw ${seen.size})`);
 
@@ -90,7 +92,9 @@ assert(seen.size === CREATURE.length, `aPrim covers all ${CREATURE.length} primi
 const mat = createBlendMaterial(CREATURE);
 assert(mat.uniforms.uA.value.length === MAX_PRIMS, 'uA padded to MAX_PRIMS');
 assert(mat.uniforms.uR.value.length === MAX_PRIMS, 'uR padded to MAX_PRIMS');
+assert(mat.uniforms.uColors.value.length === MAX_PRIMS, 'uColors padded to MAX_PRIMS');
 assert(mat.uniforms.uCount.value === CREATURE.length, 'uCount matches creature');
+assert(mat.uniforms.uAnimPrim.value === -1, 'uAnimPrim defaults to -1 (main.js wires it)');
 
 // Hand-computed smin check (JS mirror of the shader function):
 // smin(1.0, 1.0, 0.25) => h = 0.5, mix = 1.0, minus 0.25*0.25 = 0.9375.
@@ -101,6 +105,35 @@ function smin(a, b, k) {
 }
 assert(Math.abs(smin(1.0, 1.0, 0.25) - 0.9375) < 1e-9, 'smin(1,1,0.25) = 0.9375 (hand-computed)');
 assert(smin(5.0, 1.0, 0.25) === 1.0, 'smin far apart degrades to plain min');
+
+// Color weights (JS mirror of blendColor's weighting):
+// touching primitive (d=0) must massively outweigh one 0.1 away —
+// hand-computed with SOFT=0.015, POW=2: w(0)=4444.4, w(0.1)=75.6 (ratio 58.8).
+function colorWeight(d) {
+  return 1 / Math.pow(Math.max(d, 0) + COLOR_SOFT, COLOR_POW);
+}
+assert(colorWeight(0) > 50 * colorWeight(0.1), 'contact color dominates at the surface (w0 > 50*w0.1)');
+assert(Math.abs(colorWeight(0.05) / (colorWeight(0.05) + colorWeight(0.05)) - 0.5) < 1e-12, 'equal distances = 50/50 color mix');
+
+// Wave math: rotate arm's b around its a by +90deg about Z (hand-computed).
+// a=(0.45,0.25,0), b=(1.25,0.9,0.15): b-a=(0.8,0.65,0.15) -> Rz90 -> (-0.65,0.8,0.15)
+// -> +a = (-0.2, 1.05, 0.15).
+const bRot = rotateAboutPivot([0.45, 0.25, 0], [1.25, 0.9, 0.15], [0, 0, 1], Math.PI / 2);
+assert(
+  Math.abs(bRot.x - -0.2) < 1e-9 && Math.abs(bRot.y - 1.05) < 1e-9 && Math.abs(bRot.z - 0.15) < 1e-9,
+  'rotateAboutPivot 90deg about Z = (-0.2, 1.05, 0.15) (hand-computed)'
+);
+
+// updateAnim: t=0 => sin=0 => rest pose exactly (uB unchanged, uAnimMat identity-ish).
+assert(ANIM_PRIM_INDEX >= 0, `animated prim '${CREATURE[ANIM_PRIM_INDEX]?.id}' found in registry`);
+const restB = mat.uniforms.uB.value[ANIM_PRIM_INDEX].clone();
+updateAnim(mat, 0);
+assert(mat.uniforms.uB.value[ANIM_PRIM_INDEX].distanceTo(restB) < 1e-9, 'updateAnim(t=0) keeps rest pose');
+// Quarter period of sin: t = (PI/2)/WAVE_SPEED => angle = WAVE_AMPLITUDE => b must move.
+updateAnim(mat, Math.PI / 2 / WAVE_SPEED);
+const moved = mat.uniforms.uB.value[ANIM_PRIM_INDEX].distanceTo(restB);
+assert(moved > 0.01, `updateAnim(peak) moves b (moved ${moved.toFixed(3)} > 0.01) — the wave is not inert`);
+assert(WAVE_AMPLITUDE > 0 && WAVE_SPEED > 0, 'wave constants are live');
 
 console.log(failures === 0 ? '\nALL PASS' : `\n${failures} FAILURE(S)`);
 process.exit(failures === 0 ? 0 : 1);

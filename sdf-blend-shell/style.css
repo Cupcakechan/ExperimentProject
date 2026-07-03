@@ -20,3 +20,19 @@ canvas {
   pointer-events: none; /* HUD must never eat orbit-drag input */
   user-select: none;
 }
+
+#controls {
+  position: fixed;
+  bottom: 14px;
+  left: 12px;
+  font: 13px/1.4 system-ui, sans-serif;
+  color: #9aa3ad;
+  user-select: none;
+  /* unlike #hud, controls MUST receive pointer events (it holds the slider) */
+}
+
+#controls input[type='range'] {
+  width: 160px;
+  vertical-align: middle;
+  margin: 0 8px;
+}
