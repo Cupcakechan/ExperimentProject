@@ -5,14 +5,16 @@
 // combines them with smooth-min, and slides each mesh vertex
 // onto the combined zero-surface. Vertices from different
 // primitive meshes converge onto the SAME surface, so seams
-// cease to exist. Normals come from the SDF gradient, not from
-// the mesh, so lighting is continuous across every join.
+// cease to exist.
 //
-// Stage B adds:
-//   - per-primitive colors, blended by SDF proximity (vColor)
-//   - an animated primitive: its vertices are rigidly moved by
-//     uAnimMat BEFORE snapping (selected via the aPrim attribute),
-//     so they start near the moved surface and converge as usual.
+// Polish pass (per-pixel shading): normals and colors are now
+// computed in the FRAGMENT shader. Previously they were computed
+// per-vertex and linearly interpolated across triangles, so the
+// quantized toon bands wobbled along the tessellation. The SDF is
+// a continuous field — evaluating it per pixel makes band edges
+// and color gradients smooth curves regardless of mesh density.
+// Geometry cost stays per-vertex; shading adds ~5 field
+// evaluations per pixel (still nowhere near raymarching).
 // ============================================================
 
 import * as THREE from 'three';
@@ -23,9 +25,10 @@ import { BLEND_K, SNAP_ITERS, MAX_PRIMS, SHELL_COLOR, COLOR_SOFT, COLOR_POW } fr
 // attributes like aPrim must be declared by us.
 // NOTE: no backticks inside these template literals — a backtick in a GLSL
 // comment terminates the JS string early (already bitten once; suite catches it).
-const VERT = /* glsl */ `
-attribute float aPrim;
 
+// The SDF field: shared by BOTH shaders (vertex snaps with it, fragment
+// shades with it). One source of truth — the two stages can never drift.
+const FIELD_GLSL = /* glsl */ `
 uniform vec3 uA[MAX_PRIMS];
 uniform vec3 uB[MAX_PRIMS];
 uniform float uR[MAX_PRIMS];
@@ -34,11 +37,6 @@ uniform int uCount;
 uniform float uK;
 uniform float uColorSoft;
 uniform float uColorPow;
-uniform mat4 uAnimMat;
-uniform int uAnimPrim;
-
-varying vec3 vNormal;
-varying vec3 vColor;
 
 // Distance from point p to a capsule (segment a-b, radius r).
 // A sphere is the degenerate case a == b (the max() guards divide-by-zero).
@@ -99,6 +97,17 @@ vec3 blendColor(vec3 p) {
   }
   return c / max(wsum, 1e-6);
 }
+`;
+
+const VERT = /* glsl */ `
+attribute float aPrim;
+
+uniform mat4 uAnimMat;
+uniform int uAnimPrim;
+
+varying vec3 vPos;
+
+${FIELD_GLSL}
 
 void main() {
   // Geometry is baked in world space, so 'position' is already a world point
@@ -117,18 +126,21 @@ void main() {
     p -= sdfNormal(p) * mapSDF(p);
   }
 
-  vNormal = sdfNormal(p);
-  vColor = blendColor(p);
+  // Hand the snapped surface point to the fragment shader; interpolated
+  // points stay close enough to the surface for field evaluation.
+  vPos = p;
   gl_Position = projectionMatrix * modelViewMatrix * vec4(p, 1.0);
 }
 `;
 
 const FRAG = /* glsl */ `
-varying vec3 vNormal;
-varying vec3 vColor;
+varying vec3 vPos;
+
+${FIELD_GLSL}
 
 void main() {
-  vec3 n = normalize(vNormal);
+  // Per-pixel: evaluate the field HERE, not at the nearest vertex.
+  vec3 n = sdfNormal(vPos);
   vec3 lightDir = normalize(vec3(0.6, 1.0, 0.5));
   float diff = max(dot(n, lightDir), 0.0);
 
@@ -136,7 +148,7 @@ void main() {
   // If lighting shows ANY visible line at a primitive join, the experiment failed.
   float toon = floor(diff * 3.0 + 0.5) / 3.0;
 
-  vec3 col = vColor * (0.35 + 0.65 * toon);
+  vec3 col = blendColor(vPos) * (0.35 + 0.65 * toon);
   gl_FragColor = vec4(col, 1.0);
 }
 `;
