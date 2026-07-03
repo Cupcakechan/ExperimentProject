@@ -121,7 +121,8 @@ for (const creature of CREATURES) {
       (prim.b === undefined || (Array.isArray(prim.b) && prim.b.length === 3)) &&
       typeof prim.r === 'number' && prim.r > 0 &&
       (prim.color === undefined || typeof prim.color === 'number') &&
-      (prim.paint === undefined || typeof prim.paint === 'boolean');
+      (prim.paint === undefined || typeof prim.paint === 'boolean') &&
+      (prim.kCap === undefined || (typeof prim.kCap === 'number' && prim.kCap > 0));
     assert(ok, `${tag} ${prim.id}: well-formed prim`);
   }
   assert(prims.length <= MAX_PRIMS, `${tag} fits shader capacity (${prims.length} <= ${MAX_PRIMS})`);
@@ -202,6 +203,8 @@ for (const creature of CREATURES) {
   assert(mat.uniforms.uA.value.length === MAX_PRIMS && mat.uniforms.uPaint.value.length === MAX_PRIMS, `${tag} uniforms padded to MAX_PRIMS`);
   assert(mat.uniforms.uCount.value === prims.length, `${tag} uCount matches`);
   assert(prims.every((p, i) => mat.uniforms.uPaint.value[i] === (p.paint ? 1.0 : 0.0)), `${tag} uPaint flags mirror the registry`);
+  assert(mat.uniforms.uKCap.value.length === MAX_PRIMS, `${tag} uKCap padded to MAX_PRIMS`);
+  assert(prims.every((p, i) => mat.uniforms.uKCap.value[i] === (p.kCap != null ? p.kCap : 1e3)), `${tag} uKCap mirrors the registry (uncapped = sentinel 1e3)`);
 
   // anim: named prim exists, rest pose at t=0, actually moves at peak
   if (creature.anim) {
@@ -256,6 +259,19 @@ assert(coverage(0.14, 0.15) > 0.99, 'longneck pupil at inflated skin, NEW model:
 // And at rest (no inflation) the pupil center is covered as before:
 // hopper skin point on the ray at R=0.5: |0.5-0.48| - 0.055 = -0.035 < 0.
 assert(coverage(-0.035, 0) > 0.99, 'hopper pupil at rest skin: covered (no regression at low k)');
+
+// Per-prim blend caps (the thin-part trick). Effective k = min(slider, cap).
+// Hand-computed with the shipped smin: smin(1,1,k) = 1 - k/4.
+//   Longneck neck (kCap 0.12): slider 0.25 -> k 0.12 -> smin(1,1) = 0.97
+//   Slider cranked to 0.60    -> k STILL 0.12 -> 0.97 (the cap holds)
+//   An uncapped prim (sentinel 1e3): slider 0.60 -> k 0.60 -> 0.85
+function effK(slider, cap) { return Math.min(slider, cap); }
+const neck = longneck.prims.find((p) => p.id === 'neck');
+assert(neck.kCap === 0.12, 'longneck neck kCap = 0.12 (design probe: the melty-neck fix is live)');
+assert(Math.abs(smin(1, 1, effK(0.25, neck.kCap)) - 0.97) < 1e-9, 'capped smin at slider 0.25 = 0.97 (hand-computed)');
+assert(Math.abs(smin(1, 1, effK(0.6, neck.kCap)) - 0.97) < 1e-9, 'capped smin at slider 0.60 = 0.97 — the cap HOLDS against the slider');
+assert(Math.abs(smin(1, 1, effK(0.6, 1e3)) - 0.85) < 1e-9, 'uncapped smin at slider 0.60 = 0.85 (sentinel does not clamp)');
+assert(longneck.prims.find((p) => p.id === 'tail').kCap === 0.07, 'longneck tail kCap = 0.07');
 
 console.log(failures === 0 ? '\nALL PASS' : `\n${failures} FAILURE(S)`);
 process.exit(failures === 0 ? 0 : 1);

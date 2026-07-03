@@ -1,6 +1,6 @@
 # PROJECT_HANDOFF — SDF Blend-Shell Experiment
 
-_Last updated: 2026-07-03 (gallery browser-confirmed + pushed; decal-inflation fix delivered, awaiting browser confirmation)_
+_Last updated: 2026-07-03 (inflation fix browser-confirmed; kCAP delivered — per-prim blend ceilings, awaiting browser confirmation)_
 
 ## What this is
 An experiment replicating the "SDF blend-shell" character technique from a
@@ -79,8 +79,20 @@ the `sdf-blend-shell\` subfolder. Git commands run from the CONTAINER root.
   coverage subtracts the LOCAL INFLATION (min solid distance at the shaded
   point, free from the existing phase-1 loop) so decals ride the skin at
   any k. Side effect: eyes read very slightly larger at k=0.25. Suite has
-  bug-then-fix probes at inflation 0.15 (hand-computed). NOT yet
-  browser-confirmed. See LESSONS.md.
+  bug-then-fix probes at inflation 0.15 (hand-computed). Browser-confirmed
+  and pushed (`2e9fd82`).
+- kCAP delivered (this pass): optional per-prim `kCap` — a blend-radius
+  CEILING (effective k = min(slider, cap)) — the post's thin-part trick,
+  the LAST of its robustness tricks. Applied where the design wanted it:
+  Longneck neck kCap 0.12 (fixes the observed melty neck base) and tail
+  kCap 0.07. Authoring rule added: thin prims (r < ~0.18) joining bigger
+  masses get kCap ~= 0.7*r. Suite: uKCap padding/mirroring per creature +
+  hand-computed cap-holds-against-slider probes (smin(1,1,0.12) = 0.97 at
+  slider 0.25 AND 0.60). NOT yet browser-confirmed.
+- Deep Research question answered: deferred as low-ROI for blob critters;
+  conditional next steps noted — the original poster's public demo/code
+  (primary source) and targeted stylized-proportion research IF creatures
+  stop reading as species.
 - Cost note: shading is now ~5 field evaluations per pixel (was per-vertex).
   Fine on desktop; would need measuring before any mobile claim.
 - History quirk (accepted, left alone): Stage A commit appears twice
@@ -143,13 +155,13 @@ the `sdf-blend-shell\` subfolder. Git commands run from the CONTAINER root.
   pattern (see LESSONS.md).
 
 ## Open items / next steps
-1. **Daniel:** verify the fix — sweep the slider 0.02 -> 0.60 on ALL THREE
-   creatures: eyes must stay visible (and glued to the skin) at every k.
+1. **Daniel:** verify kCap — Longneck's neck base must look like a NECK at
+   k=0.25, and must HOLD its shape at k=0.60 while body/legs go blobby.
 2. On confirmation: git checkpoint (from `Experiment Project\` root).
-3. Queued menu (each its own options round): per-prim blend caps (kCap —
-   unlocks 3D bulging eyes, ears, antennae, thinner necks), toon outline via
-   SDF offset surface, IK leg stepping, more practice creatures (cheap now —
-   pure creatures.js entries).
+3. Queued menu (each its own options round): toon outline via SDF offset
+   surface (the glory pass — recommended next), IK leg stepping (multi-pass,
+   staged), more practice creatures exercising the kCap vocabulary
+   (antennae, thin ears, 3D-geometry eyes are now legal).
 4. SKILL harvest (end goal, when the technique feels complete): dev-method
    skill session over LESSONS.md + this handoff -> a creature-generation
    skill reference (schema, invariants, tuning levers, gotchas).

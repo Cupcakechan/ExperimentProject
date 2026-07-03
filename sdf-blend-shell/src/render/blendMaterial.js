@@ -41,6 +41,7 @@ uniform vec3 uB[MAX_PRIMS];
 uniform float uR[MAX_PRIMS];
 uniform vec3 uColors[MAX_PRIMS];
 uniform float uPaint[MAX_PRIMS]; // 1.0 = color-only prim: no surface, no mesh
+uniform float uKCap[MAX_PRIMS]; // per-prim blend-radius ceiling (thin-part trick)
 uniform float uPaintEdge; // decal edge softness, world units
 uniform int uCount;
 uniform float uK;
@@ -71,7 +72,11 @@ float mapSDF(vec3 p) {
   float d = 1e9;
   for (int i = 0; i < MAX_PRIMS; i++) {
     if (i < uCount && uPaint[i] < 0.5) { // paint prims have no surface
-      d = smin(d, sdCapsule(p, uA[i], uB[i], uR[i]), uK);
+      // The thin-part trick: a prim's kCap CLAMPS how wide it may blend,
+      // no matter where the global slider goes — so a thin neck or antenna
+      // keeps its shape instead of dissolving into the nearest big mass.
+      float k = min(uK, uKCap[i]);
+      d = smin(d, sdCapsule(p, uA[i], uB[i], uR[i]), k);
     }
   }
   return d;
@@ -215,6 +220,7 @@ export function createBlendMaterial(prims) {
   const uR = [];
   const uColors = [];
   const uPaint = [];
+  const uKCap = [];
   for (let i = 0; i < MAX_PRIMS; i++) {
     const prim = prims[i];
     uA.push(new THREE.Vector3(...(prim ? prim.a : [0, 0, 0])));
@@ -224,6 +230,9 @@ export function createBlendMaterial(prims) {
     uColors.push(new THREE.Color(prim ? prim.color ?? SHELL_COLOR : 0x000000));
     // paint is optional; absent = solid (existing entries unaffected).
     uPaint.push(prim && prim.paint ? 1.0 : 0.0);
+    // kCap is optional; absent = uncapped. The sentinel just has to be
+    // larger than any slider value so min(uK, sentinel) === uK.
+    uKCap.push(prim && prim.kCap != null ? prim.kCap : 1e3);
   }
 
   return new THREE.ShaderMaterial({
@@ -234,6 +243,7 @@ export function createBlendMaterial(prims) {
       uR: { value: uR },
       uColors: { value: uColors },
       uPaint: { value: uPaint },
+      uKCap: { value: uKCap },
       uCount: { value: Math.min(prims.length, MAX_PRIMS) },
       uK: { value: BLEND_K },
       uColorSoft: { value: COLOR_SOFT },
