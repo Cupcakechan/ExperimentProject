@@ -1,6 +1,6 @@
 # PROJECT_HANDOFF — SDF Blend-Shell Experiment
 
-_Last updated: 2026-07-03 (ink-tuck fix v1 FAILED in browser; corrected occlusion fix delivered, awaiting browser confirmation)_
+_Last updated: 2026-07-03 (occlusion fix browser-confirmed, minor slivers remain; burial-ramp polish delivered, awaiting browser confirmation)_
 
 ## What this is
 An experiment replicating the "SDF blend-shell" character technique from a
@@ -107,8 +107,16 @@ the `sdf-blend-shell\` subfolder. Git commands run from the CONTAINER root.
   occluded by the skin. Expect a short black rim at burial boundaries
   (reads as crease ink; lever = the ink tuck value if too heavy). Suite
   asserts the final position's SIGN. See LESSONS.md (incl. the
-  wrong-fix lesson). NOT yet browser-confirmed; the outline checkpoint
-  (never committed) covers outline + fix together.
+  wrong-fix lesson). Browser result: domes GONE; thin black slivers/ticks
+  remained at burial boundaries — the predicted binary-tuck transition
+  cliffs (0.055 tall) flashing their back faces.
+- BURIAL-RAMP polish delivered (this pass): the tuck is now CONTINUOUS —
+  buryT = 1 - smoothstep(-BURY_EPS - BURY_BAND, -BURY_EPS, dOther), full
+  tuck only at depth, zero exactly at the boundary. Cliffs become slopes
+  hugging the surface; skin also stops tuck-POPPING on animated prims.
+  Tunable: BURY_BAND 0.04 (bigger = softer crease ink). Suite: hand-computed
+  ramp probes (0 at boundary, 1 at depth, exactly 0.5 at midpoint). The
+  still-open outline checkpoint covers outline + occlusion fix + ramp.
 - Deep Research question answered: deferred as low-ROI for blob critters;
   conditional next steps noted — the original poster's public demo/code
   (primary source) and targeted stylized-proportion research IF creatures

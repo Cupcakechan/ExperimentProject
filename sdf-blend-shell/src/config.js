@@ -61,3 +61,8 @@ export const PAINT_EDGE = 0.02;
 // parts (suite-enforced per creature).
 export const OUTLINE_WIDTH = 0.035;
 export const OUTLINE_COLOR = 0x0d0f12;
+// Burial ramp width (world units of depth): the tuck fades IN over this
+// band instead of switching on at BURY_EPS. Binary tucking made 0.055-tall
+// triangle cliffs at every burial boundary, whose back faces flashed as
+// black slivers in the ink pass. Bigger = softer creases; smaller = crisper.
+export const BURY_BAND = 0.04;

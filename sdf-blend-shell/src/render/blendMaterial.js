@@ -25,7 +25,7 @@
 // ============================================================
 
 import * as THREE from 'three';
-import { BLEND_K, SNAP_ITERS, MAX_PRIMS, SHELL_COLOR, COLOR_SOFT, COLOR_POW, TUCK_DEPTH, BURY_EPS, PAINT_EDGE, OUTLINE_WIDTH, OUTLINE_COLOR } from '../config.js';
+import { BLEND_K, SNAP_ITERS, MAX_PRIMS, SHELL_COLOR, COLOR_SOFT, COLOR_POW, TUCK_DEPTH, BURY_EPS, BURY_BAND, PAINT_EDGE, OUTLINE_WIDTH, OUTLINE_COLOR } from '../config.js';
 
 // NOTE: three.js auto-prepends 'position', the matrices, and precision
 // headers to ShaderMaterial shaders (never redeclare those) — but CUSTOM
@@ -144,6 +144,7 @@ uniform mat4 uAnimMat;
 uniform int uAnimPrim;
 uniform float uTuck;
 uniform float uBuryEps;
+uniform float uBuryBand;
 uniform float uSnapOffset; // 0 = the skin; OUTLINE_WIDTH = the ink shell
 
 varying vec3 vPos;
@@ -170,7 +171,11 @@ void main() {
       dOther = min(dOther, sdCapsule(p, uA[i], uB[i], uR[i]));
     }
   }
-  bool buried = dOther < -uBuryEps;
+  // CONTINUOUS burial: 0 at the boundary (-uBuryEps), 1 once uBuryBand
+  // deeper. Binary tucking built 0.055-tall triangle cliffs across the
+  // boundary whose back faces flashed as black slivers in the ink pass;
+  // the ramp turns cliffs into slopes that hug the surface.
+  float buryT = 1.0 - smoothstep(-uBuryEps - uBuryBand, -uBuryEps, dOther);
 
   // Slide onto the target surface: step along the gradient by the signed
   // distance MINUS the snap offset — offset 0 converges on the skin,
@@ -181,10 +186,9 @@ void main() {
     p -= sdfNormal(p) * (mapSDF(p) - uSnapOffset);
   }
 
-  // Buried vertices tuck themselves under the skin (the post's trick).
-  if (buried) {
-    p -= sdfNormal(p) * uTuck;
-  }
+  // Buried vertices tuck themselves under the skin (the post's trick),
+  // proportionally to burial depth (buryT is 0 for exposed verts — no-op).
+  p -= sdfNormal(p) * (uTuck * buryT);
 
   // Hand the surface point to the fragment shader; interpolated points
   // stay close enough to the surface for field evaluation.
@@ -270,6 +274,7 @@ function buildUniforms(prims, snapOffset) {
     // (The skin's own fold is invisible — it is skin-colored and shaded
     // from the same position as the true skin behind it.)
     uTuck: { value: snapOffset > 0 ? snapOffset + TUCK_DEPTH : TUCK_DEPTH },
+    uBuryBand: { value: BURY_BAND },
     uBuryEps: { value: BURY_EPS },
     uPaintEdge: { value: PAINT_EDGE },
     uSnapOffset: { value: snapOffset },

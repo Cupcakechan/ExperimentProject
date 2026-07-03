@@ -223,6 +223,7 @@ for (const creature of CREATURES) {
   assert(mat.uniforms.uTuck.value === TUCK_DEPTH, `${tag} skin tucks buried verts (uTuck = TUCK_DEPTH)`);
   assert(ink.uniforms.uTuck.value === OUTLINE_WIDTH + TUCK_DEPTH, `${tag} ink tuck = OUTLINE_WIDTH + TUCK_DEPTH`);
   assert(ink.uniforms.uSnapOffset.value - ink.uniforms.uTuck.value < 0, `${tag} buried ink ends BELOW the skin (${(ink.uniforms.uSnapOffset.value - ink.uniforms.uTuck.value).toFixed(3)} < 0) — occluded, not painted`);
+  assert(mat.uniforms.uBuryBand.value > 0 && ink.uniforms.uBuryBand.value > 0, `${tag} both materials carry the burial ramp (uBuryBand > 0)`);
 
   // the ink must be thinner than the thinnest solid, or it swallows it
   const minSolidR = Math.min(...solids.map((s) => s.r));
@@ -281,6 +282,19 @@ assert(coverage(0.14, 0.15) > 0.99, 'longneck pupil at inflated skin, NEW model:
 // And at rest (no inflation) the pupil center is covered as before:
 // hopper skin point on the ray at R=0.5: |0.5-0.48| - 0.055 = -0.035 < 0.
 assert(coverage(-0.035, 0) > 0.99, 'hopper pupil at rest skin: covered (no regression at low k)');
+
+// Continuous burial ramp (JS mirror of the shader's buryT). Hand-computed:
+// 0 exactly at the boundary (-BURY_EPS), 1 once BURY_BAND deeper, and
+// smoothstep's midpoint is exactly 0.5.
+const { BURY_BAND } = await import('./src/config.js');
+function buryT(dOther) {
+  return 1 - smoothstep(-BURY_EPS - BURY_BAND, -BURY_EPS, dOther);
+}
+assert(BURY_BAND > 0, 'BURY_BAND > 0');
+assert(buryT(-BURY_EPS) === 0, 'buryT at the boundary = 0 (no cliff — continuous with exposed verts)');
+assert(buryT(-BURY_EPS - BURY_BAND) === 1, 'buryT at full depth = 1 (fully tucked)');
+assert(Math.abs(buryT(-BURY_EPS - BURY_BAND / 2) - 0.5) < 1e-9, 'buryT at half depth = 0.5 exactly (hand-computed)');
+assert(buryT(0.1) === 0, 'exposed verts never tuck (buryT = 0)');
 
 // Per-prim blend caps (the thin-part trick). Effective k = min(slider, cap).
 // Hand-computed with the shipped smin: smin(1,1,k) = 1 - k/4.
