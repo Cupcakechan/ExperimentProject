@@ -66,3 +66,19 @@ export const OUTLINE_COLOR = 0x0d0f12;
 // triangle cliffs at every burial boundary, whose back faces flashed as
 // black slivers in the ink pass. Bigger = softer creases; smaller = crisper.
 export const BURY_BAND = 0.04;
+// Roaming (root motion): the whole creature drifts around the stage.
+// Heading integrates a sum-of-sines turn rate (deterministic — no RNG),
+// plus a steering term that bends it back toward center beyond the soft
+// radius. Speeds are world units / second; turn params are rad/s.
+export const ROAM_SPEED = 0.35;
+export const ROAM_SOFT_RADIUS = 0.9; // beyond this, steering ramps in
+export const ROAM_STEER_GAIN = 2.2;
+export const ROAM_TURN_A = 1.2;
+export const ROAM_TURN_W1 = 0.7;
+export const ROAM_TURN_B = 0.9;
+export const ROAM_TURN_W2 = 1.9;
+export const ROAM_TURN_PHASE = 2.0;
+
+// Idle bob: subtle whole-body rise/fall while roaming (no stepping yet).
+export const BOB_AMPLITUDE = 0.035;
+export const BOB_SPEED = 4.0;

@@ -1,6 +1,6 @@
 # PROJECT_HANDOFF — SDF Blend-Shell Experiment
 
-_Last updated: 2026-07-03 (occlusion fix browser-confirmed, minor slivers remain; burial-ramp polish delivered, awaiting browser confirmation)_
+_Last updated: 2026-07-03 (outline arc browser-confirmed + pushed; ROAM+BOB delivered — living gallery stage 1, awaiting browser confirmation)_
 
 ## What this is
 An experiment replicating the "SDF blend-shell" character technique from a
@@ -112,11 +112,25 @@ the `sdf-blend-shell\` subfolder. Git commands run from the CONTAINER root.
   cliffs (0.055 tall) flashing their back faces.
 - BURIAL-RAMP polish delivered (this pass): the tuck is now CONTINUOUS —
   buryT = 1 - smoothstep(-BURY_EPS - BURY_BAND, -BURY_EPS, dOther), full
-  tuck only at depth, zero exactly at the boundary. Cliffs become slopes
-  hugging the surface; skin also stops tuck-POPPING on animated prims.
-  Tunable: BURY_BAND 0.04 (bigger = softer crease ink). Suite: hand-computed
-  ramp probes (0 at boundary, 1 at depth, exactly 0.5 at midpoint). The
-  still-open outline checkpoint covers outline + occlusion fix + ramp.
+  tuck only at depth, zero exactly at the boundary. Browser-confirmed
+  ("looks better") and pushed (`bc3ad97`). Residual taste levers queued:
+  BURY_BAND up = softer crease ink; OUTLINE_WIDTH down = thinner line.
+- ANIMATION ROADMAP locked (options round): 1) roam+bob (this pass) ->
+  2) per-prim transform plumbing (uPrimMat[MAX_PRIMS], parity-tested) ->
+  3) IK foot stepping. Reddit original is fully animated (walking) —
+  SKILL HARVEST DEFERRED until the animation half is learned (decision:
+  one harvest from a complete technique beats two).
+- ROAM+BOB delivered (this pass): src/roam.js — DETERMINISTIC wander
+  (heading integrates sum-of-sines turn rate, no RNG) + boundary steering
+  past ROAM_SOFT_RADIUS; main.js gains a THREE.Group rig carrying skin+ink
+  (root motion moves both; works because snapping is creature-space and
+  modelMatrix applies after), clamped-delta clock (tab-restore spike
+  guard), idle bob. LIGHTING FIX folded in: fragment now rotates the
+  creature-space SDF normal by mat3(modelMatrix) (declared by built-in
+  name in the fragment stage) — without it the light turns WITH the
+  roamer. Legs slide (known, staged — stepping is stage 3). Suite: roam
+  determinism/boundedness/liveness/reset + lighting regression guard.
+  NOT yet browser-confirmed.
 - Deep Research question answered: deferred as low-ROI for blob critters;
   conditional next steps noted — the original poster's public demo/code
   (primary source) and targeted stylized-proportion research IF creatures
@@ -188,10 +202,11 @@ the `sdf-blend-shell\` subfolder. Git commands run from the CONTAINER root.
   pattern (see LESSONS.md).
 
 ## Open items / next steps
-1. **Daniel:** verify the outline — dark ink line around every silhouette
-   (outer AND interior, e.g. a leg seen against the body), clean in the
-   concave joints, tracking the wave with no lag, holding at all k.
+1. **Daniel:** verify roam+bob — creatures wander the stage facing their
+   direction of travel, gentle bob, lighting stays world-stable as they
+   turn (bands don't rotate with the body), ink tracks perfectly.
 2. On confirmation: git checkpoint (from `Experiment Project\` root).
+   Then STAGE 2: per-prim transform plumbing (behavior-parity pass).
 3. Queued menu (each its own options round): IK leg stepping (multi-pass,
    staged), more practice creatures exercising the kCap vocabulary
    (antennae, thin ears, 3D-geometry eyes are now legal), OUTLINE_WIDTH /

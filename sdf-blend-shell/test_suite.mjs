@@ -296,6 +296,35 @@ assert(buryT(-BURY_EPS - BURY_BAND) === 1, 'buryT at full depth = 1 (fully tucke
 assert(Math.abs(buryT(-BURY_EPS - BURY_BAND / 2) - 0.5) < 1e-9, 'buryT at half depth = 0.5 exactly (hand-computed)');
 assert(buryT(0.1) === 0, 'exposed verts never tuck (buryT = 0)');
 
+// Roam: deterministic, bounded, alive, resettable.
+const { createRoam } = await import('./src/roam.js');
+const { ROAM_SOFT_RADIUS, ROAM_SPEED, BOB_AMPLITUDE, BOB_SPEED } = await import('./src/config.js');
+assert(ROAM_SPEED > 0 && BOB_AMPLITUDE > 0 && BOB_SPEED > 0, 'roam/bob constants are live');
+const roamA = createRoam();
+const roamB = createRoam();
+let poseA = null;
+let poseB = null;
+let maxR = 0;
+for (let i = 0; i < 5000; i++) {
+  poseA = roamA.update(1 / 60);
+  poseB = roamB.update(1 / 60);
+  maxR = Math.max(maxR, Math.hypot(poseA.x, poseA.z));
+}
+assert(poseA.x === poseB.x && poseA.z === poseB.z && poseA.heading === poseB.heading, 'roam is deterministic (two instances, identical 5000-step paths)');
+assert(maxR > 0.2, `roam is not inert (max radius ${maxR.toFixed(2)} > 0.2 over ~83s)`);
+assert(maxR < ROAM_SOFT_RADIUS + 0.6, `steering bounds the wander (max radius ${maxR.toFixed(2)} < ${ROAM_SOFT_RADIUS} + 0.6)`);
+assert(Number.isFinite(poseA.heading), 'heading stays finite');
+roamA.reset();
+const fresh = roamA.update(1 / 60);
+const roamC = createRoam();
+const freshC = roamC.update(1 / 60);
+assert(fresh.x === freshC.x && fresh.z === freshC.z, 'reset() restores the exact initial state');
+
+// World-space lighting: the fragment shader must rotate the creature-space
+// SDF normal by the model matrix, or the light turns with the roamer.
+const litMat = createBlendMaterial(critter.prims);
+assert(litMat.fragmentShader.includes('mat3(modelMatrix)'), 'fragment lighting rotates normals into world space (mat3(modelMatrix))');
+
 // Per-prim blend caps (the thin-part trick). Effective k = min(slider, cap).
 // Hand-computed with the shipped smin: smin(1,1,k) = 1 - k/4.
 //   Longneck neck (kCap 0.12): slider 0.25 -> k 0.12 -> smin(1,1) = 0.97

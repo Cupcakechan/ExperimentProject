@@ -198,13 +198,20 @@ void main() {
 `;
 
 const FRAG = /* glsl */ `
+// three declares modelMatrix for VERTEX shaders only; declaring it here by
+// its built-in name makes the renderer bind it for the fragment stage too.
+uniform mat4 modelMatrix;
+
 varying vec3 vPos;
 
 ${FIELD_GLSL}
 
 void main() {
   // Per-pixel: evaluate the field HERE, not at the nearest vertex.
-  vec3 n = sdfNormal(vPos);
+  // The field lives in CREATURE space; the creature now roams, so rotate
+  // the normal into WORLD space or the lighting turns with the body
+  // (a sunset that follows you around).
+  vec3 n = normalize(mat3(modelMatrix) * sdfNormal(vPos));
   vec3 lightDir = normalize(vec3(0.6, 1.0, 0.5));
   float diff = max(dot(n, lightDir), 0.0);
 

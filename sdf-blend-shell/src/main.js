@@ -11,7 +11,8 @@ import { buildShellGeometry } from './render/buildShell.js';
 import { createBlendMaterial, createOutlineMaterial } from './render/blendMaterial.js';
 import { updateAnim, animPrimIndex } from './anim.js';
 import { createControls } from './ui/controls.js';
-import { BLEND_K, BACKGROUND_COLOR, CAMERA_FOV, CAMERA_START, ORBIT_TARGET } from './config.js';
+import { createRoam } from './roam.js';
+import { BLEND_K, BACKGROUND_COLOR, CAMERA_FOV, CAMERA_START, ORBIT_TARGET, BOB_AMPLITUDE, BOB_SPEED } from './config.js';
 
 const renderer = new THREE.WebGLRenderer({ antialias: true });
 renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2)); // cap DPR: retina 3x is wasted work here
@@ -28,6 +29,14 @@ const controls = new OrbitControls(camera, renderer.domElement);
 controls.target.set(...ORBIT_TARGET);
 controls.enableDamping = true;
 
+// The rig carries BOTH draws: root motion moves the group, so skin and
+// ink can never drift apart. This works because geometry + snapping live
+// in creature space and the model matrix applies AFTER — moving the mesh
+// moves the whole snapped result.
+const rig = new THREE.Group();
+scene.add(rig);
+const roam = createRoam();
+
 // --- gallery state ---
 let shell = null;
 let outline = null;
@@ -39,8 +48,8 @@ function setCreature(i) {
   const creature = CREATURES[i];
   if (!creature) return;
   if (shell) {
-    scene.remove(shell);
-    scene.remove(outline);
+    rig.remove(shell);
+    rig.remove(outline);
     shell.geometry.dispose(); // ONE dispose — the outline shares this geometry
     shell.material.dispose();
     outline.material.dispose();
@@ -59,8 +68,12 @@ function setCreature(i) {
   // never let three cull either mesh based on it.
   shell.frustumCulled = false;
   outline.frustumCulled = false;
-  scene.add(shell);
-  scene.add(outline);
+  rig.add(shell);
+  rig.add(outline);
+  // Each creature starts its wander fresh at center, facing -X.
+  roam.reset();
+  rig.position.set(0, 0, 0);
+  rig.rotation.y = 0;
   current = creature;
   ui.setActive(i);
 }
@@ -91,13 +104,24 @@ window.addEventListener('resize', () => {
 });
 
 const clock = new THREE.Clock();
+let tAnim = 0;
 
 renderer.setAnimationLoop(() => {
-  const t = clock.getElapsedTime();
+  // Clamped delta: a backgrounded tab returns with a giant dt, which would
+  // teleport the roamer and spike the steering.
+  const dt = Math.min(clock.getDelta(), 0.05);
+  tAnim += dt;
+
   // Both materials own their uniforms — the skin and its ink must move in
   // lockstep or the outline lags the wave.
-  updateAnim(shell.material, t, current, animIdx); // absolute pose — no drift
-  updateAnim(outline.material, t, current, animIdx);
+  updateAnim(shell.material, tAnim, current, animIdx); // absolute pose — no drift
+  updateAnim(outline.material, tAnim, current, animIdx);
+
+  // Root motion: wander + face the direction of travel + idle bob.
+  const pose = roam.update(dt);
+  rig.position.set(pose.x, BOB_AMPLITUDE * Math.sin(tAnim * BOB_SPEED), pose.z);
+  rig.rotation.y = pose.heading;
+
   controls.update(); // required every frame when damping is on
   renderer.render(scene, camera);
 });
