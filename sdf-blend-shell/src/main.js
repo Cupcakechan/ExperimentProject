@@ -1,18 +1,17 @@
 // ============================================================
-// main.js — entry point. Scene, camera, controls, render loop.
-// (Roughly: this file is the "Main Camera + game loop" of a
-// Unity scene; buildShell + blendMaterial are the prefab+shader,
-// anim.js is the Update() that drives the wave.)
+// main.js — entry point. Scene, camera, gallery state, loop.
+// Switching creatures rebuilds geometry + material (simplest
+// reliable — a rebuild is a one-off cost, not per-frame).
 // ============================================================
 
 import * as THREE from 'three';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
-import { CREATURE } from './data/creature.js';
+import { CREATURES } from './data/creatures.js';
 import { buildShellGeometry } from './render/buildShell.js';
 import { createBlendMaterial } from './render/blendMaterial.js';
-import { updateAnim, ANIM_PRIM_INDEX } from './anim.js';
+import { updateAnim, animPrimIndex } from './anim.js';
 import { createControls } from './ui/controls.js';
-import { BACKGROUND_COLOR, CAMERA_FOV, CAMERA_START, ORBIT_TARGET } from './config.js';
+import { BLEND_K, BACKGROUND_COLOR, CAMERA_FOV, CAMERA_START, ORBIT_TARGET } from './config.js';
 
 const renderer = new THREE.WebGLRenderer({ antialias: true });
 renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2)); // cap DPR: retina 3x is wasted work here
@@ -29,16 +28,50 @@ const controls = new OrbitControls(camera, renderer.domElement);
 controls.target.set(...ORBIT_TARGET);
 controls.enableDamping = true;
 
-// The creature: one merged geometry + the blend-shell material.
-const material = createBlendMaterial(CREATURE);
-material.uniforms.uAnimPrim.value = ANIM_PRIM_INDEX; // wire which prim waves
-const shell = new THREE.Mesh(buildShellGeometry(CREATURE), material);
-// Vertices move in the shader, so the CPU-side bounding volume is wrong —
-// never let three cull the mesh based on it.
-shell.frustumCulled = false;
-scene.add(shell);
+// --- gallery state ---
+let shell = null;
+let current = null;
+let animIdx = -1;
+let k = BLEND_K; // the slider's value survives creature switches
 
-createControls(material); // the uK slider
+function setCreature(i) {
+  const creature = CREATURES[i];
+  if (!creature) return;
+  if (shell) {
+    scene.remove(shell);
+    shell.geometry.dispose();
+    shell.material.dispose(); // rebuilt per creature; never leak GPU objects
+  }
+  const material = createBlendMaterial(creature.prims);
+  animIdx = animPrimIndex(creature);
+  material.uniforms.uAnimPrim.value = animIdx;
+  material.uniforms.uK.value = k;
+  shell = new THREE.Mesh(buildShellGeometry(creature.prims), material);
+  // Vertices move in the shader, so the CPU-side bounding volume is wrong —
+  // never let three cull the mesh based on it.
+  shell.frustumCulled = false;
+  scene.add(shell);
+  current = creature;
+  ui.setActive(i);
+}
+
+const ui = createControls({
+  creatures: CREATURES,
+  initialK: k,
+  onK: (v) => {
+    k = v;
+    if (shell) shell.material.uniforms.uK.value = v;
+  },
+  onSelect: setCreature,
+});
+
+// Number keys 1..N mirror the buttons.
+window.addEventListener('keydown', (e) => {
+  const n = parseInt(e.key, 10);
+  if (n >= 1 && n <= CREATURES.length) setCreature(n - 1);
+});
+
+setCreature(0);
 
 window.addEventListener('resize', () => {
   camera.aspect = window.innerWidth / window.innerHeight;
@@ -49,7 +82,7 @@ window.addEventListener('resize', () => {
 const clock = new THREE.Clock();
 
 renderer.setAnimationLoop(() => {
-  updateAnim(material, clock.getElapsedTime()); // absolute pose from t — no drift
+  updateAnim(shell.material, clock.getElapsedTime(), current, animIdx); // absolute pose — no drift
   controls.update(); // required every frame when damping is on
   renderer.render(scene, camera);
 });

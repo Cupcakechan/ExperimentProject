@@ -1,6 +1,6 @@
 # PROJECT_HANDOFF — SDF Blend-Shell Experiment
 
-_Last updated: 2026-07-03 (legs browser-confirmed + repo untangled; EYE UPGRADE delivered — layered decals, awaiting browser confirmation)_
+_Last updated: 2026-07-03 (eyes browser-confirmed; GALLERY delivered — 3 creatures from data, generalized suite, awaiting browser confirmation)_
 
 ## What this is
 An experiment replicating the "SDF blend-shell" character technique from a
@@ -56,14 +56,21 @@ the `sdf-blend-shell\` subfolder. Git commands run from the CONTAINER root.
 - Ring-density leg fix browser-confirmed ("legs are great") and pushed
   (`8bca4b8`). Nested-repo incident resolved (stale inner .git deleted,
   remote verified healthy; see LESSONS.md).
-- EYE UPGRADE delivered (this pass): each eye = white sclera + dark pupil.
-  Required a paint-model change: paint prims now composite as ORDERED DECALS
-  (registry order, later wins, smoothstep edge = PAINT_EDGE) on top of the
-  weighted solid-prim skin — the weighted model ties layered paints 50/50
-  (a pupil over a sclera reads gray). Bonus: crisp decal edges (the
-  reference look). Registry at 11/12 of MAX_PRIMS. Suite ALL PASS incl.
-  decal-order probe and pupil-fits-inside-sclera disc math (hand-computed
-  angular radii). NOT yet browser-confirmed.
+- Eye upgrade (layered decals) browser-confirmed and pushed (`f20a89a`).
+- GALLERY delivered (this pass, Option 1 of the exploration round):
+  `src/data/creatures.js` holds THREE creatures — Critter (ported), plus
+  Hopper and Longneck (both GENERATED COLD from data alone, graded by the
+  suite before any browser saw them: the end-goal practice loop, run twice).
+  Schema v2: creature = { id, name, prims, anim? } — the wave params moved
+  from config into per-creature data. Switcher: number keys 1-3 + buttons;
+  switching rebuilds geometry+material (disposed properly); slider k
+  survives switches. Suite GENERALIZED: every invariant now loops over
+  every creature (well-formed prims, capacity, aPrim/solids, ring density
+  on the longest capsule, paint anchored-and-poking (-r < sd < 0 vs nearest
+  solid host), decal order, pupil-disc-fits-inside-sclera-disc angular
+  math, anim rest/peak) + hand-computed regression anchors per creature.
+  ~180 probes ALL PASS. `src/data/creature.js` DELETED (replaced by
+  creatures.js). NOT yet browser-confirmed.
 - Cost note: shading is now ~5 field evaluations per pixel (was per-vertex).
   Fine on desktop; would need measuring before any mobile claim.
 - History quirk (accepted, left alone): Stage A commit appears twice
@@ -71,7 +78,12 @@ the `sdf-blend-shell\` subfolder. Git commands run from the CONTAINER root.
   history rewrite.
 
 ## Architecture
-- `src/data/creature.js` — the creature IS data: array of
+- `src/data/creatures.js` — the GALLERY: array of self-contained creatures
+  `{ id, name, prims, anim? }`; anim = { primId, axis, amplitude, speed }.
+  The file's header documents the AUTHORING RULES (stage bounds, face -X,
+  capacity budget, paint poke-through, pupil-on-sclera-ray, decal order,
+  single-prim anim limitation, thin-part minimums) — this list is the core
+  skill material. Each prim: array of
   `{ id, type: 'capsule'|'sphere', a:[x,y,z], b?:[x,y,z], r, color?, paint? }`.
   `color` optional (SHELL_COLOR fallback); `paint: true` = color-only DECAL
   prim (eyes): no surface/mesh/burial; composited over the skin in REGISTRY
@@ -92,19 +104,22 @@ the `sdf-blend-shell\` subfolder. Git commands run from the CONTAINER root.
   per-pixel sdfNormal(vPos) + blendColor(vPos) (`w = 1/(d+SOFT)^POW`; on the
   shell all prim distances are >= 0, so the touching prim dominates), 4-band
   toon lambert.
-- `src/anim.js` — the wave: arm's `b` rotates about its `a` (Z axis, sine,
-  ABSOLUTE from rest pose each frame — never accumulated, cannot drift).
-  Updates `uB[i]` (the SDF) and `uAnimMat` (the mesh) in lockstep. Registry is
-  never mutated. Exports pure `rotateAboutPivot` for the suite.
-- `src/ui/controls.js` — DOM layer: the `uK` slider (range K_MIN..K_MAX),
-  live uniform update, graceful no-op if the container is missing.
+- `src/anim.js` — the wave, CREATURE-AWARE: params from creature.anim; the
+  named prim's `b` rotates about its `a` (sine, ABSOLUTE from rest pose each
+  frame — never accumulated, cannot drift). Updates `uB[idx]` (the SDF) and
+  `uAnimMat` (the mesh) in lockstep; caller caches idx via animPrimIndex().
+  Registry never mutated. Exports pure `rotateAboutPivot` for the suite.
+- `src/ui/controls.js` — DOM layer: creature switcher buttons + the `uK`
+  slider; callbacks in (onSelect/onK), returns { setActive } — a uniform
+  no-op interface when headless, so callers never guard.
 - `src/config.js` — all tunables: BLEND_K 0.25 (slider 0.02–0.6), SNAP_ITERS 5,
   MAX_PRIMS 12, COLOR_SOFT 0.015, COLOR_POW 2.0, wave: 'tail' about X,
   0.6 rad @ 2.5, TUCK_DEPTH 0.02, BURY_EPS 0.005, colors, camera (start
   [-1.6,1.3,3.2], target [0,0.6,0]).
-- `src/main.js` — scene/camera/OrbitControls/loop; wires `uAnimPrim`, calls
-  `updateAnim(material, clock.getElapsedTime())` per frame;
-  `frustumCulled = false` on the shell.
+- `src/main.js` — scene/camera/OrbitControls/loop + GALLERY STATE:
+  setCreature(i) disposes the old shell (geometry + material) and rebuilds;
+  keys 1..N mirror the buttons; slider k persists across switches; loop
+  calls `updateAnim(shell.material, t, current, animIdx)`.
 
 ## Gotchas (project-specific)
 - **No backticks inside the GLSL template literals** (see LESSONS.md).
@@ -118,14 +133,15 @@ the `sdf-blend-shell\` subfolder. Git commands run from the CONTAINER root.
   pattern (see LESSONS.md).
 
 ## Open items / next steps
-1. **Daniel:** run the critter in the browser — quadruped standing, tail
-   wagging seamlessly, dark eyes painted on the head, no seams anywhere
-   (legs join the belly, tail joins the rump), console clean.
-2. On confirmation: git checkpoint (from `Experiment Project\` root).
+1. **Daniel:** run the gallery in the browser — 3 creatures, keys/buttons
+   switch, each seamless with working eyes and its own animation, slider k
+   survives switches, console clean.
+2. On confirmation: git checkpoint (from `Experiment Project\` root) —
+   NOTE it includes the DELETION of src/data/creature.js.
 3. Queued menu (each its own options round): per-prim blend caps (kCap —
-   unlocks 3D bulging eyes, ears, antennae), toon outline via SDF offset
-   surface, multi-creature gallery from JSON (the natural stage for "Claude
-   generates a creature cold" practice runs), IK leg stepping.
+   unlocks 3D bulging eyes, ears, antennae, thinner necks), toon outline via
+   SDF offset surface, IK leg stepping, more practice creatures (cheap now —
+   pure creatures.js entries).
 4. SKILL harvest (end goal, when the technique feels complete): dev-method
    skill session over LESSONS.md + this handoff -> a creature-generation
    skill reference (schema, invariants, tuning levers, gotchas).

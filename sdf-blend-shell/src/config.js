@@ -32,12 +32,7 @@ export const SHELL_COLOR = 0x4fd1a5;
 export const COLOR_SOFT = 0.015;
 export const COLOR_POW = 2.0;
 
-// Procedural wave (Stage B): which primitive moves, and how.
-// The prim's endpoint b rotates around its endpoint a — a shoulder joint.
-export const ANIM_PRIM_ID = 'tail';
-export const WAVE_AXIS = [1, 0, 0]; // rotate about X: the tail wags side to side
-export const WAVE_AMPLITUDE = 0.6; // radians each way from rest pose
-export const WAVE_SPEED = 2.5; // wave frequency (radians of phase per second)
+// (The wave animation is now per-creature data — see creatures.js anim.)
 
 // Scene / camera
 export const BACKGROUND_COLOR = 0x14161a;
