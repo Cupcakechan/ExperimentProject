@@ -208,6 +208,11 @@ for (const creature of CREATURES) {
   assert(mat.uniforms.uKCap.value.length === MAX_PRIMS, `${tag} uKCap padded to MAX_PRIMS`);
   assert(prims.every((p, i) => mat.uniforms.uKCap.value[i] === (p.kCap != null ? p.kCap : 1e3)), `${tag} uKCap mirrors the registry (uncapped = sentinel 1e3)`);
   assert(mat.uniforms.uSnapOffset.value === 0.0, `${tag} skin material snaps to the zero surface`);
+  const IDENTITY = new THREE.Matrix4();
+  assert(mat.uniforms.uPrimMat.value.length === MAX_PRIMS, `${tag} uPrimMat padded to MAX_PRIMS`);
+  assert(mat.uniforms.uPrimMat.value.every((m) => m.equals(IDENTITY)), `${tag} every prim starts at identity (rest pose)`);
+  assert(new Set(mat.uniforms.uPrimMat.value).size === MAX_PRIMS, `${tag} uPrimMat slots are SEPARATE instances (no shared matrix)`);
+  assert(mat.uniforms.uAnimPrim === undefined, `${tag} old single-slot uAnimPrim is gone`);
 
   // outline material: same field, offset snap target, back faces only
   const ink = createOutlineMaterial(prims);
@@ -229,17 +234,24 @@ for (const creature of CREATURES) {
   const minSolidR = Math.min(...solids.map((s) => s.r));
   assert(OUTLINE_WIDTH < minSolidR, `${tag} OUTLINE_WIDTH ${OUTLINE_WIDTH} < thinnest solid r ${minSolidR}`);
 
-  // anim: named prim exists, rest pose at t=0, actually moves at peak
+  // anim: named prim exists, rest pose at t=0, actually moves at peak —
+  // BEHAVIOR PARITY with the old single-slot path, now via uPrimMat.
   if (creature.anim) {
     const idx = animPrimIndex(creature);
     assert(idx >= 0, `${tag} anim prim '${creature.anim.primId}' found`);
     if (idx >= 0) {
+      const restA = mat.uniforms.uA.value[idx].clone();
       const restB = mat.uniforms.uB.value[idx].clone();
       updateAnim(mat, 0, creature, idx);
       assert(mat.uniforms.uB.value[idx].distanceTo(restB) < 1e-9, `${tag} updateAnim(t=0) keeps rest pose`);
+      assert(mat.uniforms.uPrimMat.value[idx].equals(IDENTITY), `${tag} updateAnim(t=0) writes identity to uPrimMat`);
       updateAnim(mat, Math.PI / 2 / creature.anim.speed, creature, idx);
       const moved = mat.uniforms.uB.value[idx].distanceTo(restB);
       assert(moved > 0.01, `${tag} updateAnim(peak) moves '${creature.anim.primId}' (${moved.toFixed(3)} > 0.01) — the wave is not inert`);
+      assert(mat.uniforms.uA.value[idx].distanceTo(restA) < 1e-9, `${tag} pivot invariant: 'a' never moves under rotation about a`);
+      assert(!mat.uniforms.uPrimMat.value[idx].equals(IDENTITY), `${tag} peak writes a non-identity uPrimMat`);
+      const untouched = mat.uniforms.uPrimMat.value.filter((m, i) => i !== idx);
+      assert(untouched.every((m) => m.equals(IDENTITY)), `${tag} non-animated prims stay at identity`);
     }
   }
 }

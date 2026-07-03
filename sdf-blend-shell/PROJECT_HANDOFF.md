@@ -1,6 +1,6 @@
 # PROJECT_HANDOFF — SDF Blend-Shell Experiment
 
-_Last updated: 2026-07-03 (outline arc browser-confirmed + pushed; ROAM+BOB delivered — living gallery stage 1, awaiting browser confirmation)_
+_Last updated: 2026-07-03 (roam browser-confirmed + pushed; STAGE 2 per-prim plumbing delivered — parity pass, awaiting browser confirmation)_
 
 ## What this is
 An experiment replicating the "SDF blend-shell" character technique from a
@@ -130,7 +130,24 @@ the `sdf-blend-shell\` subfolder. Git commands run from the CONTAINER root.
   name in the fragment stage) — without it the light turns WITH the
   roamer. Legs slide (known, staged — stepping is stage 3). Suite: roam
   determinism/boundedness/liveness/reset + lighting regression guard.
-  NOT yet browser-confirmed.
+  Browser-confirmed ("looks decent") and pushed (`35a9f07`).
+- STAGE 2 delivered (this pass): PER-PRIM TRANSFORM PLUMBING. The single
+  uAnimMat/uAnimPrim slot is replaced by uniform mat4 uPrimMat[MAX_PRIMS]
+  (identity = rest; SEPARATE Matrix4 instances per slot); every vertex
+  applies ITS OWN prim's transform (dynamic uniform indexing — legal in
+  vertex shaders). anim.js rewritten on it with a setPrimTransform()
+  lockstep helper: writing a prim's mat ALSO rewrites its uA/uB from the
+  rest pose — mesh and field can never disagree. Behavior parity: same
+  single-prim wave, suite-proven (rest identity, pivot invariant 'a' never
+  moves, non-animated prims stay identity, peak movement unchanged).
+  Uniform budget note: 12 mat4s = 48 vec4 slots on top of the prim arrays
+  — fine on desktop (1024+), would need auditing for a mobile claim.
+  ZERO visible change expected in the browser. NOT yet browser-confirmed.
+- FIELD queued (Daniel's ask, after this stage): all creatures roaming ONE
+  shared stage simultaneously — N rigs, one roam instance each with
+  per-creature PHASE OFFSETS (deterministic variation, or they wander in
+  unison), camera pulled back, switcher becomes creature-focus or goes
+  away. Its own options round when stage 2 confirms.
 - Deep Research question answered: deferred as low-ROI for blob critters;
   conditional next steps noted — the original poster's public demo/code
   (primary source) and targeted stylized-proportion research IF creatures
@@ -173,11 +190,12 @@ the `sdf-blend-shell\` subfolder. Git commands run from the CONTAINER root.
   per-pixel sdfNormal(vPos) + blendColor(vPos) (`w = 1/(d+SOFT)^POW`; on the
   shell all prim distances are >= 0, so the touching prim dominates), 4-band
   toon lambert.
-- `src/anim.js` — the wave, CREATURE-AWARE: params from creature.anim; the
-  named prim's `b` rotates about its `a` (sine, ABSOLUTE from rest pose each
-  frame — never accumulated, cannot drift). Updates `uB[idx]` (the SDF) and
-  `uAnimMat` (the mesh) in lockstep; caller caches idx via animPrimIndex().
-  Registry never mutated. Exports pure `rotateAboutPivot` for the suite.
+- `src/anim.js` — prim animation on the PER-PRIM plumbing: uPrimMat[i] per
+  prim (identity = rest). setPrimTransform(material, idx, prim, mat) is the
+  ONLY write path — it updates the prim's mat AND its uA/uB from the rest
+  pose in lockstep. Today's content is still the single-prim wave (sine,
+  ABSOLUTE from rest, cannot drift); IK (stage 3) writes many prims per
+  frame through the same helper. Registry never mutated.
 - `src/ui/controls.js` — DOM layer: creature switcher buttons + the `uK`
   slider; callbacks in (onSelect/onK), returns { setActive } — a uniform
   no-op interface when headless, so callers never guard.
@@ -202,11 +220,11 @@ the `sdf-blend-shell\` subfolder. Git commands run from the CONTAINER root.
   pattern (see LESSONS.md).
 
 ## Open items / next steps
-1. **Daniel:** verify roam+bob — creatures wander the stage facing their
-   direction of travel, gentle bob, lighting stays world-stable as they
-   turn (bands don't rotate with the body), ink tracks perfectly.
+1. **Daniel:** verify stage 2 — a PARITY pass: everything must look and
+   move EXACTLY as before (waves, roam, ink, eyes, slider, switching).
+   Any visible difference is a defect.
 2. On confirmation: git checkpoint (from `Experiment Project\` root).
-   Then STAGE 2: per-prim transform plumbing (behavior-parity pass).
+   Then the FIELD (options round), then STAGE 3 (IK stepping).
 3. Queued menu (each its own options round): IK leg stepping (multi-pass,
    staged), more practice creatures exercising the kCap vocabulary
    (antennae, thin ears, 3D-geometry eyes are now legal), OUTLINE_WIDTH /

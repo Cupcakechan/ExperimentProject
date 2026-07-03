@@ -140,8 +140,10 @@ vec3 blendColor(vec3 p) {
 const VERT = /* glsl */ `
 attribute float aPrim;
 
-uniform mat4 uAnimMat;
-uniform int uAnimPrim;
+// Every prim owns a transform (identity = rest). This replaces the single
+// uAnimMat/uAnimPrim slot: four legs stepping at once is four prims moving
+// independently — the prerequisite for IK.
+uniform mat4 uPrimMat[MAX_PRIMS];
 uniform float uTuck;
 uniform float uBuryEps;
 uniform float uBuryBand;
@@ -157,10 +159,10 @@ void main() {
   vec3 p = position;
   int own = int(aPrim + 0.5); // +0.5 makes the float->int cast robust
 
-  // If this vertex belongs to the animated primitive, rigidly follow it first.
-  if (own == uAnimPrim) {
-    p = (uAnimMat * vec4(p, 1.0)).xyz;
-  }
+  // Every vertex rigidly follows ITS OWN prim's transform first (identity
+  // for prims at rest — a no-op). Dynamic uniform-array indexing is legal
+  // in VERTEX shaders (GLSL ES restricts it in fragment shaders only).
+  p = (uPrimMat[own] * vec4(p, 1.0)).xyz;
 
   // Burial check BEFORE snapping: does this vertex start inside a
   // primitive that is not its own? Then another mesh owns this patch of
@@ -269,8 +271,9 @@ function buildUniforms(prims, snapOffset) {
     uK: { value: BLEND_K },
     uColorSoft: { value: COLOR_SOFT },
     uColorPow: { value: COLOR_POW },
-    uAnimMat: { value: new THREE.Matrix4() }, // identity = rest pose
-    uAnimPrim: { value: -1 }, // -1 = nothing animated until main.js wires it
+    // SEPARATE identity per slot — a shared instance would make every
+    // prim follow whichever one anim.js writes.
+    uPrimMat: { value: Array.from({ length: MAX_PRIMS }, () => new THREE.Matrix4()) },
     // Buried patches FOLD when projected onto a target surface: a buried
     // end cap faces many directions, so part of it lands with INVERTED
     // winding — and inverted triangles show their back faces to an outside

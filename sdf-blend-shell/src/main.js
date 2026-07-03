@@ -59,7 +59,6 @@ function setCreature(i) {
   const inkMaterial = createOutlineMaterial(creature.prims);
   animIdx = animPrimIndex(creature);
   for (const m of [material, inkMaterial]) {
-    m.uniforms.uAnimPrim.value = animIdx;
     m.uniforms.uK.value = k; // both draws follow the same field
   }
   shell = new THREE.Mesh(geometry, material);
