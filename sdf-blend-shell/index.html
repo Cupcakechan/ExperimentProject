@@ -1,0 +1,25 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>SDF Blend-Shell Experiment</title>
+  <link rel="stylesheet" href="style.css" />
+  <!--
+    Import map: lets ES modules use the bare specifier "three" without a bundler.
+    Version is PINNED so the experiment can't break under us when three.js updates.
+  -->
+  <script type="importmap">
+    {
+      "imports": {
+        "three": "https://cdn.jsdelivr.net/npm/three@0.170.0/build/three.module.js",
+        "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.170.0/examples/jsm/"
+      }
+    }
+  </script>
+</head>
+<body>
+  <div id="hud">SDF blend-shell — Stage A: static blend proof. Drag to orbit, scroll to zoom.</div>
+  <script type="module" src="src/main.js"></script>
+</body>
+</html>

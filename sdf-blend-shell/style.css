@@ -1,0 +1,22 @@
+html,
+body {
+  margin: 0;
+  padding: 0;
+  height: 100%;
+  overflow: hidden;
+  background: #14161a;
+}
+
+canvas {
+  display: block; /* removes the inline-element gap below the canvas */
+}
+
+#hud {
+  position: fixed;
+  top: 10px;
+  left: 12px;
+  font: 13px/1.4 system-ui, sans-serif;
+  color: #9aa3ad;
+  pointer-events: none; /* HUD must never eat orbit-drag input */
+  user-select: none;
+}
