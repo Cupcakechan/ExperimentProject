@@ -101,3 +101,22 @@
   (2) for culling-based passes, reason about WINDING under projection, not
   just position.
 - Route: skill reference candidate (both rules) + project-only mechanics.
+
+## 2026-07-03 — two gait defects caught by pre-delivery simulation
+- What broke / what happened: (1) both diagonal leg groups launched swings
+  in the SAME frame (all four feet airborne — gallop glitch, measured max
+  concurrent groups = 2); (2) Hopper's horizontal feet crumpled to 0.18x
+  rest length when the hip walked over a planted toe.
+- Root causes: (1) the "whose turn" gate was a SNAPSHOT taken before the
+  foot loop — stale the moment the first foot lifted; shared turn-taking
+  state must be claimed AT MUTATION TIME, not read once. (2) a pin axis
+  parallel to travel lets the hip overtake the anchor — pinned-length
+  systems need a stretch clamp (pin slips along the axis past the band).
+- Verification gap it exposed: none — the measure-before-encode pattern
+  (established in the field pass) caught both before the browser existed
+  as a test. The suite now RUNS the 20s walk per creature every execution.
+- Plug shipped: live gate claim + stretch clamp (STRETCH_MIN/MAX); suite
+  walk-sim asserts trot invariant, world-fixed planted feet, drift bound,
+  clamp band — thresholds MEASURED (drift 0.298, hopper floor 0.55).
+- Route: skill reference candidates (stale-snapshot gates; pinned-length
+  clamps; simulate stateful systems before shipping).

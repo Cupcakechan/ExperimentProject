@@ -14,6 +14,7 @@ import { createBlendMaterial, createOutlineMaterial } from './render/blendMateri
 import { updateAnim, animPrimIndex } from './anim.js';
 import { createControls } from './ui/controls.js';
 import { createRoam } from './roam.js';
+import { createGait } from './gait.js';
 import {
   BLEND_K,
   BACKGROUND_COLOR,
@@ -70,6 +71,7 @@ const actors = CREATURES.map((creature, i) => {
     ink,
     rig,
     roam: createRoam(i), // seed = index: distinct spawn + wander phase
+    gait: createGait(creature), // null for creatures without feet
     animIdx: animPrimIndex(creature),
     bobPhase: i * 2.1, // decorrelated bobbing — synchronized bouncing is uncanny
     pos: { x: 0, z: 0 }, // last frame's position, read by the OTHERS' separation
@@ -113,8 +115,15 @@ renderer.setAnimationLoop(() => {
     const pose = actor.roam.update(dt, others);
     actor.pos.x = pose.x;
     actor.pos.z = pose.z;
-    actor.rig.position.set(pose.x, BOB_AMPLITUDE * Math.sin(tAnim * BOB_SPEED + actor.bobPhase), pose.z);
+    const bobY = BOB_AMPLITUDE * Math.sin(tAnim * BOB_SPEED + actor.bobPhase);
+    actor.rig.position.set(pose.x, bobY, pose.z);
     actor.rig.rotation.y = pose.heading;
+
+    // Feet plant in the world and step reactively; the gait writes the leg
+    // prims through the SDF-lockstep path on both draws.
+    if (actor.gait) {
+      actor.gait.update(dt, { x: pose.x, y: bobY, z: pose.z, heading: pose.heading }, [actor.material, actor.ink]);
+    }
   }
 
   controls.update(); // required every frame when damping is on

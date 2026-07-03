@@ -12,6 +12,12 @@
 //   anim        optional single-prim wave:
 //               { primId, axis, amplitude (rad), speed (rad/s) }
 //               The prim's endpoint b rotates about its endpoint a.
+//   step        optional reactive gait: { feet: [leg prim ids],
+//               groups: [[feet indices]] }. Feet PLANT in the world and
+//               step when their home drifts past STEP_TRIGGER; only one
+//               group swings at a time (diagonal pairs for quadrupeds,
+//               alternating singles for bipeds — leg count is pure data).
+//               A foot prim must be a capsule whose b is the GROUND end.
 //
 // AUTHORING RULES (the constraints that make a creature come out
 // right — this list is skill material):
@@ -35,6 +41,7 @@ export const CREATURES = [
     id: 'critter',
     name: 'Critter',
     anim: { primId: 'tail', axis: [1, 0, 0], amplitude: 0.6, speed: 2.5 },
+    step: { feet: ['leg_fl', 'leg_fr', 'leg_bl', 'leg_br'], groups: [[0, 3], [1, 2]] },
     prims: [
       { id: 'body', type: 'capsule', a: [-0.5, 0.55, 0.0], b: [0.5, 0.55, 0.0], r: 0.42, color: 0x4fd1a5 },
       { id: 'head', type: 'sphere', a: [-0.85, 0.95, 0.0], r: 0.32, color: 0xf2b05a },
@@ -54,6 +61,8 @@ export const CREATURES = [
     name: 'Hopper',
     // Ears wiggle (a neck-free prim — safe to animate; see authoring rules).
     anim: { primId: 'ear_l', axis: [1, 0, 0], amplitude: 0.3, speed: 3.2 },
+    // Two feet, alternating — the "same system handles 2 or 4 legs" claim.
+    step: { feet: ['foot_l', 'foot_r'], groups: [[0], [1]] },
     prims: [
       { id: 'body', type: 'sphere', a: [0.0, 0.62, 0.0], r: 0.5, color: 0xcf6fc9 },
       { id: 'foot_l', type: 'capsule', a: [-0.05, 0.16, 0.18], b: [-0.38, 0.12, 0.22], r: 0.15, color: 0x9b4f96 },
@@ -71,6 +80,7 @@ export const CREATURES = [
     name: 'Longneck',
     // Tail wags — NOT the neck: the head would not follow it (see rules).
     anim: { primId: 'tail', axis: [1, 0, 0], amplitude: 0.7, speed: 2.8 },
+    step: { feet: ['leg_fl', 'leg_fr', 'leg_bl', 'leg_br'], groups: [[0, 3], [1, 2]] },
     prims: [
       { id: 'body', type: 'capsule', a: [-0.35, 0.55, 0.0], b: [0.45, 0.55, 0.0], r: 0.38, color: 0xe8b04b },
       { id: 'neck', type: 'capsule', a: [-0.35, 0.6, 0.0], b: [-0.75, 1.35, 0.0], r: 0.17, kCap: 0.12, color: 0xe8b04b },

@@ -107,3 +107,19 @@ export const ROAM_HARD_RADIUS = 2.4;
 // ever wanders off the edge of the world — suite-enforced.
 export const GROUND_RADIUS = 2.9;
 export const GROUND_COLOR = 0x1b1f24;
+
+// Reactive gait (stage 3). A planted foot steps when its HOME (rest spot
+// carried by the body) drifts more than STEP_TRIGGER away; the swing takes
+// STEP_TIME seconds, arcs STEP_LIFT high, and lands STEP_LEAD_TIME of body
+// velocity AHEAD of home (so feet keep up instead of always trailing).
+export const STEP_TRIGGER = 0.22;
+export const STEP_TIME = 0.22;
+export const STEP_LIFT = 0.09;
+export const STEP_LEAD_TIME = 0.15;
+
+// Leg stretch clamp: the pin may stretch/compress the leg only this far
+// (ratio of rest length). Beyond it the pin SLIPS along the leg axis
+// instead — measured failure without it: Hopper's horizontal feet crumpled
+// to 0.18x rest length when the hip walked over a planted toe.
+export const STRETCH_MIN = 0.55;
+export const STRETCH_MAX = 1.6;

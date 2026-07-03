@@ -1,6 +1,6 @@
 # PROJECT_HANDOFF — SDF Blend-Shell Experiment
 
-_Last updated: 2026-07-03 (stage 2 browser-confirmed + pushed; THE FIELD delivered — all creatures on one stage, awaiting browser confirmation)_
+_Last updated: 2026-07-03 (field browser-confirmed + pushed; STAGE 3 GAIT delivered — reactive foot stepping, awaiting browser confirmation)_
 
 ## What this is
 An experiment replicating the "SDF blend-shell" character technique from a
@@ -156,7 +156,24 @@ the `sdf-blend-shell\` subfolder. Git commands run from the CONTAINER root.
   clamp fixed both; re-measured closest approach 1.234, max radius exactly
   2.400; suite encodes the MEASURED thresholds and simulates the 3-actor
   field every run. Separation reads last-frame positions (1-frame lag,
-  order-independent). NOT yet browser-confirmed.
+  order-independent). Browser-confirmed ("Perfect") and pushed (`d49dbab`).
+- STAGE 3 GAIT delivered (this pass, Option 1 of the stepping round):
+  src/gait.js — reactive foot stepping, data-driven (creature.step =
+  { feet, groups }; quadrupeds trot on diagonal pairs, Hopper alternates
+  two feet — leg count is pure data). Per foot: world ANCHOR (planted) vs
+  HOME (rest spot carried by the body); swing triggers past STEP_TRIGGER
+  when the group has the turn; lifted arc over STEP_TIME, landing
+  STEP_LEAD_TIME of velocity ahead; legs pin hip->anchor via
+  aimStretchMatrix (pure, exported: rotate rest axis onto pin + scale
+  ALONG the axis only — hip invariant, cross-section preserved), written
+  through anim.js's setPrimTransform (now exported) on both draws.
+  TWO DEFECTS CAUGHT BY SIMULATION pre-delivery (see LESSONS.md): stale
+  turn gate (gallop glitch) -> live claim; horizontal-foot crumple to
+  0.18x -> STRETCH_MIN/MAX clamp (pin slips past the band). Suite runs
+  the 20s walk per creature every execution (trot invariant, world-fixed
+  planted feet, drift < 0.35 MEASURED 0.298, clamp band). Free-sine bob
+  retained (step-synced bob = queued Option 2 feel pass). NOT yet
+  browser-confirmed.
 - Deep Research question answered: deferred as low-ROI for blob critters;
   conditional next steps noted — the original poster's public demo/code
   (primary source) and targeted stylized-proportion research IF creatures
@@ -168,6 +185,8 @@ the `sdf-blend-shell\` subfolder. Git commands run from the CONTAINER root.
   history rewrite.
 
 ## Architecture
+- `src/gait.js` — reactive stepping (see Current state); exports pure
+  aimStretchMatrix for the suite; exposes .feet for simulation probes.
 - `src/data/creatures.js` — the GALLERY: array of self-contained creatures
   `{ id, name, prims, anim? }`; anim = { primId, axis, amplitude, speed }.
   The file's header documents the AUTHORING RULES (stage bounds, face -X,
@@ -233,8 +252,11 @@ the `sdf-blend-shell\` subfolder. Git commands run from the CONTAINER root.
    veering politely around each other, never touching, never leaving the
    ground disc; slider melts all three at once; performance smooth.
 2. On confirmation: git checkpoint (from `Experiment Project\` root).
-   Then STAGE 3: IK foot stepping (its own options round — the legs
-   finally stop sliding). Terrarium (population play) remains queued.
+3. Queued: gait FEEL pass (step-synced bob, lean into turns — Option 2 of
+   the stepping round); two-segment knees (Option 3); hopper HOP state
+   machine (the post's real hopper answer — it waddles for now);
+   terrarium (population play); then the SKILL HARVEST — with gait
+   working, the technique is essentially complete against the post.
 3. Queued menu (each its own options round): IK leg stepping (multi-pass,
    staged), more practice creatures exercising the kCap vocabulary
    (antennae, thin ears, 3D-geometry eyes are now legal), OUTLINE_WIDTH /

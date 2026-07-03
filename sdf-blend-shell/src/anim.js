@@ -38,9 +38,10 @@ const _a = new THREE.Vector3();
 const _b = new THREE.Vector3();
 
 // Write one prim's transform AND its SDF endpoints from the rest pose.
-// The lockstep lives HERE so no future caller can move a mesh without
-// moving its field (the registry is never mutated).
-function setPrimTransform(material, idx, prim, mat) {
+// The lockstep lives HERE so no caller can move a mesh without moving its
+// field (the registry is never mutated). EXPORTED: gait.js writes the leg
+// prims through this same path.
+export function setPrimTransform(material, idx, prim, mat) {
   material.uniforms.uPrimMat.value[idx].copy(mat);
   _a.set(...prim.a).applyMatrix4(mat);
   _b.set(...(prim.b ?? prim.a)).applyMatrix4(mat);

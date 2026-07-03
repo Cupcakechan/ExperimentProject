@@ -371,6 +371,74 @@ assert(minPair > 1.0, `actors never touch (closest approach ${minPair.toFixed(3)
 assert(fieldMaxR <= ROAM_HARD_RADIUS + 1e-9, `hard clamp holds (max radius ${fieldMaxR.toFixed(3)} <= ${ROAM_HARD_RADIUS})`);
 assert(ROAM_SEP_RADIUS > 1.0, 'personal space exceeds the touch threshold');
 
+// ---- Gait (stage 3): aim-and-stretch math, step data, and a measured walk ----
+const { createGait, aimStretchMatrix } = await import('./src/gait.js');
+const { STEP_TRIGGER, STRETCH_MIN, STRETCH_MAX } = await import('./src/config.js');
+
+// aimStretchMatrix, hand-computed: rest leg straight down from hip (0,1,0)
+// to foot (0,0,0). Re-aimed to (0.6,0.2,0): rotation only (same length).
+const A0 = new THREE.Vector3(0, 1, 0);
+const B0 = new THREE.Vector3(0, 0, 0);
+const M1 = aimStretchMatrix(A0, B0, new THREE.Vector3(0.6, 0.2, 0));
+assert(B0.clone().applyMatrix4(M1).distanceTo(new THREE.Vector3(0.6, 0.2, 0)) < 1e-9, 'aimStretch maps the foot exactly onto the pin (hand-computed)');
+assert(A0.clone().applyMatrix4(M1).distanceTo(A0) < 1e-9, 'aimStretch: the hip is invariant');
+// Stretched straight down to (0,-0.5,0): s = 1.5, no rotation — and a point
+// offset perpendicular at the hip must NOT move (cross-section preserved).
+const M2 = aimStretchMatrix(A0, B0, new THREE.Vector3(0, -0.5, 0));
+assert(B0.clone().applyMatrix4(M2).distanceTo(new THREE.Vector3(0, -0.5, 0)) < 1e-9, 'aimStretch stretches to the pin (s=1.5, hand-computed)');
+assert(new THREE.Vector3(0.13, 1, 0).applyMatrix4(M2).distanceTo(new THREE.Vector3(0.13, 1, 0)) < 1e-9, 'aimStretch preserves the cross-section (perpendicular point fixed)');
+
+for (const creature of CREATURES) {
+  if (!creature.step) continue;
+  const tag = `[${creature.id}]`;
+  const { feet: feetIds, groups } = creature.step;
+
+  // step data: every foot resolves to a capsule with a ground end; groups
+  // partition the feet exactly (every foot in exactly one group).
+  for (const id of feetIds) {
+    const prim = creature.prims.find((p) => p.id === id);
+    assert(prim && Array.isArray(prim.b) && !prim.paint, `${tag} foot '${id}' is a solid capsule with a b end`);
+  }
+  const covered = groups.flat().sort((a, b) => a - b);
+  assert(covered.length === feetIds.length && covered.every((v, i) => v === i), `${tag} groups partition the feet exactly`);
+
+  // The walk, simulated (20s straight line at roam speed, with bob) —
+  // thresholds encode the MEASURED values: drift 0.298, stretch 0.55-1.33,
+  // never more than one group airborne, planted feet world-fixed.
+  const gMat = createBlendMaterial(creature.prims);
+  const gait = createGait(creature);
+  let steps = 0;
+  let maxDrift = 0;
+  let maxS = 0;
+  let minS = 9;
+  let maxGroups = 0;
+  let plantedMoved = false;
+  const prevSwing = feetIds.map(() => false);
+  const prevAnchor = feetIds.map(() => null);
+  for (let i = 0; i < 1200; i++) {
+    const tt = i / 60;
+    gait.update(1 / 60, { x: -tt * 0.35, y: 0.03 * Math.sin(tt * 4), z: 0, heading: 0 }, [gMat]);
+    maxGroups = Math.max(maxGroups, new Set(gait.feet.filter((f) => f.swingT >= 0).map((f) => f.group)).size);
+    gait.feet.forEach((f, j) => {
+      const swinging = f.swingT >= 0;
+      if (swinging && !prevSwing[j]) steps++;
+      if (!swinging && !prevSwing[j] && prevAnchor[j] && f.anchor.distanceTo(prevAnchor[j]) > 1e-9) plantedMoved = true;
+      prevSwing[j] = swinging;
+      prevAnchor[j] = (prevAnchor[j] ?? new THREE.Vector3()).copy(f.anchor);
+      if (!swinging) maxDrift = Math.max(maxDrift, Math.hypot(f.b0.x - tt * 0.35 - f.anchor.x, f.b0.z - f.anchor.z));
+      const s = gMat.uniforms.uA.value[f.idx].distanceTo(gMat.uniforms.uB.value[f.idx]) / f.len0;
+      maxS = Math.max(maxS, s);
+      minS = Math.min(minS, s);
+    });
+  }
+  assert(steps >= feetIds.length * 15, `${tag} the gait is not inert (${steps} steps >= ${feetIds.length * 15} over 20s)`);
+  assert(maxGroups === 1, `${tag} at most ONE group airborne at a time (the trot invariant)`);
+  assert(!plantedMoved, `${tag} planted feet are world-fixed between steps`);
+  assert(maxDrift < STEP_TRIGGER + 0.13, `${tag} feet keep up (max planted drift ${maxDrift.toFixed(3)} < ${(STEP_TRIGGER + 0.13).toFixed(2)}, MEASURED 0.298)`);
+  assert(minS >= STRETCH_MIN - 1e-6 && maxS <= STRETCH_MAX + 1e-6, `${tag} leg stretch stays in the clamp band (${minS.toFixed(2)}-${maxS.toFixed(2)} within ${STRETCH_MIN}-${STRETCH_MAX})`);
+}
+assert(createGait({ prims: [] }) === null, 'creatures without step data get no gait (graceful null)');
+
 // World-space lighting: the fragment shader must rotate the creature-space
 // SDF normal by the model matrix, or the light turns with the roamer.
 const litMat = createBlendMaterial(critter.prims);
