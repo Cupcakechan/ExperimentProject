@@ -33,7 +33,12 @@ export const CREATURE = [
   { id: 'leg_br', type: 'capsule', a: [0.42, 0.45, -0.22], b: [0.46, 0.08, -0.26], r: 0.13, color: 0x3bbd8e },
   // tail at the +X end, angled up — the animated prim (wags about its a)
   { id: 'tail', type: 'capsule', a: [0.5, 0.7, 0.0], b: [1.05, 1.05, 0.0], r: 0.14, color: 0x6f8cff },
-  // eyes: PAINT prims on the head's front-upper surface (critter faces -X)
-  { id: 'eye_l', type: 'sphere', a: [-1.05, 1.03, 0.14], r: 0.08, color: 0x20242c, paint: true },
-  { id: 'eye_r', type: 'sphere', a: [-1.05, 1.03, -0.14], r: 0.08, color: 0x20242c, paint: true },
+  // eyes: PAINT prims on the head's front-upper surface (critter faces -X).
+  // Each eye is TWO layered decals — white sclera, then a dark pupil poking
+  // slightly further out along the gaze. REGISTRY ORDER IS THE PAINT ORDER
+  // (later entries composite on top), so pupils MUST come after scleras.
+  { id: 'sclera_l', type: 'sphere', a: [-1.05, 1.03, 0.14], r: 0.095, color: 0xf2f4f6, paint: true },
+  { id: 'sclera_r', type: 'sphere', a: [-1.05, 1.03, -0.14], r: 0.095, color: 0xf2f4f6, paint: true },
+  { id: 'pupil_l', type: 'sphere', a: [-1.09, 1.05, 0.15], r: 0.04, color: 0x1b1f26, paint: true },
+  { id: 'pupil_r', type: 'sphere', a: [-1.09, 1.05, -0.15], r: 0.04, color: 0x1b1f26, paint: true },
 ];

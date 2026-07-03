@@ -41,3 +41,18 @@
   CAPSULE_RINGS_PER_UNIT (config) + suite probe asserting interior belly rings.
 - Route: project-only (three-version-specific measured fact; the general rule
   "the artifact wins — measure it" already lives in the skill).
+
+## 2026-07-03 — saved setup snippet kept re-creating a nested git repo
+- What broke / what happened: a nested `.git` reappeared inside the project
+  subfolder; VS Code showed two repositories, terminal and UI disagreed, and
+  two commits landed in the wrong (inner) repo.
+- Root cause: delivered instructions bundled a ONE-TIME setup command
+  (`git init`) with a REPEATABLE command (`node test_suite.mjs`) in one block;
+  Daniel saved the block and re-ran all of it later — as saved snippets get
+  re-run.
+- Verification gap it exposed: none automatable in-repo; the guard is a
+  delivery rule.
+- Plug shipped: nested repo confirmed stale (2 duplicate commits) and deleted;
+  snippet retired; rule: never ship run-once and run-every-time commands in
+  the same block — label lifecycle explicitly.
+- Route: GI candidate (delivery formatting rule).

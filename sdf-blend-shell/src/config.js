@@ -56,3 +56,7 @@ export const BURY_EPS = 0.005;
 // blend fillet — buildShell constructs capsules from cylinder + hemispheres
 // using this. Raise it if a join on a LONG capsule still looks starved.
 export const CAPSULE_RINGS_PER_UNIT = 14;
+// Decal edge softness for PAINT prims, in world units: how far outside a
+// paint prim's surface its color fades to nothing. Small = crisp cartoon
+// edges (the reference look); larger = airbrushed.
+export const PAINT_EDGE = 0.02;

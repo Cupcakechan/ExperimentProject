@@ -1,10 +1,16 @@
 # PROJECT_HANDOFF — SDF Blend-Shell Experiment
 
-_Last updated: 2026-07-03 (critter browser-tested: eyes work, legs were detached; ring-density fix delivered, awaiting browser confirmation)_
+_Last updated: 2026-07-03 (legs browser-confirmed + repo untangled; EYE UPGRADE delivered — layered decals, awaiting browser confirmation)_
 
 ## What this is
 An experiment replicating the "SDF blend-shell" character technique from a
-Reddit post (r/aigamedev): characters built from capsule/sphere primitive
+Reddit post (r/aigamedev) — **with an explicit end goal: build transferable
+knowledge for a future dev-method SKILL so Claude can procedurally generate
+new creatures from data alone.** The registry schema, the invariants proven
+by the suite (paint poke-through math, decal ordering, capsule ring density,
+burial distances), and LESSONS.md are the raw material for that harvest.
+
+The technique: characters built from capsule/sphere primitive
 meshes whose vertices are snapped, in a vertex shader, onto the smooth-min
 SDF surface of all primitives combined — so overlapping shapes render as one
 seamless body. Normals come from the SDF gradient; still ordinary mesh
@@ -47,16 +53,17 @@ the `sdf-blend-shell\` subfolder. Git commands run from the CONTAINER root.
   per-pixel). Old torso/head/arm creature replaced (lives in git history).
   Suite ALL PASS (burial + eye-visibility probes recomputed, hand-computed,
   for the new geometry).
-- Browser result: eyes visible and glued to the skin; head/tail joins clean;
-  LEGS DETACHED (hard boundary at the belly). Diagnosed + fixed (this pass):
-  three r170 CapsuleGeometry has ZERO length subdivisions (measured), so the
-  belly had no vertices to bend into leg fillets. buildShell now constructs
-  capsules as cylinder + hemispheres with CAPSULE_RINGS_PER_UNIT (config, 14)
-  rings; suite probes interior belly rings (14 measured). NOT yet
-  browser-confirmed. See LESSONS.md.
-- Eye upgrade queued (Daniel likes the reference's white-eyeball look):
-  data-only option = two paint prims per eye (white sclera + dark pupil);
-  3D option = kCap round.
+- Ring-density leg fix browser-confirmed ("legs are great") and pushed
+  (`8bca4b8`). Nested-repo incident resolved (stale inner .git deleted,
+  remote verified healthy; see LESSONS.md).
+- EYE UPGRADE delivered (this pass): each eye = white sclera + dark pupil.
+  Required a paint-model change: paint prims now composite as ORDERED DECALS
+  (registry order, later wins, smoothstep edge = PAINT_EDGE) on top of the
+  weighted solid-prim skin — the weighted model ties layered paints 50/50
+  (a pupil over a sclera reads gray). Bonus: crisp decal edges (the
+  reference look). Registry at 11/12 of MAX_PRIMS. Suite ALL PASS incl.
+  decal-order probe and pupil-fits-inside-sclera disc math (hand-computed
+  angular radii). NOT yet browser-confirmed.
 - Cost note: shading is now ~5 field evaluations per pixel (was per-vertex).
   Fine on desktop; would need measuring before any mobile claim.
 - History quirk (accepted, left alone): Stage A commit appears twice
@@ -66,9 +73,12 @@ the `sdf-blend-shell\` subfolder. Git commands run from the CONTAINER root.
 ## Architecture
 - `src/data/creature.js` — the creature IS data: array of
   `{ id, type: 'capsule'|'sphere', a:[x,y,z], b?:[x,y,z], r, color?, paint? }`.
-  `color` optional (SHELL_COLOR fallback); `paint: true` = color-only decal
-  prim (eyes): tints skin, no surface/mesh/burial. A paint prim must poke
-  through its host's skin: |offset| + r > host.r (suite-checked).
+  `color` optional (SHELL_COLOR fallback); `paint: true` = color-only DECAL
+  prim (eyes): no surface/mesh/burial; composited over the skin in REGISTRY
+  ORDER (later wins) with smoothstep edge PAINT_EDGE. Layering rule: pupil
+  entries must come AFTER sclera entries. A paint prim must poke through its
+  host's skin: |offset| + r > host.r; a layered decal must fit inside its
+  parent's disc (angular-radius math) — both suite-checked.
 - `src/render/buildShell.js` — one geometry per SOLID primitive (paint prims
   skipped), baked into WORLD space, merged. Bakes `aPrim` (per-vertex REGISTRY
   index). Capsules are built as cylinder + 2 hemispheres with
@@ -113,6 +123,9 @@ the `sdf-blend-shell\` subfolder. Git commands run from the CONTAINER root.
    (legs join the belly, tail joins the rump), console clean.
 2. On confirmation: git checkpoint (from `Experiment Project\` root).
 3. Queued menu (each its own options round): per-prim blend caps (kCap —
-   unlocks 3D bulging eyes, ears, antennae; deferred from the shaping round),
-   toon outline via SDF offset surface, multi-creature gallery from JSON,
-   IK leg stepping.
+   unlocks 3D bulging eyes, ears, antennae), toon outline via SDF offset
+   surface, multi-creature gallery from JSON (the natural stage for "Claude
+   generates a creature cold" practice runs), IK leg stepping.
+4. SKILL harvest (end goal, when the technique feels complete): dev-method
+   skill session over LESSONS.md + this handoff -> a creature-generation
+   skill reference (schema, invariants, tuning levers, gotchas).

@@ -184,16 +184,54 @@ assert(Math.abs(dLegTop - -0.1783) < 1e-3 && dLegTop < -BURY_EPS, 'leg_fl top is
 assert(Math.abs(dTailTip - 0.3233) < 1e-3 && dTailTip > -BURY_EPS, 'tail tip is exposed (d = +0.3233, hand-computed)');
 assert(TUCK_DEPTH > 0 && BURY_EPS > 0 && TUCK_DEPTH > BURY_EPS, 'tuck constants sane (depth > dead-zone > 0)');
 
-// Painted eyes must POKE THROUGH the head's skin to be visible, while
-// staying anchored inside it. Hand-computed for eye offset (0.20,0.08,0.14)
-// from head center: |offset| = 0.2569; reach = 0.2569 + 0.08 = 0.3369.
-// Anchored: 0.2569 < 0.32. Visible: 0.3369 > 0.32.
+// Every painted decal must POKE THROUGH the head's skin to be visible,
+// while staying anchored inside it. Hand-computed:
+//   scleras: |offset| = 0.2569 < 0.32; reach = 0.2569 + 0.095 = 0.3519 > 0.32
+//   pupils:  |offset| = 0.3002 < 0.32; reach = 0.3002 + 0.04  = 0.3402 > 0.32
 const head = CREATURE.find((p) => p.id === 'head');
+const expected = { sclera: [0.2569, 0.3519], pupil: [0.3002, 0.3402] };
 for (const eye of CREATURE.filter((p) => p.paint)) {
+  const [expOff, expReach] = expected[eye.id.startsWith('sclera') ? 'sclera' : 'pupil'];
   const off = Math.hypot(eye.a[0] - head.a[0], eye.a[1] - head.a[1], eye.a[2] - head.a[2]);
-  assert(Math.abs(off - 0.2569) < 1e-3 && off < head.r, `${eye.id} anchored inside head (|offset| = 0.2569 < 0.32, hand-computed)`);
-  assert(Math.abs(off + eye.r - 0.3369) < 1e-3 && off + eye.r > head.r, `${eye.id} pokes through the skin (reach = 0.3369 > 0.32, hand-computed)`);
+  assert(Math.abs(off - expOff) < 1e-3 && off < head.r, `${eye.id} anchored inside head (|offset| = ${expOff} < 0.32, hand-computed)`);
+  assert(Math.abs(off + eye.r - expReach) < 1e-3 && off + eye.r > head.r, `${eye.id} pokes through the skin (reach = ${expReach} > 0.32, hand-computed)`);
 }
+
+// Decals composite in REGISTRY ORDER (later wins), so each pupil must come
+// AFTER its sclera — a swapped order paints the white OVER the pupil.
+for (const side of ['l', 'r']) {
+  const si = CREATURE.findIndex((p) => p.id === 'sclera_' + side);
+  const pi = CREATURE.findIndex((p) => p.id === 'pupil_' + side);
+  assert(si >= 0 && pi > si, `pupil_${side} comes after sclera_${side} in the registry (decal order)`);
+}
+
+// Design probe: each pupil's visible disc must sit FULLY INSIDE its sclera's
+// disc, or the eye reads broken. On the head sphere, a decal's angular
+// radius is acos((R^2 + c^2 - r^2) / (2*R*c)); the pupil fits if the angle
+// between the two gaze directions + pupil angle <= sclera angle.
+// Hand-computed: sclera angle 0.2478 rad, pupil angle 0.1121 rad,
+// gaze separation 0.0548 rad -> 0.1669 <= 0.2478.
+function discAngle(off, r, R) {
+  return Math.acos((R * R + off * off - r * r) / (2 * R * off));
+}
+for (const side of ['l', 'r']) {
+  const s = CREATURE.find((p) => p.id === 'sclera_' + side);
+  const pu = CREATURE.find((p) => p.id === 'pupil_' + side);
+  const vS = [s.a[0] - head.a[0], s.a[1] - head.a[1], s.a[2] - head.a[2]];
+  const vP = [pu.a[0] - head.a[0], pu.a[1] - head.a[1], pu.a[2] - head.a[2]];
+  const nS = Math.hypot(...vS);
+  const nP = Math.hypot(...vP);
+  const gazeSep = Math.acos((vS[0] * vP[0] + vS[1] * vP[1] + vS[2] * vP[2]) / (nS * nP));
+  const aS = discAngle(nS, s.r, head.r);
+  const aP = discAngle(nP, pu.r, head.r);
+  assert(Math.abs(aS - 0.2478) < 2e-3 && Math.abs(aP - 0.1121) < 2e-3 && Math.abs(gazeSep - 0.0548) < 2e-3,
+    `eye_${side} disc angles match hand-computed (sclera 0.2478, pupil 0.1121, sep 0.0548)`);
+  assert(gazeSep + aP <= aS, `pupil_${side} disc fits fully inside sclera_${side} disc (${(gazeSep + aP).toFixed(3)} <= ${aS.toFixed(3)})`);
+}
+
+const { PAINT_EDGE } = await import('./src/config.js');
+assert(PAINT_EDGE > 0, 'PAINT_EDGE > 0 (smoothstep needs a nonzero edge)');
+assert(CREATURE.length <= MAX_PRIMS, `registry still fits capacity (${CREATURE.length} <= ${MAX_PRIMS})`);
 
 console.log(failures === 0 ? '\nALL PASS' : `\n${failures} FAILURE(S)`);
 process.exit(failures === 0 ? 0 : 1);

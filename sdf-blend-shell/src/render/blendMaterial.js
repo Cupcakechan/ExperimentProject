@@ -25,7 +25,7 @@
 // ============================================================
 
 import * as THREE from 'three';
-import { BLEND_K, SNAP_ITERS, MAX_PRIMS, SHELL_COLOR, COLOR_SOFT, COLOR_POW, TUCK_DEPTH, BURY_EPS } from '../config.js';
+import { BLEND_K, SNAP_ITERS, MAX_PRIMS, SHELL_COLOR, COLOR_SOFT, COLOR_POW, TUCK_DEPTH, BURY_EPS, PAINT_EDGE } from '../config.js';
 
 // NOTE: three.js auto-prepends 'position', the matrices, and precision
 // headers to ShaderMaterial shaders (never redeclare those) — but CUSTOM
@@ -41,6 +41,7 @@ uniform vec3 uB[MAX_PRIMS];
 uniform float uR[MAX_PRIMS];
 uniform vec3 uColors[MAX_PRIMS];
 uniform float uPaint[MAX_PRIMS]; // 1.0 = color-only prim: no surface, no mesh
+uniform float uPaintEdge; // decal edge softness, world units
 uniform int uCount;
 uniform float uK;
 uniform float uColorSoft;
@@ -93,17 +94,31 @@ vec3 sdfNormal(vec3 p) {
 // distance is >= 0 (smin <= min), so the touching primitive gets a huge
 // weight and distant ones fade — soft gradients at every join, for free.
 vec3 blendColor(vec3 p) {
+  // Phase 1: SOLID prims blend by proximity weight (the skin's base color).
   vec3 c = vec3(0.0);
   float wsum = 0.0;
   for (int i = 0; i < MAX_PRIMS; i++) {
-    if (i < uCount) {
+    if (i < uCount && uPaint[i] < 0.5) {
       float d = max(sdCapsule(p, uA[i], uB[i], uR[i]), 0.0);
       float w = 1.0 / pow(d + uColorSoft, uColorPow);
       c += uColors[i] * w;
       wsum += w;
     }
   }
-  return c / max(wsum, 1e-6);
+  c /= max(wsum, 1e-6);
+
+  // Phase 2: PAINT prims composite on top as decals, in REGISTRY ORDER
+  // (later wins) — full color where the point is inside the prim, fading
+  // out across uPaintEdge beyond it. Weighted blending can't layer paints:
+  // a pupil over a sclera saturates both weights and ties 50/50 (gray).
+  for (int i = 0; i < MAX_PRIMS; i++) {
+    if (i < uCount && uPaint[i] > 0.5) {
+      float d = sdCapsule(p, uA[i], uB[i], uR[i]);
+      float cov = 1.0 - smoothstep(0.0, uPaintEdge, d);
+      c = mix(c, uColors[i], cov);
+    }
+  }
+  return c;
 }
 `;
 
@@ -217,6 +232,7 @@ export function createBlendMaterial(prims) {
       uAnimPrim: { value: -1 }, // -1 = nothing animated until main.js wires it
       uTuck: { value: TUCK_DEPTH },
       uBuryEps: { value: BURY_EPS },
+      uPaintEdge: { value: PAINT_EDGE },
     },
     vertexShader: VERT,
     fragmentShader: FRAG,
