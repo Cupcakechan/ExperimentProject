@@ -1,6 +1,6 @@
 # PROJECT_HANDOFF — SDF Blend-Shell Experiment
 
-_Last updated: 2026-07-03 (per-pixel polish browser-confirmed; buried-geometry tuck delivered, awaiting browser confirmation)_
+_Last updated: 2026-07-03 (tuck browser-confirmed; CRITTER pass delivered — limbs from data + painted eyes, awaiting browser confirmation)_
 
 ## What this is
 An experiment replicating the "SDF blend-shell" character technique from a
@@ -37,11 +37,16 @@ the `sdf-blend-shell\` subfolder. Git commands run from the CONTAINER root.
 - Per-pixel polish browser-confirmed and pushed. It exposed the next defect:
   a faint stitched seam at glancing angles near the head — DOUBLE COVERAGE
   (buried mesh patches snapping onto skin another mesh owns, z-fighting).
-- Fix delivered (this pass): buried-geometry tuck, the post's own trick.
-  Vertices starting > BURY_EPS inside a DIFFERENT primitive sink TUCK_DEPTH
-  beneath the surface after snapping. Checked against live uniforms, so it
-  holds mid-wave. Suite ALL PASS (40 probes incl. hand-computed burial
-  distances). NOT yet browser-confirmed.
+- Buried-geometry tuck browser-confirmed and pushed (`2e98d0c`).
+- CRITTER pass delivered (this pass, Option 1 of the shaping round): the
+  registry now defines a quadruped — body, head, 4 legs, wagging tail
+  (7 solid prims) + 2 PAINTED eyes. New concept: paint prims (`paint: true`)
+  tint the skin via proximity color but have NO surface — skipped by mapSDF,
+  the burial check, and geometry building; aPrim keeps REGISTRY indices.
+  MAX_PRIMS 8 -> 12 (cost note: every field eval loops MAX_PRIMS, now
+  per-pixel). Old torso/head/arm creature replaced (lives in git history).
+  Suite ALL PASS (burial + eye-visibility probes recomputed, hand-computed,
+  for the new geometry). NOT yet browser-confirmed.
 - Cost note: shading is now ~5 field evaluations per pixel (was per-vertex).
   Fine on desktop; would need measuring before any mobile claim.
 - History quirk (accepted, left alone): Stage A commit appears twice
@@ -50,8 +55,10 @@ the `sdf-blend-shell\` subfolder. Git commands run from the CONTAINER root.
 
 ## Architecture
 - `src/data/creature.js` — the creature IS data: array of
-  `{ id, type: 'capsule'|'sphere', a:[x,y,z], b?:[x,y,z], r, color? }`.
-  `color` is optional (SHELL_COLOR fallback guards every read site).
+  `{ id, type: 'capsule'|'sphere', a:[x,y,z], b?:[x,y,z], r, color?, paint? }`.
+  `color` optional (SHELL_COLOR fallback); `paint: true` = color-only decal
+  prim (eyes): tints skin, no surface/mesh/burial. A paint prim must poke
+  through its host's skin: |offset| + r > host.r (suite-checked).
 - `src/render/buildShell.js` — one three.js geometry per primitive, baked into
   WORLD space, merged into a single geometry. Bakes `aPrim` (per-vertex
   primitive index).
@@ -70,8 +77,9 @@ the `sdf-blend-shell\` subfolder. Git commands run from the CONTAINER root.
 - `src/ui/controls.js` — DOM layer: the `uK` slider (range K_MIN..K_MAX),
   live uniform update, graceful no-op if the container is missing.
 - `src/config.js` — all tunables: BLEND_K 0.25 (slider 0.02–0.6), SNAP_ITERS 5,
-  MAX_PRIMS 8, COLOR_SOFT 0.015, COLOR_POW 2.0, WAVE_AMPLITUDE 0.5 rad,
-  WAVE_SPEED 1.6, TUCK_DEPTH 0.02, BURY_EPS 0.005, colors, camera.
+  MAX_PRIMS 12, COLOR_SOFT 0.015, COLOR_POW 2.0, wave: 'tail' about X,
+  0.6 rad @ 2.5, TUCK_DEPTH 0.02, BURY_EPS 0.005, colors, camera (start
+  [-1.6,1.3,3.2], target [0,0.6,0]).
 - `src/main.js` — scene/camera/OrbitControls/loop; wires `uAnimPrim`, calls
   `updateAnim(material, clock.getElapsedTime())` per frame;
   `frustumCulled = false` on the shell.
@@ -88,11 +96,11 @@ the `sdf-blend-shell\` subfolder. Git commands run from the CONTAINER root.
   pattern (see LESSONS.md).
 
 ## Open items / next steps
-1. **Daniel:** verify the tuck fix in the browser — find the angle that showed
-   the seam on the head; it must be gone, including mid-wave at the shoulder.
+1. **Daniel:** run the critter in the browser — quadruped standing, tail
+   wagging seamlessly, dark eyes painted on the head, no seams anywhere
+   (legs join the belly, tail joins the rump), console clean.
 2. On confirmation: git checkpoint (from `Experiment Project\` root).
-3. Then the CREATURE-SHAPING pass (Daniel's ask: legs, arms, eyes — a real
-   critter). Options round required; key design question flagged: eyes as
-   blended prims dissolve into the head at current k — needs per-prim blend
-   caps or non-blended decal prims. Menu beyond that (each its own round):
-   toon outline via SDF offset surface, multi-creature from data, IK stepping.
+3. Queued menu (each its own options round): per-prim blend caps (kCap —
+   unlocks 3D bulging eyes, ears, antennae; deferred from the shaping round),
+   toon outline via SDF offset surface, multi-creature gallery from JSON,
+   IK leg stepping.

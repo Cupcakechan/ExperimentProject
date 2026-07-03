@@ -36,15 +36,20 @@ function primGeometry(prim) {
 }
 
 export function buildShellGeometry(prims) {
-  const geos = prims.map((prim, idx) => {
-    const geo = primGeometry(prim);
-    // aPrim: which primitive each vertex belongs to. Unused in Stage A,
-    // but Stage B needs it so vertices can follow their primitive when it moves —
-    // adding it now means the merge never has to be redone.
-    const count = geo.getAttribute('position').count;
-    geo.setAttribute('aPrim', new THREE.BufferAttribute(new Float32Array(count).fill(idx), 1));
-    return geo;
-  });
+  const geos = prims
+    .map((prim, idx) => ({ prim, idx }))
+    // Paint prims tint the skin via the color field only — they have no
+    // surface of their own, so they get no mesh.
+    .filter(({ prim }) => !prim.paint)
+    .map(({ prim, idx }) => {
+      const geo = primGeometry(prim);
+      // aPrim: the REGISTRY index (not the filtered index — uniform arrays
+      // are indexed by registry position) so animated vertices can follow
+      // their primitive when it moves.
+      const count = geo.getAttribute('position').count;
+      geo.setAttribute('aPrim', new THREE.BufferAttribute(new Float32Array(count).fill(idx), 1));
+      return geo;
+    });
 
   const merged = mergeGeometries(geos, false);
   geos.forEach((g) => g.dispose()); // merged owns copies; source geos are done

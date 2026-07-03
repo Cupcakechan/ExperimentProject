@@ -19,7 +19,7 @@ export const SNAP_ITERS = 5;
 
 // Uniform array capacity compiled into the shader. The creature may define
 // FEWER primitives than this, never more.
-export const MAX_PRIMS = 8;
+export const MAX_PRIMS = 12;
 
 // Fallback color for any primitive that omits its own (guards hand-authored
 // registry entries — a colorless prim must never break the shader).
@@ -34,16 +34,16 @@ export const COLOR_POW = 2.0;
 
 // Procedural wave (Stage B): which primitive moves, and how.
 // The prim's endpoint b rotates around its endpoint a — a shoulder joint.
-export const ANIM_PRIM_ID = 'arm';
-export const WAVE_AXIS = [0, 0, 1]; // rotate in the XY plane (arm waves up/down)
-export const WAVE_AMPLITUDE = 0.5; // radians each way from rest pose
-export const WAVE_SPEED = 1.6; // wave frequency (radians of phase per second)
+export const ANIM_PRIM_ID = 'tail';
+export const WAVE_AXIS = [1, 0, 0]; // rotate about X: the tail wags side to side
+export const WAVE_AMPLITUDE = 0.6; // radians each way from rest pose
+export const WAVE_SPEED = 2.5; // wave frequency (radians of phase per second)
 
 // Scene / camera
 export const BACKGROUND_COLOR = 0x14161a;
 export const CAMERA_FOV = 50;
-export const CAMERA_START = [0, 1.1, 3.8]; // x, y, z
-export const ORBIT_TARGET = [0, 0.25, 0]; // roughly the creature's center of mass
+export const CAMERA_START = [-1.6, 1.3, 3.2]; // x, y, z — angled toward the face
+export const ORBIT_TARGET = [0, 0.6, 0]; // roughly the critter's center of mass
 // Buried-geometry tuck (seam fix). A vertex starting inside a DIFFERENT
 // primitive sinks this far beneath the skin instead of z-fighting the mesh
 // that owns that patch of surface. BURY_EPS is the dead-zone so vertices

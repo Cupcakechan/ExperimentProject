@@ -40,6 +40,7 @@ uniform vec3 uA[MAX_PRIMS];
 uniform vec3 uB[MAX_PRIMS];
 uniform float uR[MAX_PRIMS];
 uniform vec3 uColors[MAX_PRIMS];
+uniform float uPaint[MAX_PRIMS]; // 1.0 = color-only prim: no surface, no mesh
 uniform int uCount;
 uniform float uK;
 uniform float uColorSoft;
@@ -68,7 +69,7 @@ float smin(float a, float b, float k) {
 float mapSDF(vec3 p) {
   float d = 1e9;
   for (int i = 0; i < MAX_PRIMS; i++) {
-    if (i < uCount) {
+    if (i < uCount && uPaint[i] < 0.5) { // paint prims have no surface
       d = smin(d, sdCapsule(p, uA[i], uB[i], uR[i]), uK);
     }
   }
@@ -134,7 +135,7 @@ void main() {
   // skin, and this vertex must hide beneath it instead of z-fighting it.
   float dOther = 1e9;
   for (int i = 0; i < MAX_PRIMS; i++) {
-    if (i < uCount && i != own) {
+    if (i < uCount && i != own && uPaint[i] < 0.5) { // paint prims bury nothing
       dOther = min(dOther, sdCapsule(p, uA[i], uB[i], uR[i]));
     }
   }
@@ -188,6 +189,7 @@ export function createBlendMaterial(prims) {
   const uB = [];
   const uR = [];
   const uColors = [];
+  const uPaint = [];
   for (let i = 0; i < MAX_PRIMS; i++) {
     const prim = prims[i];
     uA.push(new THREE.Vector3(...(prim ? prim.a : [0, 0, 0])));
@@ -195,6 +197,8 @@ export function createBlendMaterial(prims) {
     uR.push(prim ? prim.r : 0.0);
     // ?? guard: a registry entry without a color must never break the shader.
     uColors.push(new THREE.Color(prim ? prim.color ?? SHELL_COLOR : 0x000000));
+    // paint is optional; absent = solid (existing entries unaffected).
+    uPaint.push(prim && prim.paint ? 1.0 : 0.0);
   }
 
   return new THREE.ShaderMaterial({
@@ -204,6 +208,7 @@ export function createBlendMaterial(prims) {
       uB: { value: uB },
       uR: { value: uR },
       uColors: { value: uColors },
+      uPaint: { value: uPaint },
       uCount: { value: Math.min(prims.length, MAX_PRIMS) },
       uK: { value: BLEND_K },
       uColorSoft: { value: COLOR_SOFT },

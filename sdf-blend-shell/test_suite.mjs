@@ -76,6 +76,7 @@ for (const prim of CREATURE) {
   assert(prim.b === undefined || (Array.isArray(prim.b) && prim.b.length === 3), `${prim.id}: b is [x,y,z] or omitted`);
   assert(typeof prim.r === 'number' && prim.r > 0, `${prim.id}: r > 0`);
   assert(prim.color === undefined || typeof prim.color === 'number', `${prim.id}: color is a hex number or omitted`);
+  assert(prim.paint === undefined || typeof prim.paint === 'boolean', `${prim.id}: paint is boolean or omitted`);
 }
 assert(CREATURE.length <= MAX_PRIMS, `creature fits shader capacity (${CREATURE.length} <= ${MAX_PRIMS})`);
 assert(BLEND_K > 0, 'BLEND_K > 0 (smin divides by k)');
@@ -86,13 +87,17 @@ assert(geo !== null && geo.getAttribute('position').count > 0, 'merged geometry 
 const aPrim = geo.getAttribute('aPrim');
 assert(aPrim !== undefined, 'aPrim attribute exists (animated verts follow their prim)');
 const seen = new Set(aPrim.array);
-assert(seen.size === CREATURE.length, `aPrim covers all ${CREATURE.length} primitives (saw ${seen.size})`);
+const solidCount = CREATURE.filter((p) => !p.paint).length;
+assert(seen.size === solidCount, `aPrim covers all ${solidCount} SOLID primitives (saw ${seen.size})`);
+assert([...seen].every((i) => !CREATURE[i].paint), 'no paint prim got a mesh (aPrim indices are all solid)');
 
 // Material: uniform arrays are padded to exactly MAX_PRIMS, count is honest.
 const mat = createBlendMaterial(CREATURE);
 assert(mat.uniforms.uA.value.length === MAX_PRIMS, 'uA padded to MAX_PRIMS');
 assert(mat.uniforms.uR.value.length === MAX_PRIMS, 'uR padded to MAX_PRIMS');
 assert(mat.uniforms.uColors.value.length === MAX_PRIMS, 'uColors padded to MAX_PRIMS');
+assert(mat.uniforms.uPaint.value.length === MAX_PRIMS, 'uPaint padded to MAX_PRIMS');
+assert(CREATURE.every((p, i) => mat.uniforms.uPaint.value[i] === (p.paint ? 1.0 : 0.0)), 'uPaint flags mirror the registry');
 assert(mat.uniforms.uCount.value === CREATURE.length, 'uCount matches creature');
 assert(mat.uniforms.uAnimPrim.value === -1, 'uAnimPrim defaults to -1 (main.js wires it)');
 
@@ -149,14 +154,30 @@ function sdCapsule(p, a, b, r) {
   return Math.hypot(d[0], d[1], d[2]) - r;
 }
 const { TUCK_DEPTH, BURY_EPS } = await import('./src/config.js');
-const torso = CREATURE.find((p) => p.id === 'torso');
-const dHeadBottom = sdCapsule([-0.95, 0.25, 0], torso.a, torso.b, torso.r);
-const dHeadTop = sdCapsule([-0.95, 0.95, 0], torso.a, torso.b, torso.r);
-const dArmRoot = sdCapsule([0.45, 0.25, 0], torso.a, torso.b, torso.r);
-assert(Math.abs(dHeadBottom - -0.0283) < 1e-3 && dHeadBottom < -BURY_EPS, 'head-bottom is buried in torso (d = -0.0283, hand-computed)');
-assert(Math.abs(dHeadTop - 0.5308) < 1e-3 && dHeadTop > -BURY_EPS, 'head-top is exposed (d = +0.5308, hand-computed)');
-assert(Math.abs(dArmRoot - -0.25) < 1e-9 && dArmRoot < -BURY_EPS, 'arm root is deeply buried (d = -0.25 exactly, hand-computed)');
+const body = CREATURE.find((p) => p.id === 'body');
+const tail = CREATURE.find((p) => p.id === 'tail');
+const legFl = CREATURE.find((p) => p.id === 'leg_fl');
+// tail root (0.5,0.7,0): closest body point (0.5,0.55,0) -> |(0,0.15,0)| - 0.42 = -0.27 exactly
+const dTailRoot = sdCapsule(tail.a, body.a, body.b, body.r);
+// leg_fl top (-0.42,0.45,0.22): closest (-0.42,0.55,0) -> sqrt(0.01+0.0484) - 0.42 = -0.1783
+const dLegTop = sdCapsule(legFl.a, body.a, body.b, body.r);
+// tail tip (1.05,1.05,0): closest (0.5,0.55,0) -> sqrt(0.3025+0.25) - 0.42 = +0.3233
+const dTailTip = sdCapsule(tail.b, body.a, body.b, body.r);
+assert(Math.abs(dTailRoot - -0.27) < 1e-9 && dTailRoot < -BURY_EPS, 'tail root is deeply buried in body (d = -0.27 exactly, hand-computed)');
+assert(Math.abs(dLegTop - -0.1783) < 1e-3 && dLegTop < -BURY_EPS, 'leg_fl top is buried in body (d = -0.1783, hand-computed)');
+assert(Math.abs(dTailTip - 0.3233) < 1e-3 && dTailTip > -BURY_EPS, 'tail tip is exposed (d = +0.3233, hand-computed)');
 assert(TUCK_DEPTH > 0 && BURY_EPS > 0 && TUCK_DEPTH > BURY_EPS, 'tuck constants sane (depth > dead-zone > 0)');
+
+// Painted eyes must POKE THROUGH the head's skin to be visible, while
+// staying anchored inside it. Hand-computed for eye offset (0.20,0.08,0.14)
+// from head center: |offset| = 0.2569; reach = 0.2569 + 0.08 = 0.3369.
+// Anchored: 0.2569 < 0.32. Visible: 0.3369 > 0.32.
+const head = CREATURE.find((p) => p.id === 'head');
+for (const eye of CREATURE.filter((p) => p.paint)) {
+  const off = Math.hypot(eye.a[0] - head.a[0], eye.a[1] - head.a[1], eye.a[2] - head.a[2]);
+  assert(Math.abs(off - 0.2569) < 1e-3 && off < head.r, `${eye.id} anchored inside head (|offset| = 0.2569 < 0.32, hand-computed)`);
+  assert(Math.abs(off + eye.r - 0.3369) < 1e-3 && off + eye.r > head.r, `${eye.id} pokes through the skin (reach = 0.3369 > 0.32, hand-computed)`);
+}
 
 console.log(failures === 0 ? '\nALL PASS' : `\n${failures} FAILURE(S)`);
 process.exit(failures === 0 ? 0 : 1);
