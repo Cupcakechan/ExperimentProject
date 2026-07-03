@@ -233,5 +233,29 @@ assert(Math.abs(paintSd(hopper, 'sclera_l', 'body') - -0.0229) < 1e-3, 'hopper s
 assert(Math.abs(paintSd(longneck, 'sclera_l', 'head') - -0.0381) < 1e-3, 'longneck sclera_l sd vs head = -0.0381 (hand-computed)');
 assert(Math.abs(sdPrim(critter.prims.find((p) => p.id === 'tail').a, critter.prims.find((p) => p.id === 'body')) - -0.27) < 1e-9, 'critter tail root buried d = -0.27 exactly (hand-computed)');
 
+// Decals ride the inflated skin (the k=0.6 vanishing-eyes defect):
+// coverage subtracts the local skin inflation so a decal stays visible at
+// any blend radius. JS mirror of the shader's coverage; smoothstep as GLSL.
+function smoothstep(a, b, x) {
+  const t = Math.min(Math.max((x - a) / (b - a), 0), 1);
+  return t * t * (3 - 2 * t);
+}
+function coverage(paintSd, infl) {
+  return 1 - smoothstep(0, PAINT_EDGE, paintSd - infl);
+}
+// Test point: on the eye's gaze ray, on a skin inflated by 0.15 (~k=0.6's
+// max deficit k/4). Hand-computed paint distances at that point:
+//   hopper pupil:   |0.5+0.15 - 0.48| - 0.055 = 0.115
+//   longneck pupil: |0.22+0.15 - 0.20| - 0.03  = 0.14
+// OLD model (infl ignored) -> coverage 0 (the reported bug).
+// NEW model (infl subtracted) -> full coverage.
+assert(coverage(0.115, 0) < 0.01, 'hopper pupil at inflated skin, OLD model: invisible (reproduces the bug)');
+assert(coverage(0.115, 0.15) > 0.99, 'hopper pupil at inflated skin, NEW model: fully covered (the fix)');
+assert(coverage(0.14, 0) < 0.01, 'longneck pupil at inflated skin, OLD model: invisible (reproduces the bug)');
+assert(coverage(0.14, 0.15) > 0.99, 'longneck pupil at inflated skin, NEW model: fully covered (the fix)');
+// And at rest (no inflation) the pupil center is covered as before:
+// hopper skin point on the ray at R=0.5: |0.5-0.48| - 0.055 = -0.035 < 0.
+assert(coverage(-0.035, 0) > 0.99, 'hopper pupil at rest skin: covered (no regression at low k)');
+
 console.log(failures === 0 ? '\nALL PASS' : `\n${failures} FAILURE(S)`);
 process.exit(failures === 0 ? 0 : 1);

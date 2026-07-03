@@ -1,6 +1,6 @@
 # PROJECT_HANDOFF — SDF Blend-Shell Experiment
 
-_Last updated: 2026-07-03 (eyes browser-confirmed; GALLERY delivered — 3 creatures from data, generalized suite, awaiting browser confirmation)_
+_Last updated: 2026-07-03 (gallery browser-confirmed + pushed; decal-inflation fix delivered, awaiting browser confirmation)_
 
 ## What this is
 An experiment replicating the "SDF blend-shell" character technique from a
@@ -69,8 +69,18 @@ the `sdf-blend-shell\` subfolder. Git commands run from the CONTAINER root.
   on the longest capsule, paint anchored-and-poking (-r < sd < 0 vs nearest
   solid host), decal order, pupil-disc-fits-inside-sclera-disc angular
   math, anim rest/peak) + hand-computed regression anchors per creature.
-  ~180 probes ALL PASS. `src/data/creature.js` DELETED (replaced by
-  creatures.js). NOT yet browser-confirmed.
+  ~130 probes ALL PASS. `src/data/creature.js` DELETED (replaced by
+  creatures.js). Browser-confirmed ("they look great") and pushed
+  (`bae461c`).
+- DECAL-INFLATION FIX delivered (this pass): at k=0.6 the smin skin
+  inflates (up to k/4) past the eyes' poke margins — Hopper kept a ghost
+  sclera, Longneck lost its eyes entirely, Critter (uncrowded face)
+  survived: severity ordered by margin + prim crowding. Fix: decal
+  coverage subtracts the LOCAL INFLATION (min solid distance at the shaded
+  point, free from the existing phase-1 loop) so decals ride the skin at
+  any k. Side effect: eyes read very slightly larger at k=0.25. Suite has
+  bug-then-fix probes at inflation 0.15 (hand-computed). NOT yet
+  browser-confirmed. See LESSONS.md.
 - Cost note: shading is now ~5 field evaluations per pixel (was per-vertex).
   Fine on desktop; would need measuring before any mobile claim.
 - History quirk (accepted, left alone): Stage A commit appears twice
@@ -133,11 +143,9 @@ the `sdf-blend-shell\` subfolder. Git commands run from the CONTAINER root.
   pattern (see LESSONS.md).
 
 ## Open items / next steps
-1. **Daniel:** run the gallery in the browser — 3 creatures, keys/buttons
-   switch, each seamless with working eyes and its own animation, slider k
-   survives switches, console clean.
-2. On confirmation: git checkpoint (from `Experiment Project\` root) —
-   NOTE it includes the DELETION of src/data/creature.js.
+1. **Daniel:** verify the fix — sweep the slider 0.02 -> 0.60 on ALL THREE
+   creatures: eyes must stay visible (and glued to the skin) at every k.
+2. On confirmation: git checkpoint (from `Experiment Project\` root).
 3. Queued menu (each its own options round): per-prim blend caps (kCap —
    unlocks 3D bulging eyes, ears, antennae, thinner necks), toon outline via
    SDF offset surface, IK leg stepping, more practice creatures (cheap now —

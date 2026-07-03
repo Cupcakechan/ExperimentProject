@@ -56,3 +56,20 @@
   snippet retired; rule: never ship run-once and run-every-time commands in
   the same block — label lifecycle explicitly.
 - Route: GI candidate (delivery formatting rule).
+
+## 2026-07-03 — decals vanished at high blend radius (k=0.6)
+- What broke / what happened: Hopper's pupils and Longneck's whole eyes
+  disappeared as the uK slider approached 0.6; Critter's eyes survived.
+- Root cause: paint decals measured coverage against their ABSOLUTE sphere
+  position, but the smin skin INFLATES outward with k (deficit up to k/4)
+  wherever prims are within k of each other — the skin ballooned past the
+  decals' poke margins. Severity ordered exactly by margin size and local
+  prim crowding (the diagnostic fingerprint).
+- Verification gap it exposed: no probe covered paint visibility at
+  non-default k; all decal math assumed the k=0.25 skin.
+- Plug shipped: coverage now subtracts the local inflation (min solid
+  distance at the shaded point — free from the existing phase-1 loop), so
+  decals ride the skin at any k; suite gained bug-then-fix coverage probes
+  at inflation 0.15 (hand-computed).
+- Route: project-only mechanics; the general rule (features authored against
+  a rest state must track the state that actually varies) is skill-worthy.

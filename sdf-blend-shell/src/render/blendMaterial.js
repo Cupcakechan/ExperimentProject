@@ -95,11 +95,17 @@ vec3 sdfNormal(vec3 p) {
 // weight and distant ones fade — soft gradients at every join, for free.
 vec3 blendColor(vec3 p) {
   // Phase 1: SOLID prims blend by proximity weight (the skin's base color).
+  // dSkin tracks the distance to the NEAREST solid: on the shell this is
+  // exactly how far the smin skin has INFLATED above its nearest primitive
+  // (smin <= min, so at the surface every solid distance is >= 0).
   vec3 c = vec3(0.0);
   float wsum = 0.0;
+  float dSkin = 1e9;
   for (int i = 0; i < MAX_PRIMS; i++) {
     if (i < uCount && uPaint[i] < 0.5) {
-      float d = max(sdCapsule(p, uA[i], uB[i], uR[i]), 0.0);
+      float dRaw = sdCapsule(p, uA[i], uB[i], uR[i]);
+      dSkin = min(dSkin, dRaw);
+      float d = max(dRaw, 0.0);
       float w = 1.0 / pow(d + uColorSoft, uColorPow);
       c += uColors[i] * w;
       wsum += w;
@@ -108,12 +114,16 @@ vec3 blendColor(vec3 p) {
   c /= max(wsum, 1e-6);
 
   // Phase 2: PAINT prims composite on top as decals, in REGISTRY ORDER
-  // (later wins) — full color where the point is inside the prim, fading
-  // out across uPaintEdge beyond it. Weighted blending can't layer paints:
-  // a pupil over a sclera saturates both weights and ties 50/50 (gray).
+  // (later wins). Weighted blending can't layer paints: a pupil over a
+  // sclera saturates both weights and ties 50/50 (gray).
+  // Decals RIDE THE INFLATED SKIN: subtracting the local inflation keeps
+  // a decal's footprint glued to the surface at ANY blend radius — paint
+  // prims are authored against the primitives, but at high k the skin
+  // balloons past their absolute reach (the k=0.6 vanishing-eyes defect).
+  float infl = max(dSkin, 0.0);
   for (int i = 0; i < MAX_PRIMS; i++) {
     if (i < uCount && uPaint[i] > 0.5) {
-      float d = sdCapsule(p, uA[i], uB[i], uR[i]);
+      float d = sdCapsule(p, uA[i], uB[i], uR[i]) - infl;
       float cov = 1.0 - smoothstep(0.0, uPaintEdge, d);
       c = mix(c, uColors[i], cov);
     }
