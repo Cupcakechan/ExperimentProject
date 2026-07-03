@@ -25,7 +25,7 @@
 // ============================================================
 
 import * as THREE from 'three';
-import { BLEND_K, SNAP_ITERS, MAX_PRIMS, SHELL_COLOR, COLOR_SOFT, COLOR_POW, TUCK_DEPTH, BURY_EPS, PAINT_EDGE } from '../config.js';
+import { BLEND_K, SNAP_ITERS, MAX_PRIMS, SHELL_COLOR, COLOR_SOFT, COLOR_POW, TUCK_DEPTH, BURY_EPS, PAINT_EDGE, OUTLINE_WIDTH, OUTLINE_COLOR } from '../config.js';
 
 // NOTE: three.js auto-prepends 'position', the matrices, and precision
 // headers to ShaderMaterial shaders (never redeclare those) — but CUSTOM
@@ -144,6 +144,7 @@ uniform mat4 uAnimMat;
 uniform int uAnimPrim;
 uniform float uTuck;
 uniform float uBuryEps;
+uniform float uSnapOffset; // 0 = the skin; OUTLINE_WIDTH = the ink shell
 
 varying vec3 vPos;
 
@@ -171,10 +172,13 @@ void main() {
   }
   bool buried = dOther < -uBuryEps;
 
-  // Slide onto the combined surface: step along the gradient by the
-  // signed distance. Converges in a few iterations because we start close.
+  // Slide onto the target surface: step along the gradient by the signed
+  // distance MINUS the snap offset — offset 0 converges on the skin,
+  // offset w converges on the shell w OUTSIDE it (the post's outline
+  // trick: an offset surface is smooth even in concave joints, where
+  // normal-inflated hulls self-intersect).
   for (int i = 0; i < SNAP_ITERS; i++) {
-    p -= sdfNormal(p) * mapSDF(p);
+    p -= sdfNormal(p) * (mapSDF(p) - uSnapOffset);
   }
 
   // Buried vertices tuck themselves under the skin (the post's trick).
@@ -209,9 +213,18 @@ void main() {
 }
 `;
 
-// Builds the material with the creature's primitives baked into uniform arrays,
-// padded to MAX_PRIMS (GLSL uniform arrays are fixed-size).
-export function createBlendMaterial(prims) {
+const FRAG_OUTLINE = /* glsl */ `
+uniform vec3 uOutlineColor;
+
+void main() {
+  gl_FragColor = vec4(uOutlineColor, 1.0);
+}
+`;
+
+// Fresh uniform set per material — the skin and outline materials each own
+// their instances (anim.js writes uB/uAnimMat per material; sharing value
+// objects would couple them invisibly).
+function buildUniforms(prims, snapOffset) {
   if (prims.length > MAX_PRIMS) {
     console.warn(`Creature has ${prims.length} primitives; only the first ${MAX_PRIMS} will blend.`);
   }
@@ -234,27 +247,56 @@ export function createBlendMaterial(prims) {
     // larger than any slider value so min(uK, sentinel) === uK.
     uKCap.push(prim && prim.kCap != null ? prim.kCap : 1e3);
   }
+  return {
+    uA: { value: uA },
+    uB: { value: uB },
+    uR: { value: uR },
+    uColors: { value: uColors },
+    uPaint: { value: uPaint },
+    uKCap: { value: uKCap },
+    uCount: { value: Math.min(prims.length, MAX_PRIMS) },
+    uK: { value: BLEND_K },
+    uColorSoft: { value: COLOR_SOFT },
+    uColorPow: { value: COLOR_POW },
+    uAnimMat: { value: new THREE.Matrix4() }, // identity = rest pose
+    uAnimPrim: { value: -1 }, // -1 = nothing animated until main.js wires it
+    // Buried patches FOLD when projected onto a target surface: a buried
+    // end cap faces many directions, so part of it lands with INVERTED
+    // winding — and inverted triangles show their back faces to an outside
+    // camera, which is exactly what the BackSide ink draws. The only safe
+    // place for a buried ink patch is INSIDE the creature, occluded by the
+    // skin: ink tuck = OUTLINE_WIDTH + TUCK_DEPTH lands buried ink verts at
+    // snapOffset - tuck = -TUCK_DEPTH, below the skin from every angle.
+    // (The skin's own fold is invisible — it is skin-colored and shaded
+    // from the same position as the true skin behind it.)
+    uTuck: { value: snapOffset > 0 ? snapOffset + TUCK_DEPTH : TUCK_DEPTH },
+    uBuryEps: { value: BURY_EPS },
+    uPaintEdge: { value: PAINT_EDGE },
+    uSnapOffset: { value: snapOffset },
+    uOutlineColor: { value: new THREE.Color(OUTLINE_COLOR) },
+  };
+}
 
+// The skin: snaps to the zero surface, toon-shades the blended colors.
+export function createBlendMaterial(prims) {
   return new THREE.ShaderMaterial({
     defines: { MAX_PRIMS, SNAP_ITERS },
-    uniforms: {
-      uA: { value: uA },
-      uB: { value: uB },
-      uR: { value: uR },
-      uColors: { value: uColors },
-      uPaint: { value: uPaint },
-      uKCap: { value: uKCap },
-      uCount: { value: Math.min(prims.length, MAX_PRIMS) },
-      uK: { value: BLEND_K },
-      uColorSoft: { value: COLOR_SOFT },
-      uColorPow: { value: COLOR_POW },
-      uAnimMat: { value: new THREE.Matrix4() }, // identity = rest pose
-      uAnimPrim: { value: -1 }, // -1 = nothing animated until main.js wires it
-      uTuck: { value: TUCK_DEPTH },
-      uBuryEps: { value: BURY_EPS },
-      uPaintEdge: { value: PAINT_EDGE },
-    },
+    uniforms: buildUniforms(prims, 0.0),
     vertexShader: VERT,
     fragmentShader: FRAG,
+  });
+}
+
+// The ink line: the SAME vertex shader snapping to the surface
+// OUTLINE_WIDTH outside the skin, flat-colored, BACK faces only — the
+// inflated shell shows around every silhouette (outer and interior),
+// and its front faces never occlude the creature.
+export function createOutlineMaterial(prims) {
+  return new THREE.ShaderMaterial({
+    defines: { MAX_PRIMS, SNAP_ITERS },
+    uniforms: buildUniforms(prims, OUTLINE_WIDTH),
+    vertexShader: VERT,
+    fragmentShader: FRAG_OUTLINE,
+    side: THREE.BackSide,
   });
 }

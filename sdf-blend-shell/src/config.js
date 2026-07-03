@@ -55,3 +55,9 @@ export const CAPSULE_RINGS_PER_UNIT = 14;
 // paint prim's surface its color fades to nothing. Small = crisp cartoon
 // edges (the reference look); larger = airbrushed.
 export const PAINT_EDGE = 0.02;
+// Toon outline: a second draw of the shell snapped to the surface this far
+// OUTSIDE the skin (world units), flat-colored, back faces only. Keep it
+// SMALLER than the thinnest solid prim radius or the ink swallows thin
+// parts (suite-enforced per creature).
+export const OUTLINE_WIDTH = 0.035;
+export const OUTLINE_COLOR = 0x0d0f12;

@@ -66,7 +66,9 @@ console.log('Section 1: creature invariants');
 const { CREATURES } = await import('./src/data/creatures.js');
 const { MAX_PRIMS, BLEND_K, COLOR_SOFT, COLOR_POW, TUCK_DEPTH, BURY_EPS, PAINT_EDGE } = await import('./src/config.js');
 const { buildShellGeometry } = await import('./src/render/buildShell.js');
-const { createBlendMaterial } = await import('./src/render/blendMaterial.js');
+const { createBlendMaterial, createOutlineMaterial } = await import('./src/render/blendMaterial.js');
+const { OUTLINE_WIDTH } = await import('./src/config.js');
+const THREE = await import('three');
 const { rotateAboutPivot, updateAnim, animPrimIndex } = await import('./src/anim.js');
 
 // --- shared math (JS mirrors of the shader) ---
@@ -205,6 +207,26 @@ for (const creature of CREATURES) {
   assert(prims.every((p, i) => mat.uniforms.uPaint.value[i] === (p.paint ? 1.0 : 0.0)), `${tag} uPaint flags mirror the registry`);
   assert(mat.uniforms.uKCap.value.length === MAX_PRIMS, `${tag} uKCap padded to MAX_PRIMS`);
   assert(prims.every((p, i) => mat.uniforms.uKCap.value[i] === (p.kCap != null ? p.kCap : 1e3)), `${tag} uKCap mirrors the registry (uncapped = sentinel 1e3)`);
+  assert(mat.uniforms.uSnapOffset.value === 0.0, `${tag} skin material snaps to the zero surface`);
+
+  // outline material: same field, offset snap target, back faces only
+  const ink = createOutlineMaterial(prims);
+  assert(ink.uniforms.uSnapOffset.value === OUTLINE_WIDTH, `${tag} outline snaps to the +${OUTLINE_WIDTH} offset surface`);
+  assert(ink.side === THREE.BackSide, `${tag} outline renders BACK faces only (inverted hull on the offset surface)`);
+  assert(ink.uniforms.uA.value.length === MAX_PRIMS && ink.uniforms.uKCap.value.length === MAX_PRIMS, `${tag} outline uniforms padded to MAX_PRIMS`);
+  assert(ink.uniforms.uB.value !== mat.uniforms.uB.value, `${tag} skin and outline own SEPARATE uniform instances (anim writes both explicitly)`);
+  // Buried patches fold when projected onto a target surface — part of a
+  // buried cap lands with INVERTED winding, showing back faces (= black on
+  // the BackSide ink) from outside. The buried ink patch must therefore end
+  // BELOW the skin, occluded: ink tuck = snapOffset + TUCK_DEPTH puts
+  // buried ink verts at -TUCK_DEPTH (inside the creature).
+  assert(mat.uniforms.uTuck.value === TUCK_DEPTH, `${tag} skin tucks buried verts (uTuck = TUCK_DEPTH)`);
+  assert(ink.uniforms.uTuck.value === OUTLINE_WIDTH + TUCK_DEPTH, `${tag} ink tuck = OUTLINE_WIDTH + TUCK_DEPTH`);
+  assert(ink.uniforms.uSnapOffset.value - ink.uniforms.uTuck.value < 0, `${tag} buried ink ends BELOW the skin (${(ink.uniforms.uSnapOffset.value - ink.uniforms.uTuck.value).toFixed(3)} < 0) — occluded, not painted`);
+
+  // the ink must be thinner than the thinnest solid, or it swallows it
+  const minSolidR = Math.min(...solids.map((s) => s.r));
+  assert(OUTLINE_WIDTH < minSolidR, `${tag} OUTLINE_WIDTH ${OUTLINE_WIDTH} < thinnest solid r ${minSolidR}`);
 
   // anim: named prim exists, rest pose at t=0, actually moves at peak
   if (creature.anim) {

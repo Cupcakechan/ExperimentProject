@@ -73,3 +73,31 @@
   at inflation 0.15 (hand-computed).
 - Route: project-only mechanics; the general rule (features authored against
   a rest state must track the state that actually varies) is skill-worthy.
+
+## 2026-07-03 — outline painted black domes at every limb root
+- What broke / what happened: with the toon outline on, solid black
+  dome-shaped blobs appeared at limb roots (legs/tail/ears/neck) plus thin
+  black cracks along smooth areas.
+- Root cause: the ink material reused the skin's vertex logic wholesale,
+  including the buried-geometry TUCK. Tucked ink verts land at
+  OUTLINE_WIDTH - TUCK_DEPTH (0.015) ABOVE the skin — flat-black patches
+  hovering in front of it, back faces visible. The tuck's reason (coincident
+  skin layers z-fight with mismatched colors) does not exist for flat-color
+  ink, where coincident layers fight invisibly.
+- Verification gap it exposed: reuse of a shader across materials carried a
+  mechanism whose purpose was never re-derived for the new target surface.
+- Plug shipped (SECOND attempt — the first was wrong): attempt 1 set ink
+  uTuck = 0, reasoning about hover height; blobs persisted. TRUE root cause:
+  a buried cap FOLDS when projected onto the target surface — part of it
+  lands with INVERTED winding, and inverted triangles show back faces (=
+  drawn by the BackSide ink) from outside, wherever the patch sits OUTSIDE
+  the skin. Correct fix: ink tuck = OUTLINE_WIDTH + TUCK_DEPTH, sinking
+  buried ink to -TUCK_DEPTH (inside the creature, occluded). Suite asserts
+  the SIGN of the final position, not a chosen magnitude.
+- Extra lesson: identical symptoms across two fixes meant the hypothesis,
+  not the application, was wrong — revise the mechanism when a fix that
+  verifiably shipped changes nothing. Rules: (1) when reusing a shader with
+  a different target, re-justify EACH mechanism against the new context;
+  (2) for culling-based passes, reason about WINDING under projection, not
+  just position.
+- Route: skill reference candidate (both rules) + project-only mechanics.

@@ -1,6 +1,6 @@
 # PROJECT_HANDOFF — SDF Blend-Shell Experiment
 
-_Last updated: 2026-07-03 (inflation fix browser-confirmed; kCAP delivered — per-prim blend ceilings, awaiting browser confirmation)_
+_Last updated: 2026-07-03 (ink-tuck fix v1 FAILED in browser; corrected occlusion fix delivered, awaiting browser confirmation)_
 
 ## What this is
 An experiment replicating the "SDF blend-shell" character technique from a
@@ -88,7 +88,27 @@ the `sdf-blend-shell\` subfolder. Git commands run from the CONTAINER root.
   kCap 0.07. Authoring rule added: thin prims (r < ~0.18) joining bigger
   masses get kCap ~= 0.7*r. Suite: uKCap padding/mirroring per creature +
   hand-computed cap-holds-against-slider probes (smin(1,1,0.12) = 0.97 at
-  slider 0.25 AND 0.60). NOT yet browser-confirmed.
+  slider 0.25 AND 0.60). Browser-confirmed and pushed (`53c1d76`).
+- TOON OUTLINE delivered (this pass): second draw of the SAME geometry with
+  an outline material — the shared vertex shader gained uSnapOffset (skin
+  snaps to sdf=0, ink to sdf=OUTLINE_WIDTH: the post's offset-surface trick,
+  clean in concave joints where normal-inflated hulls self-intersect),
+  fragment = flat OUTLINE_COLOR, side = BackSide. main.js drives skin + ink
+  in LOCKSTEP (both get uK, uAnimPrim, and per-frame updateAnim — separate
+  uniform instances by design). Geometry shared, disposed once. Suite:
+  offset/side/separate-instances probes + OUTLINE_WIDTH < thinnest solid r
+  per creature (ink must not swallow thin parts).
+- Browser result: outline works but painted BLACK DOMES at every limb
+  root. Fix v1 (ink uTuck=0) FAILED — same blobs. TRUE root cause: buried
+  caps FOLD when projected onto the target surface; part lands with
+  INVERTED winding, showing back faces (drawn by BackSide ink) wherever the
+  patch is OUTSIDE the skin. Fix v2 (this pass): ink tuck = OUTLINE_WIDTH +
+  TUCK_DEPTH — buried ink ends at -TUCK_DEPTH, INSIDE the creature,
+  occluded by the skin. Expect a short black rim at burial boundaries
+  (reads as crease ink; lever = the ink tuck value if too heavy). Suite
+  asserts the final position's SIGN. See LESSONS.md (incl. the
+  wrong-fix lesson). NOT yet browser-confirmed; the outline checkpoint
+  (never committed) covers outline + fix together.
 - Deep Research question answered: deferred as low-ROI for blob critters;
   conditional next steps noted — the original poster's public demo/code
   (primary source) and targeted stylized-proportion research IF creatures
@@ -118,7 +138,12 @@ the `sdf-blend-shell\` subfolder. Git commands run from the CONTAINER root.
   index). Capsules are built as cylinder + 2 hemispheres with
   CAPSULE_RINGS_PER_UNIT rings along the length (three's CapsuleGeometry has
   none — see LESSONS.md).
-- `src/render/blendMaterial.js` — the heart: FIELD_GLSL (sdCapsule +
+- `src/render/blendMaterial.js` — the heart, now TWO materials from one
+  shared vertex shader (uSnapOffset picks the target surface):
+  createBlendMaterial (skin, offset 0) + createOutlineMaterial (ink, offset
+  OUTLINE_WIDTH, flat color, BackSide). buildUniforms() gives each material
+  its OWN uniform instances — anim.js writes uB/uAnimMat per material, so
+  main updates both every frame. FIELD_GLSL (sdCapsule +
   polynomial smin + mapSDF + sdfNormal + blendColor and their uniforms) is
   ONE shared chunk injected into BOTH shaders. Vertex: optional uAnimMat
   transform for the animated prim (`aPrim == uAnimPrim`), then SNAP_ITERS
@@ -139,9 +164,9 @@ the `sdf-blend-shell\` subfolder. Git commands run from the CONTAINER root.
   0.6 rad @ 2.5, TUCK_DEPTH 0.02, BURY_EPS 0.005, colors, camera (start
   [-1.6,1.3,3.2], target [0,0.6,0]).
 - `src/main.js` — scene/camera/OrbitControls/loop + GALLERY STATE:
-  setCreature(i) disposes the old shell (geometry + material) and rebuilds;
-  keys 1..N mirror the buttons; slider k persists across switches; loop
-  calls `updateAnim(shell.material, t, current, animIdx)`.
+  setCreature(i) disposes the old shell + outline (shared geometry disposed
+  ONCE) and rebuilds both; keys 1..N mirror the buttons; slider k persists
+  and feeds BOTH materials; loop calls updateAnim for skin AND ink.
 
 ## Gotchas (project-specific)
 - **No backticks inside the GLSL template literals** (see LESSONS.md).
@@ -155,13 +180,17 @@ the `sdf-blend-shell\` subfolder. Git commands run from the CONTAINER root.
   pattern (see LESSONS.md).
 
 ## Open items / next steps
-1. **Daniel:** verify kCap — Longneck's neck base must look like a NECK at
-   k=0.25, and must HOLD its shape at k=0.60 while body/legs go blobby.
+1. **Daniel:** verify the outline — dark ink line around every silhouette
+   (outer AND interior, e.g. a leg seen against the body), clean in the
+   concave joints, tracking the wave with no lag, holding at all k.
 2. On confirmation: git checkpoint (from `Experiment Project\` root).
-3. Queued menu (each its own options round): toon outline via SDF offset
-   surface (the glory pass — recommended next), IK leg stepping (multi-pass,
+3. Queued menu (each its own options round): IK leg stepping (multi-pass,
    staged), more practice creatures exercising the kCap vocabulary
-   (antennae, thin ears, 3D-geometry eyes are now legal).
+   (antennae, thin ears, 3D-geometry eyes are now legal), OUTLINE_WIDTH /
+   OUTLINE_COLOR taste pass (one-value tunes).
+4. The post's technique list is now FULLY IMPLEMENTED except procedural
+   animation systems (IK/state machines/ropes) — a natural SKILL-harvest
+   checkpoint even before IK.
 4. SKILL harvest (end goal, when the technique feels complete): dev-method
    skill session over LESSONS.md + this handoff -> a creature-generation
    skill reference (schema, invariants, tuning levers, gotchas).
