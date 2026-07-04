@@ -99,11 +99,26 @@ window.addEventListener('resize', () => {
 
 const clock = new THREE.Clock();
 let tAnim = 0;
+let paused = false;
+
+// Pause ([P] or Space): freezes the SIM but keeps the camera live —
+// orbiting a frozen field is the whole point (screenshots). dt=0 flows
+// safely through every consumer: roam integrates nothing, gait guards
+// dt>0 for velocity and advances swings by 0, anims hold their phase.
+window.addEventListener('keydown', (e) => {
+  if (e.code === 'KeyP' || e.code === 'Space') {
+    paused = !paused;
+    e.preventDefault(); // Space would scroll the page
+  }
+});
 
 renderer.setAnimationLoop(() => {
   // Clamped delta: a backgrounded tab returns with a giant dt, which would
-  // teleport the roamers and spike the steering.
-  const dt = Math.min(clock.getDelta(), 0.05);
+  // teleport the roamers and spike the steering. getDelta() must be CALLED
+  // even while paused, or the first unpaused frame receives the entire
+  // paused duration as one spike.
+  const rawDt = clock.getDelta();
+  const dt = paused ? 0 : Math.min(rawDt, 0.05);
   tAnim += dt;
 
   for (const actor of actors) {

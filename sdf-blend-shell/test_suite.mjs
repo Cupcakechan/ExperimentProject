@@ -272,6 +272,11 @@ for (const creature of CREATURES) {
   assert(ink.side === THREE.BackSide, `${tag} outline renders BACK faces only (inverted hull on the offset surface)`);
   assert(ink.uniforms.uA.value.length === MAX_PRIMS && ink.uniforms.uKCap.value.length === MAX_PRIMS, `${tag} outline uniforms padded to MAX_PRIMS`);
   assert(ink.uniforms.uB.value !== mat.uniforms.uB.value, `${tag} skin and outline own SEPARATE uniform instances (anim writes both explicitly)`);
+  // The ink IGNORES carves (folds impossible by construction): negatives
+  // are surface-less in the OUTLINE's uniforms only — measured 16 folded
+  // ink triangles at pudge's mouth on the carved field, 0 without it.
+  assert(prims.every((p, i) => !p.negative || (ink.uniforms.uPaint.value[i] === 1.0 && ink.uniforms.uNeg.value[i] === 0.0)), `${tag} ink treats carves as surface-less (uPaint=1, uNeg=0 — no crease to fold into)`);
+  assert(prims.every((p, i) => mat.uniforms.uNeg.value[i] === (p.negative ? (p.color != null ? 2.0 : 1.0) : 0.0)), `${tag} the SKIN keeps its carves (uNeg unchanged)`);
   // Buried patches fold when projected onto a target surface — part of a
   // buried cap lands with INVERTED winding, showing back faces (= black on
   // the BackSide ink) from outside. The buried ink patch must therefore end

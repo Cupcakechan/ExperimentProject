@@ -211,3 +211,35 @@
   (2) when a fix idea is cheap to simulate, probe it analytically BEFORE
   implementing (three wrong fixes died in the terminal, zero in the
   browser).
+
+## 2026-07-03 — run-offs ROOT CAUSE: ink triangles FOLD at the carve crease
+- What broke / what happened: the run-offs SURVIVED the submerged-slit
+  geometry fix — new evidence that killed the grazing hypothesis as the
+  primary cause (the analytic surface footprint was clean; the render
+  was not; the only thing between them is the mesh and the second draw).
+- Root cause: the BLACK-DOMES defect class, third appearance. On the
+  outline's +0.035 offset surface, a slit pinches closed (and always
+  pinches at its tapering ends, at ANY slit geometry) — ink triangles
+  projected into a pinching feature FOLD, and folded triangles show back
+  faces, which is exactly what the BackSide ink draws. MEASURED with a
+  mesh-accurate fold detector: 16 folded ink triangles clustered at
+  pudge's mouth on the carved field; 0 on the uncarved field.
+- Instrument lessons (the detector itself shipped two bugs before it
+  told the truth): (1) it must mirror the FULL vertex pipeline — omitting
+  burial+tuck counted the known, handled leg-root folds as signal;
+  (2) merged geometry is INDEXED — iterating raw position triplets as
+  "triangles" produced ~50% coin-flip noise. An instrument must sample
+  what the GPU samples: indexed triangles, interpolated fragments. An
+  analytic probe of the ideal surface can pass while the render fails.
+- Plug shipped: the INK IGNORES CARVES — in the outline material's
+  uniforms only, negatives are surface-less (uPaint=1, uNeg=0: absent
+  from union, subtraction, and burial), so no crease exists to fold
+  into; folds impossible by construction (detector: 16 -> 0). The skin
+  keeps its carves. Suite asserts both sides per creature. Cosmetic
+  trade accepted: no ink crease line at mouths (they are dark inside).
+- Route: skill reference candidates — (1) the black-domes rule
+  generalizes: EVERY new concave feature re-triggers the winding audit
+  for culling-based passes, and "exclude the feature from the fragile
+  pass" beats "tune the feature until the pass survives"; (2) build
+  instruments that sample what the GPU samples before trusting a clean
+  analytic result.

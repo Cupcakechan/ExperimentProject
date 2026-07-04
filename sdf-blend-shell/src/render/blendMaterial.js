@@ -316,7 +316,15 @@ function buildUniforms(prims, snapOffset, inflate) {
     // ?? guard: a registry entry without a color must never break the shader.
     uColors.push(new THREE.Color(prim ? prim.color ?? SHELL_COLOR : 0x000000));
     // paint is optional; absent = solid (existing entries unaffected).
-    uPaint.push(prim && prim.paint ? 1.0 : 0.0);
+    // THE INK IGNORES CARVES: on the offset surface a slit pinches closed
+    // and projected triangles FOLD — and folded triangles show back
+    // faces, which is exactly what the BackSide ink draws (the
+    // black-domes defect class; MEASURED: 16 folded ink triangles at
+    // pudge's mouth on the carved field, 0 on the uncarved field).
+    // Negatives become surface-less for the OUTLINE material only —
+    // absent from union, subtraction, and burial; the skin keeps them.
+    const hideNeg = prim && prim.negative && snapOffset > 0;
+    uPaint.push(prim && (prim.paint || hideNeg) ? 1.0 : 0.0);
     // kCap is optional; absent = uncapped. The sentinel just has to be
     // larger than any slider value so min(uK, sentinel) === uK.
     uKCap.push(prim && prim.kCap != null ? prim.kCap : 1e3);
@@ -327,7 +335,7 @@ function buildUniforms(prims, snapOffset, inflate) {
     // negative: 0 = solid; 1 = carve without a color (the host's blended
     // color lines the bowl — the SHELL_COLOR fallback above must NOT tint
     // it, hence the encoding); 2 = carve WITH an authored interior color.
-    uNeg.push(prim && prim.negative ? (prim.color != null ? 2.0 : 1.0) : 0.0);
+    uNeg.push(prim && prim.negative && !hideNeg ? (prim.color != null ? 2.0 : 1.0) : 0.0);
   }
   return {
     uA: { value: uA },
