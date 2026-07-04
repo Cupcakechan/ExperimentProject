@@ -180,3 +180,34 @@
   0.05, saturation on-wall, half-edge = 0.5 exactly.
 - Route: skill reference candidate — HIGH-CONTRAST ACCENT colors must
   composite with an edge; weighted blends are for kin colors only.
+
+## 2026-07-03 — mouth "run-offs": grazing slit corners smear thresholded coverage
+- What broke / what happened: after the composite fix, thin dark tails
+  ("run-offs") extended from both mouths' corners.
+- Root cause: a straight capsule slit against a curved head is always
+  SHALLOWEST at its ends (chord vs arc), and where the surface crosses a
+  distance threshold at grazing incidence, the coverage iso-band smears.
+  Hopper's slit was worst-in-class: its MIDPOINT sat +0.019 OUTSIDE the
+  face (a pure graze). Confirmed by an ANALYTIC footprint probe (bisect
+  the exact smooth surface, evaluate coverage there — no mesh involved),
+  which reproduced the corner lobes and ruled out mesh interpolation.
+- Two candidate fixes MEASURED AND REJECTED before the real one: (1)
+  deeper + narrower slit — the smooth-difference rounding FILLED the
+  narrow slit, hollowing the middle into two eyespots; (2) tighter carve
+  kCap — footprint unchanged (the lobes are geometric, not lip-rounding).
+  A third design (mouth color as a paint decal) failed its probe too:
+  the decal inflation compensation reads the LOCAL skin lift, and under
+  a whole-body dilate (Pudge's 0.04) that lifts EVERYWHERE — the decal
+  ballooned into a blob. That compensation halo is now a KNOWN,
+  measured issue deferred to the living-face pass (also the reason
+  mouth color fades at extreme slider k).
+- Plug shipped: geometry chosen by probe sweep — both slits SUBMERGED
+  (all endpoints sd < -0.005, now suite-enforced for every capsule
+  negative) with short spans to minimize chord-sag; bounds re-measured
+  (the old ceilings correctly FAILED on the deeper hopper slit before
+  re-encoding — the guard working).
+- Route: skill reference candidates — (1) thresholded coverage smears at
+  grazing incidence: keep feature geometry transversal to the surface;
+  (2) when a fix idea is cheap to simulate, probe it analytically BEFORE
+  implementing (three wrong fixes died in the terminal, zero in the
+  browser).

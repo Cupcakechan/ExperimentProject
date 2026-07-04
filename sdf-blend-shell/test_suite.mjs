@@ -220,6 +220,16 @@ for (const creature of CREATURES) {
     }
     assert(hostSd < neg.r, `${tag} ${neg.id} reaches into its host '${host?.id}' (sd ${hostSd.toFixed(4)} < r ${neg.r})`);
     assert(neg.r - hostSd < host.r, `${tag} ${neg.id} is a dent, not a pierce (penetration ${(neg.r - hostSd).toFixed(4)} < host r ${host.r})`);
+    // Capsule slits must be SUBMERGED at both ends: a grazing endpoint
+    // (sd near/above zero — hopper's first slit sat +0.019 OUTSIDE)
+    // smears thresholded coverage into corner "run-offs" (measured
+    // analytically on the field, browser-confirmed as the defect).
+    if (neg.b) {
+      for (const [end, label] of [[neg.a, 'a'], [neg.b, 'b']]) {
+        const sdEnd = sdPrim(end, host);
+        assert(sdEnd < -0.005, `${tag} ${neg.id} endpoint ${label} is submerged (sd ${sdEnd.toFixed(4)} < -0.005 — grazing slit ends smear)`);
+      }
+    }
     // A carve's influence reaches ~kCap beyond its surface; decals must
     // sit clear of it or the bowl eats the eyes.
     for (const paint of prims.filter((p) => p.paint)) {
@@ -827,17 +837,16 @@ const INFL_CEILING = {
 // hand-computed penetration depth 0.1068, confirmed by the field).
 const CARVE_BOUNDS = {
   hopper: {
-    0.25: { hardBand: 0.037, carveFloor: 0.101 },
-    0.6: { hardBand: 0.021, carveFloor: 0.101 },
+    // MEASURED (submerged slit): min infl -0.1139 both k; min hard
+    // -0.0124 at k=0.25, -0.0000 at k=0.6.
+    0.25: { hardBand: 0.032, carveFloor: 0.134 },
+    0.6: { hardBand: 0.02, carveFloor: 0.134 },
   },
   pudge: {
-    // MEASURED: min hard is POSITIVE (+0.0228 / +0.0281) — the 0.04 dilate
-    // lifts the whole smooth contour OUTSIDE the hard-CSG surface (which
-    // excludes dilate), so the band never even engages; carveFloor from
-    // measured min inflation -0.0479 = penetration 0.088 - inflate 0.04
-    // (theory confirmed to the third decimal).
-    0.25: { hardBand: 0.02, carveFloor: 0.072 },
-    0.6: { hardBand: 0.02, carveFloor: 0.072 },
+    // MEASURED (short deep slit): min infl -0.0595; min hard POSITIVE
+    // (+0.0394/+0.0400 — the dilate lifts the contour outside hard CSG).
+    0.25: { hardBand: 0.02, carveFloor: 0.08 },
+    0.6: { hardBand: 0.02, carveFloor: 0.08 },
   },
 };
 
