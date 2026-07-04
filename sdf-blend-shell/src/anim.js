@@ -22,6 +22,19 @@ export function rotateAboutPivot(a, b, axis, angle) {
   return new THREE.Vector3(...b).sub(pivot).applyAxisAngle(ax, angle).add(pivot);
 }
 
+// Pure (suite-anchored): the breathing inflate. 0.5*(1 - cos) so the
+// creature starts exactly at its authored rest inflate (t=0, phase=0)
+// and INHALES up to base + amplitude — breath expands from rest, never
+// deflates below it. Every field consumer follows automatically: the
+// burial boundary, the carve-edge compensation, and the outline all read
+// uInflate or the field it shifts (the Pass 3 / mouth-saga payoff).
+export function breathInflate(tSec, creature, phase = 0) {
+  const base = creature.inflate ?? 0;
+  if (!creature.breath) return base; // most creatures hold still
+  const { amplitude, speed } = creature.breath;
+  return base + amplitude * 0.5 * (1 - Math.cos(tSec * speed + phase));
+}
+
 // -1 when the creature has no anim, or names a prim that isn't there —
 // animation becomes a silent no-op instead of a crash.
 export function animPrimIndex(creature) {

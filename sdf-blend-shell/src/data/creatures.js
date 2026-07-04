@@ -21,6 +21,14 @@
 //               thinnest prim radius and mind the stage bounds: the
 //               whole silhouette grows by this amount, including
 //               downward past y=0 (hidden by the ground disc).
+//   breath (per CREATURE, optional) — the inflate ANIMATES:
+//               { amplitude (world units), speed (rad/s) }. The creature
+//               inhales from its rest inflate up to inflate + amplitude
+//               (0.5*(1-cos): rest at t=0, never deflates below rest).
+//               Every consumer follows automatically (burial boundary,
+//               carve edge, outline). The suite audits the field at the
+//               BREATH PEAK; keep inflate + amplitude under the thinnest
+//               solid r.
 //   negative (per prim, optional) — CARVE prim (smooth difference):
 //               subtracted from the union of ALL solids, so its registry
 //               position never changes the result. No mesh, no burial,
@@ -98,6 +106,8 @@ export const CREATURES = [
     // crouchTime, airTime, landTime, restMin, height, dip, leadTime,
     // footTuck).
     hop: {},
+    // Subtle, quick breath — continues mid-hop (alive in the air too).
+    breath: { amplitude: 0.012, speed: 2.2 },
     prims: [
       { id: 'body', type: 'sphere', a: [0.0, 0.62, 0.0], r: 0.5, color: 0xcf6fc9 },
       { id: 'foot_l', type: 'capsule', a: [-0.05, 0.16, 0.18], b: [-0.38, 0.12, 0.22], r: 0.15, color: 0x9b4f96 },
@@ -145,6 +155,8 @@ export const CREATURES = [
     // First user of INFLATE (Pass 3): same skeleton reads chubbier by one
     // number. 0.04 stays well under the thinnest solid r (tail 0.11).
     inflate: 0.04,
+    // Deep, slow breath — the chubby creature breathes like one.
+    breath: { amplitude: 0.02, speed: 1.6 },
     anim: { primId: 'tail', axis: [0, 1, 0], amplitude: 0.5, speed: 3.0 },
     step: { feet: ['leg_fl', 'leg_fr', 'leg_bl', 'leg_br'], groups: [[0, 3], [1, 2]] },
     // 12 prims — exactly at MAX_PRIMS: the capacity ceiling, demonstrated.
@@ -171,6 +183,8 @@ export const CREATURES = [
   {
     id: 'snail',
     name: 'Shelby',
+    // Very slow breath — a snail's tempo (base inflate 0: pure breath).
+    breath: { amplitude: 0.012, speed: 0.9 },
     // NO anim and NO step — a snail SLIDES (roam moves the rig; the gait
     // null path and the animPrimIndex -1 no-op get their first live users,
     // by design not omission). The antennae carry eye decals, so per the

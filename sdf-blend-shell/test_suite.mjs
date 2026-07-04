@@ -69,7 +69,7 @@ const { buildShellGeometry } = await import('./src/render/buildShell.js');
 const { createBlendMaterial, createOutlineMaterial } = await import('./src/render/blendMaterial.js');
 const { OUTLINE_WIDTH } = await import('./src/config.js');
 const THREE = await import('three');
-const { rotateAboutPivot, updateAnim, animPrimIndex } = await import('./src/anim.js');
+const { rotateAboutPivot, updateAnim, animPrimIndex, breathInflate } = await import('./src/anim.js');
 
 // --- shared math (JS mirrors of the shader) ---
 function sdCapsule(p, a, b, r) {
@@ -108,6 +108,15 @@ assert(
   'rotateAboutPivot 90deg about Z = (-0.2, 1.05, 0.15) (hand-computed)'
 );
 assert(new Set(CREATURES.map((c) => c.id)).size === CREATURES.length, 'creature ids are unique');
+// Breathing (A2), hand-computed: rest identity at t=0 (a breathing
+// creature starts EXACTLY at its authored inflate), peak = base +
+// amplitude exactly at t*speed = PI, and creatures without breath pass
+// their base straight through (the ?? guard).
+const BREATHER = { inflate: 0.04, breath: { amplitude: 0.02, speed: 1.6 } };
+assert(breathInflate(0, BREATHER) === 0.04, 'breath at t=0 = the rest inflate exactly (rest identity)');
+assert(Math.abs(breathInflate(Math.PI / 1.6, BREATHER) - 0.06) < 1e-12, 'breath peak = inflate + amplitude exactly (hand-computed)');
+assert(breathInflate(3.7, { inflate: 0.04 }) === 0.04, 'no breath: base inflate passes through untouched');
+assert(breathInflate(3.7, {}) === 0, 'no breath, no inflate: zero (the raw field)');
 
 // --- per-creature invariants: EVERY creature must satisfy EVERY rule ---
 for (const creature of CREATURES) {
@@ -132,6 +141,12 @@ for (const creature of CREATURES) {
   }
   assert(prims.length <= MAX_PRIMS, `${tag} fits shader capacity (${prims.length} <= ${MAX_PRIMS})`);
   assert(creature.inflate === undefined || (typeof creature.inflate === 'number' && creature.inflate >= 0), `${tag} inflate is absent or a non-negative number`);
+  assert(creature.breath === undefined || (typeof creature.breath.amplitude === 'number' && creature.breath.amplitude >= 0 && typeof creature.breath.speed === 'number' && creature.breath.speed > 0), `${tag} breath is absent or { amplitude >= 0, speed > 0 }`);
+  if (creature.breath) {
+    const peak = (creature.inflate ?? 0) + creature.breath.amplitude;
+    const minR = Math.min(...prims.filter((p) => !p.paint && !p.negative).map((p) => p.r));
+    assert(peak < minR, `${tag} breath peak ${peak.toFixed(3)} stays under the thinnest solid r ${minR} (no ballooning past a limb)`);
+  }
   assert(new Set(prims.map((p) => p.id)).size === prims.length, `${tag} prim ids are unique`);
 
   // geometry: solids meshed, paints not, aPrim carries registry indices
@@ -904,10 +919,10 @@ function creatureSlices(prims) {
 // a pass changes the field, and update this table.
 const INFL_CEILING = {
   critter: { 0.25: 0.083, 0.6: 0.26 },
-  hopper: { 0.25: 0.117, 0.6: 0.255 },
+  hopper: { 0.25: 0.13, 0.6: 0.265 }, // at breath peak (+0.012)
   longneck: { 0.25: 0.114, 0.6: 0.317 },
-  pudge: { 0.25: 0.122, 0.6: 0.21 }, // includes the 0.04 dilate (rawMin at the contour rides it)
-  snail: { 0.25: 0.082, 0.6: 0.17 }, // k=0.6 measured 0.1496 ~ k/4 EXACTLY: the shell's absolute k caps compounding
+  pudge: { 0.25: 0.142, 0.6: 0.229 }, // at breath peak (dilate 0.04 + amplitude 0.02)
+  snail: { 0.25: 0.094, 0.6: 0.182 }, // at breath peak (+0.012); the shell's absolute k still caps compounding
 };
 // Carved creatures: MEASURED bounds (+0.02 margin) for the generalized
 // invariants. hardBand = how far the smooth contour may sit inside the
@@ -918,16 +933,17 @@ const INFL_CEILING = {
 // hand-computed penetration depth 0.1068, confirmed by the field).
 const CARVE_BOUNDS = {
   hopper: {
-    // MEASURED (submerged slit): min infl -0.1139 both k; min hard
-    // -0.0124 at k=0.25, -0.0000 at k=0.6.
-    0.25: { hardBand: 0.032, carveFloor: 0.134 },
-    0.6: { hardBand: 0.02, carveFloor: 0.134 },
+    // MEASURED at breath peak (+0.012): min infl -0.1019, min hard
+    // -0.0007 at k=0.25 / +0.0120 at k=0.6.
+    0.25: { hardBand: 0.021, carveFloor: 0.122 },
+    0.6: { hardBand: 0.02, carveFloor: 0.122 },
   },
   pudge: {
-    // MEASURED (short deep slit): min infl -0.0595; min hard POSITIVE
-    // (+0.0394/+0.0400 — the dilate lifts the contour outside hard CSG).
-    0.25: { hardBand: 0.02, carveFloor: 0.08 },
-    0.6: { hardBand: 0.02, carveFloor: 0.08 },
+    // MEASURED at breath peak (dilate 0.04 + amplitude 0.02): min infl
+    // -0.0387, min hard POSITIVE (+0.0600 — the peak dilate lifts the
+    // contour even further outside hard CSG).
+    0.25: { hardBand: 0.02, carveFloor: 0.059 },
+    0.6: { hardBand: 0.02, carveFloor: 0.059 },
   },
 };
 
@@ -936,6 +952,10 @@ for (const creature of CREATURES) {
   const prims = creature.prims;
   const solids = prims.filter((p) => !p.paint && !p.negative); // positives only: carve cores are NOT negative-field
   const slices = creatureSlices(prims);
+  // Breathing creatures are audited at the BREATH PEAK — the largest
+  // field the renderer ever shows (a rest-only audit would guard a field
+  // the browser exceeds every inhale).
+  const inflPeak = (creature.inflate ?? 0) + (creature.breath?.amplitude ?? 0);
 
   // Sign sanity at BLEND_K: the field is negative at every solid's core
   // (smin can only deepen the raw -r there) and positive at the padded
@@ -943,10 +963,10 @@ for (const creature of CREATURES) {
   for (const s of solids) {
     const b = s.b ?? s.a;
     const mid = [(s.a[0] + b[0]) / 2, (s.a[1] + b[1]) / 2, (s.a[2] + b[2]) / 2];
-    assert(mapField(mid, prims, BLEND_K, creature.inflate ?? 0) < 0, `${tag} field is negative inside '${s.id}'`);
+    assert(mapField(mid, prims, BLEND_K, inflPeak) < 0, `${tag} field is negative inside '${s.id}'`);
   }
   const corner = solidBBox(prims, FIELD_PAD).hi;
-  assert(mapField(corner, prims, K_MAX, creature.inflate ?? 0) > 0, `${tag} field is positive at the padded bbox corner (even at k=${K_MAX})`);
+  assert(mapField(corner, prims, K_MAX, inflPeak) > 0, `${tag} field is positive at the padded bbox corner (even at k=${K_MAX})`);
 
   const measured = {};
   const negs = prims.filter((p) => p.negative);
@@ -958,7 +978,7 @@ for (const creature of CREATURES) {
     let maxSlice = null;
     let minSlice = null;
     for (const sl of slices) {
-      const r = sampleSlice(prims, k, sl.axis, sl.value, creature.inflate ?? 0);
+      const r = sampleSlice(prims, k, sl.axis, sl.value, inflPeak);
       count += r.count;
       if (r.maxInfl > maxInfl) {
         maxInfl = r.maxInfl;

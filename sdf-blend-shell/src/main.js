@@ -11,7 +11,7 @@ import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 import { CREATURES } from './data/creatures.js';
 import { buildShellGeometry } from './render/buildShell.js';
 import { createBlendMaterial, createOutlineMaterial } from './render/blendMaterial.js';
-import { updateAnim, animPrimIndex } from './anim.js';
+import { updateAnim, animPrimIndex, breathInflate } from './anim.js';
 import { createControls } from './ui/controls.js';
 import { createRoam } from './roam.js';
 import { createGait } from './gait.js';
@@ -129,6 +129,16 @@ renderer.setAnimationLoop(() => {
     // Skin and ink own separate uniforms — both must move, in lockstep.
     updateAnim(actor.material, tAnim, actor.creature, actor.animIdx);
     updateAnim(actor.ink, tAnim, actor.creature, actor.animIdx);
+
+    // Breathing (A2): the field itself inhales. Both draws get the SAME
+    // value or the outline detaches from the swelling skin; bobPhase
+    // decorrelates the rhythms (synchronized breathing is uncanny).
+    // Non-breathers keep their build-time uInflate — no write, no cost.
+    if (actor.creature.breath) {
+      const infl = breathInflate(tAnim, actor.creature, actor.bobPhase);
+      actor.material.uniforms.uInflate.value = infl;
+      actor.ink.uniforms.uInflate.value = infl;
+    }
 
     // Separation reads the OTHERS' last-frame positions (1 frame of lag is
     // invisible at these speeds and keeps the update order-independent).
