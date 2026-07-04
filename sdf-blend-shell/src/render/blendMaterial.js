@@ -141,27 +141,34 @@ vec3 blendColor(vec3 p) {
   float wsum = 0.0;
   float dSkin = 1e9;
   for (int i = 0; i < MAX_PRIMS; i++) {
-    if (i < uCount && uPaint[i] < 0.5) {
+    if (i < uCount && uPaint[i] < 0.5 && uNeg[i] < 0.5) {
       float dRaw = sdCapsule(p, uA[i], uB[i], uR[i]);
-      bool solid = uNeg[i] < 0.5;
       // dSkin is the POSITIVE union's inflation only — the decal
-      // compensation rides the skin above its solid host; letting a
-      // nearby carve shrink dSkin would corrupt eye coverage near mouths.
-      if (solid) dSkin = min(dSkin, dRaw);
-      // Colored carves (uNeg == 2) join the same proximity blend: on the
-      // bowl wall the shaded point sits ON the carve's boundary (dRaw ~ 0)
-      // so the interior color dominates there and fades at the rim —
-      // mouth-interior darkness from math we already have. Colorless
-      // carves (uNeg == 1) contribute nothing: the host color lines them.
-      if (solid || uNeg[i] > 1.5) {
-        float d = max(dRaw, 0.0);
-        float w = 1.0 / pow(d + uColorSoft, uColorPow);
-        c += uColors[i] * w;
-        wsum += w;
-      }
+      // compensation rides the skin above its solid host.
+      dSkin = min(dSkin, dRaw);
+      float d = max(dRaw, 0.0);
+      float w = 1.0 / pow(d + uColorSoft, uColorPow);
+      c += uColors[i] * w;
+      wsum += w;
     }
   }
   c /= max(wsum, 1e-6);
+
+  // Carve interiors COMPOSITE like decals — a weighted proximity blend
+  // cannot CONTAIN a color, only attenuate it: a near-black mouth joining
+  // the weight soup held ~42% of the mix on clean skin 0.05 away (the
+  // mouth-shadow defect; worst under dilate, which weakens the host's
+  // contact weight from ~4400 to ~330). The bowl wall sits INSIDE the
+  // carve volume, so coverage saturates there and dies within uPaintEdge
+  // past the rim. Colorless carves (uNeg == 1) composite nothing — the
+  // host's blended color lines them.
+  for (int i = 0; i < MAX_PRIMS; i++) {
+    if (i < uCount && uNeg[i] > 1.5) {
+      float d = sdCapsule(p, uA[i], uB[i], uR[i]);
+      float cov = 1.0 - smoothstep(0.0, uPaintEdge, d);
+      c = mix(c, uColors[i], cov);
+    }
+  }
 
   // Phase 2: PAINT prims composite on top as decals, in REGISTRY ORDER
   // (later wins). Weighted blending can't layer paints: a pupil over a

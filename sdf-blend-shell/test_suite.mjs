@@ -658,8 +658,23 @@ assert(ORDER_PTS.every((p) => mapField(p, CUT, 0.25) === mapField(p, CUT_R, 0.25
 // shader actually does this).
 assert(dMat.vertexShader.includes('float sdiff('), 'GLSL has the smooth-difference operator');
 assert(dMat.vertexShader.includes('uPaint[i] < 0.5 && uNeg[i] < 0.5'), 'GLSL phase 1 unions positives only');
-assert(dMat.vertexShader.includes('uNeg[i] > 1.5'), 'GLSL blendColor admits COLORED carves only (colorless bowls keep the host color)');
+assert(dMat.vertexShader.includes('uNeg[i] > 1.5'), 'GLSL COMPOSITES colored carves as decals (colorless bowls keep the host color)');
 assert(dMat.vertexShader.includes('i != own && uPaint[i] < 0.5 && uNeg[i] < 0.5'), 'GLSL burial ignores carves (the host must line its own bowl)');
+// The mouth-shadow defect, bug-then-fix (hand-computed): a weighted blend
+// cannot CONTAIN a color. OLD model at Pudge's face, 0.05 from the mouth:
+// host weight 1/(0.04+SOFT)^2 = 330.6 (0.04 = his dilate weakening the
+// contact weight — the diagnostic fingerprint), mouth weight 1/(0.05+
+// SOFT)^2 = 236.7 -> the near-black holds 42% of clean skin. NEW model:
+// composite coverage there is EXACTLY zero.
+function shadowShare(dHost, dMouth) {
+  const wH = 1 / Math.pow(Math.max(dHost, 0) + COLOR_SOFT, COLOR_POW);
+  const wM = 1 / Math.pow(Math.max(dMouth, 0) + COLOR_SOFT, COLOR_POW);
+  return wM / (wH + wM);
+}
+assert(shadowShare(0.04, 0.05) > 0.4, `OLD model: mouth held ${(shadowShare(0.04, 0.05) * 100).toFixed(0)}% of skin 0.05 away under dilate (reproduces the shadow)`);
+assert(coverage(0.05, 0) === 0, 'NEW model: composite coverage 0.05 away is EXACTLY zero (the fix)');
+assert(coverage(-0.04, 0) === 1, 'NEW model: on the bowl wall (inside the carve volume) coverage saturates');
+assert(Math.abs(coverage(PAINT_EDGE / 2, 0) - 0.5) < 1e-12, 'NEW model: coverage at the half-edge = 0.5 exactly (hand-computed smoothstep midpoint)');
 
 // --- the slice sampler ---
 // Grid-sample one axis-aligned plane, bisect every sign-change edge to the

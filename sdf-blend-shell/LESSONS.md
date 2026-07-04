@@ -158,3 +158,25 @@
   CAPSULE_RINGS_PER_UNIT).
 - Route: skill reference candidate (when a feature depends on donor
   geometry, its density probe ships in the same pass — never after).
+
+## 2026-07-03 — carve color bled a dark "shadow" around the mouths
+- What broke / what happened: the browser showed a diffuse dark smudge
+  around both mouths, several times larger than the slit — worst on Pudge.
+- Root cause: colored carves joined the phase-1 WEIGHTED proximity blend,
+  and a weighted blend cannot CONTAIN a color, only attenuate it. Hand-
+  computed at 0.05 from the mouth: mouth weight 1/(0.05+SOFT)^2 = 237 vs
+  host weight 1/(dSkin+SOFT)^2 where dSkin = local inflation — on Pudge
+  the 0.04 DILATE weakened the host's contact weight from ~4400 to ~330,
+  so the near-black held ~42% of clean skin (the diagnostic fingerprint:
+  worst on the inflated creature). The decal system exists because of
+  this exact limitation (the pupil-over-sclera gray lesson); the carve
+  color re-introduced the class from the other side.
+- Verification gap it exposed: no probe bounded a color's spatial REACH —
+  coverage probes checked presence, never containment.
+- Plug shipped: carve interiors now COMPOSITE like decals (crisp
+  smoothstep edge, PAINT_EDGE wide, saturated on the bowl wall which sits
+  inside the carve volume); phase 1 is pure solids again. Bug-then-fix
+  probes hand-computed: 42% share OLD vs exactly-zero coverage NEW at
+  0.05, saturation on-wall, half-edge = 0.5 exactly.
+- Route: skill reference candidate — HIGH-CONTRAST ACCENT colors must
+  composite with an edge; weighted blends are for kin colors only.
