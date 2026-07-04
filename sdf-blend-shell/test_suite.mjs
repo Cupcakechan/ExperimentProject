@@ -516,6 +516,70 @@ for (const creature of CREATURES) {
 }
 assert(createGait({ prims: [] }) === null, 'creatures without step data get no gait (graceful null)');
 
+// ---- Hop (roadmap A1): arc math, state machine, and a measured 20s hop ----
+const { createHop, hopArcY } = await import('./src/hop.js');
+const { HOP_TRIGGER, HOP_AIR_TIME, HOP_HEIGHT, HOP_CROUCH_DIP } = await import('./src/config.js');
+
+// Arc anchors, hand-computed: the arc is CONTINUOUS with the crouch —
+// it starts AND ends at -dip, and the peak is exactly height at u=0.5.
+assert(Math.abs(hopArcY(0, 0.24, 0.07) - -0.07) < 1e-12, 'hop arc launches FROM the crouch depth (-dip, hand-computed)');
+assert(Math.abs(hopArcY(1, 0.24, 0.07) - -0.07) < 1e-12, 'hop arc lands AT the crouch depth (continuous with LAND)');
+assert(Math.abs(hopArcY(0.5, 0.24, 0.07) - 0.24) < 1e-12, 'hop arc peak = height exactly at u=0.5 (hand-computed)');
+assert(createHop({}) === null, 'creatures without hop data get no hop (graceful null)');
+assert(hopper.hop && hopper.step && hopper.step.feet.length === 2, 'hopper hops (hop block present; feet come from the same step data)');
+
+// The hop, simulated: 20s of straight-line logical motion at roam speed.
+// Thresholds encode MEASURED values (see the INFO line); the walk-sim
+// above still exercises hopper's reactive gait as machinery, but main
+// gives the HOP precedence for creatures that have both.
+{
+  const hMat = createBlendMaterial(hopper.prims);
+  const hop = createHop(hopper);
+  let hops = 0;
+  let prevState = 'PAUSE';
+  let maxY = -9;
+  let minY = 9;
+  let maxStep = 0;
+  let plantedMoved = false;
+  let airFeetOk = true;
+  let groundFeetOk = true;
+  let prevD = null;
+  const prevAnchor = hop.feet.map(() => null);
+  let disp = null;
+  for (let i = 0; i < 1200; i++) {
+    const tt = i / 60;
+    disp = hop.update(1 / 60, { x: -tt * 0.35, z: 0, heading: 0 }, [hMat]);
+    const st = hop.current();
+    if (st === 'AIR' && prevState !== 'AIR') hops++;
+    maxY = Math.max(maxY, disp.y);
+    minY = Math.min(minY, disp.y);
+    if (prevD) maxStep = Math.max(maxStep, Math.hypot(disp.x - prevD.x, disp.z - prevD.z));
+    prevD = { x: disp.x, z: disp.z };
+    hop.feet.forEach((f, j) => {
+      if (st === 'AIR') {
+        // mid-air (body clearly up): the feet must be off the ground
+        if (disp.y > 0.1 && f.anchor.y < f.restY + 0.05) airFeetOk = false;
+        prevAnchor[j] = null; // anchors are rig-carried in the air
+      } else {
+        if (f.anchor.y !== f.restY) groundFeetOk = false;
+        if (prevAnchor[j] && f.anchor.distanceTo(prevAnchor[j]) > 1e-9 && prevState === st) plantedMoved = true;
+        prevAnchor[j] = (prevAnchor[j] ?? new THREE.Vector3()).copy(f.anchor);
+      }
+    });
+    prevState = st;
+  }
+  const travel = Math.abs(disp.x);
+  console.log(`  INFO  hop sim: ${hops} hops in 20s, displayed travel ${travel.toFixed(2)} (logical 7.00), y ${minY.toFixed(3)}..${maxY.toFixed(3)}, max frame step ${maxStep.toFixed(4)}`);
+  assert(hops >= 10, `the hop is not inert (${hops} hops >= 10 over 20s, MEASURED)`);
+  assert(Math.abs(travel - 7.0) < HOP_TRIGGER + 0.35, `displayed speed self-regulates to roam speed (travel ${travel.toFixed(2)} ~ 7.00, lag < trigger + a hop of drift)`);
+  assert(minY >= -HOP_CROUCH_DIP - 1e-9 && maxY <= HOP_HEIGHT + 1e-9, `displayed y stays in [-dip, height] (${minY.toFixed(3)}..${maxY.toFixed(3)})`);
+  assert(maxStep < 0.05, `the burst is continuous, never a teleport (max frame step ${maxStep.toFixed(4)} < 0.05, MEASURED)`);
+  assert(airFeetOk, 'mid-air, both feet are off the ground (tucked with the body)');
+  assert(groundFeetOk, 'grounded, both anchors sit exactly at rest height (planted on the ground)');
+  assert(!plantedMoved, 'planted anchors are world-fixed within a grounded state');
+  assert(HOP_AIR_TIME > 0 && HOP_TRIGGER > 0, 'hop constants are live');
+}
+
 // World-space lighting: the fragment shader must rotate the creature-space
 // SDF normal by the model matrix, or the light turns with the roamer.
 const litMat = createBlendMaterial(critter.prims);

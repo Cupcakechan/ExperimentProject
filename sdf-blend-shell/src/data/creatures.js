@@ -91,6 +91,13 @@ export const CREATURES = [
     anim: { primId: 'ear_l', axis: [1, 0, 0], amplitude: 0.3, speed: 3.2 },
     // Two feet, alternating — the "same system handles 2 or 4 legs" claim.
     step: { feet: ['foot_l', 'foot_r'], groups: [[0], [1]] },
+    // The HOP state machine (A1) replaces the reactive gait for this
+    // creature (main picks hop over gait when both exist); the feet list
+    // above stays the single source of truth for which prims are legs.
+    // Empty object = all config defaults; any field overrides (trigger,
+    // crouchTime, airTime, landTime, restMin, height, dip, leadTime,
+    // footTuck).
+    hop: {},
     prims: [
       { id: 'body', type: 'sphere', a: [0.0, 0.62, 0.0], r: 0.5, color: 0xcf6fc9 },
       { id: 'foot_l', type: 'capsule', a: [-0.05, 0.16, 0.18], b: [-0.38, 0.12, 0.22], r: 0.15, color: 0x9b4f96 },

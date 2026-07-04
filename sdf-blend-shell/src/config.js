@@ -124,3 +124,22 @@ export const STEP_LEAD_TIME = 0.15;
 // to 0.18x rest length when the hip walked over a planted toe.
 export const STRETCH_MIN = 0.55;
 export const STRETCH_MAX = 1.6;
+
+// Hop state machine (roadmap A1). The creature RESTS until its logical
+// roam position drifts HOP_TRIGGER ahead, then CROUCH -> AIR -> LAND ->
+// back to rest. The displayed body bursts between points on the logical
+// path, so average speed self-regulates to ROAM_SPEED and roam's
+// separation/boundary math stays untouched (it steers the LOGICAL point;
+// the displayed body lags it by at most ~trigger + a crouch of drift).
+export const HOP_TRIGGER = 0.32; // logical drift that launches a hop
+export const HOP_CROUCH_TIME = 0.16;
+export const HOP_AIR_TIME = 0.34;
+export const HOP_LAND_TIME = 0.14;
+export const HOP_REST_MIN = 0.2; // minimum grounded time between hops
+// Peak height above ground. NOTE: mid-hop the creature briefly exceeds
+// the stage's REST-pose top bound (a framing rule, not a physics one) —
+// hopper's ear tips peak ~1.78 for a few frames; accepted.
+export const HOP_HEIGHT = 0.24;
+export const HOP_CROUCH_DIP = 0.07; // body sink while loading + absorbing
+export const HOP_LEAD_TIME = 0.1; // land this much logical velocity AHEAD
+export const HOP_FOOT_TUCK = 0.07; // feet pull up toward the body in AIR
