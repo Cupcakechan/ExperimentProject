@@ -26,6 +26,7 @@ import {
   LEAN_GAIN,
   LEAN_MAX,
   LEAN_SMOOTH,
+  LIFT_SMOOTH,
   GROUND_RADIUS,
   GROUND_COLOR,
 } from './config.js';
@@ -184,7 +185,12 @@ renderer.setAnimationLoop(() => {
       }
       actor.rig.position.set(pose.x, actor.lift, pose.z);
       actor.rig.rotation.y = pose.heading;
-      actor.lift = actor.gait ? STRIDE_LIFT * stridePulse(actor.gait.feet) : 0;
+      // The body is a MASS: it low-passes the stride. sin^2 softened each
+      // hump's endpoints, but discrete full-range humps at the irregular
+      // step cadence still read as convulsing — the suspension turns them
+      // into one continuous sway (pause-safe: approach is identity at dt=0).
+      const targetLift = actor.gait ? STRIDE_LIFT * stridePulse(actor.gait.feet) : 0;
+      actor.lift = approach(actor.lift, targetLift, LIFT_SMOOTH, dt);
     }
     // SIGN CHECK (flagged): positive omega should bank INTO the turn —
     // if the field reads as leaning OUT of turns, flip this one sign.

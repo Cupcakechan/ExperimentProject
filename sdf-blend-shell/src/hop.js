@@ -29,6 +29,7 @@
 import * as THREE from 'three';
 import { setPrimTransform } from './anim.js';
 import { aimStretchMatrix } from './gait.js';
+import { squashEndpoints } from './feel.js';
 import {
   HOP_TRIGGER,
   HOP_CROUCH_TIME,
@@ -39,6 +40,8 @@ import {
   HOP_CROUCH_DIP,
   HOP_LEAD_TIME,
   HOP_FOOT_TUCK,
+  SQUASH_AMOUNT,
+  STRETCH_AMOUNT,
   STRETCH_MIN,
   STRETCH_MAX,
 } from './config.js';
@@ -71,7 +74,17 @@ export function createHop(creature) {
     dip: h.dip ?? HOP_CROUCH_DIP,
     leadTime: h.leadTime ?? HOP_LEAD_TIME,
     footTuck: h.footTuck ?? HOP_FOOT_TUCK,
+    squash: h.squash ?? SQUASH_AMOUNT,
+    stretch: h.stretch ?? STRETCH_AMOUNT,
   };
+
+  // Squash & stretch target: a SPHERE prim (a == b — endpoint deformation
+  // would overwrite a capsule's own segment). Missing or non-sphere ->
+  // -1: the hop works without juice rather than crashing (graceful).
+  const sIdx = creature.prims.findIndex(
+    (p) => p.id === (h.squashPrim ?? 'body') && !p.paint && !p.negative && (p.b === undefined)
+  );
+  const sPrim = sIdx >= 0 ? creature.prims[sIdx] : null;
 
   // The hop OWNS the feet, but the foot DEFINITIONS are the same step
   // data the gait uses — one source of truth for which prims are legs.
@@ -200,6 +213,32 @@ export function createHop(creature) {
         aimStretchMatrix(f.a0, f.b0, _local, _mat);
         for (const m of materials) {
           setPrimTransform(m, f.idx, f.prim, _mat);
+        }
+      }
+
+      // --- squash & stretch (A3.2): shape follows the state ---
+      // CROUCH loads a squash with the dip's ease; the CROUCH->AIR flip
+      // to full stretch is a DELIBERATE one-frame shape pop (the classic
+      // anticipation release), as is the stretch->squash impact at LAND.
+      // In AIR, stretch follows |vertical speed|: full at launch and
+      // touchdown, EXACTLY zero at the apex.
+      if (sPrim) {
+        let s = 0;
+        if (state === 'CROUCH') {
+          s = P.squash * Math.sin((Math.PI / 2) * Math.min(tState / P.crouchTime, 1));
+        } else if (state === 'AIR') {
+          s = -P.stretch * Math.abs(Math.cos(Math.PI * Math.min(tState / P.airTime, 1)));
+        } else if (state === 'LAND') {
+          s = P.squash * (1 - Math.sin((Math.PI / 2) * Math.min(tState / P.landTime, 1)));
+        }
+        // ABSOLUTE from rest every frame (the drift rule) — s = 0 restores
+        // the exact rest sphere bit-for-bit. uPrimMat stays identity: the
+        // mesh starts at the rest sphere and the SNAP absorbs the deformed
+        // field, the same way it absorbs breathing.
+        const d = squashEndpoints(sPrim, s);
+        for (const m of materials) {
+          m.uniforms.uA.value[sIdx].set(d.a[0], d.a[1], d.a[2]);
+          m.uniforms.uB.value[sIdx].set(d.b[0], d.b[1], d.b[2]);
         }
       }
 

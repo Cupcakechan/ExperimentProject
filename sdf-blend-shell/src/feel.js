@@ -41,3 +41,19 @@ export function approach(current, target, rate, dt) {
 export function headingDelta(a, b) {
   return ((b - a + Math.PI) % (2 * Math.PI) + 2 * Math.PI) % (2 * Math.PI) - Math.PI;
 }
+
+// Cartoon squash & stretch via ENDPOINT deformation (A3.2). A per-prim
+// radius is isotropic — shrinking r reads as DEFLATING — but splitting a
+// sphere's endpoints is anisotropic for free: along creature-space X
+// (the facing axis) the shape goes wider + flatter (SQUASH, s > 0);
+// along Y it goes taller (STRETCH, s < 0). r untouched, no new uniform,
+// no shader change — the vertex snap absorbs the deformed field exactly
+// like it absorbs breathing. SPHERE prims only (a == b): a capsule's own
+// segment would be overwritten; walker squash is a future pass if the
+// hop version earns it.
+export function squashEndpoints(prim, s) {
+  const [x, y, z] = prim.a;
+  if (s > 0) return { a: [x - s, y, z], b: [x + s, y, z] };
+  if (s < 0) return { a: [x, y + s, z], b: [x, y - s, z] };
+  return { a: [x, y, z], b: [x, y, z] };
+}

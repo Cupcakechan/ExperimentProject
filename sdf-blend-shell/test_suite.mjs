@@ -397,7 +397,7 @@ assert(buryT(0.1) === 0, 'exposed verts never tuck (buryT = 0)');
 const { createRoam, idleSpeedMul } = await import('./src/roam.js');
 const { ROAM_SPEED, ROAM_HARD_RADIUS, ROAM_SEP_RADIUS, GROUND_RADIUS, STRIDE_LIFT, LEAN_MAX } = await import('./src/config.js');
 const { IDLE_PERIOD, IDLE_DURATION, IDLE_RAMP } = await import('./src/config.js');
-const { stridePulse, leanTarget, approach, headingDelta } = await import('./src/feel.js');
+const { stridePulse, leanTarget, approach, headingDelta, squashEndpoints } = await import('./src/feel.js');
 assert(ROAM_SPEED > 0 && STRIDE_LIFT > 0 && LEAN_MAX > 0, 'roam/feel constants are live');
 // Gait feel (A3.1), hand-computed:
 assert(stridePulse([{ swingT: -1 }, { swingT: -1 }]) === 0, 'stridePulse: all planted = 0 (an idle walker is genuinely still)');
@@ -414,6 +414,30 @@ assert(approach(0.7, 1, 6, 0) === 0.7, 'approach: dt=0 is an exact identity (pau
 assert(Math.abs(approach(0, 1, 6, Math.LN2 / 6) - 0.5) < 1e-12, 'approach: half-life = ln2/rate exactly (hand-computed)');
 assert(Math.abs(headingDelta(3.1, -3.1) - (2 * Math.PI - 6.2)) < 1e-12, 'headingDelta: shortest way across the PI wrap (hand-computed)');
 assert(Math.abs(headingDelta(0.5, 0.7) - 0.2) < 1e-12 && headingDelta(0.5, 0.7) > 0, 'headingDelta: plain small turns pass through');
+// Squash & stretch (A3.2), hand-computed. Endpoint deformation: squash
+// splits along X (wider/flatter), stretch along Y (taller), rest is a
+// bit-exact identity (the drift rule made assertable).
+const SQ_PRIM = { id: 'body', a: [0, 0.62, 0], r: 0.5 };
+assert(JSON.stringify(squashEndpoints(SQ_PRIM, 0)) === JSON.stringify({ a: [0, 0.62, 0], b: [0, 0.62, 0] }), 'squashEndpoints: s=0 is the exact rest sphere (bit-exact identity)');
+assert(JSON.stringify(squashEndpoints(SQ_PRIM, 0.07)) === JSON.stringify({ a: [-0.07, 0.62, 0], b: [0.07, 0.62, 0] }), 'squashEndpoints: +0.07 splits along X (wider + flatter, hand-computed)');
+assert(JSON.stringify(squashEndpoints(SQ_PRIM, -0.09)) === JSON.stringify({ a: [0, 0.53, 0], b: [0, 0.71, 0] }), 'squashEndpoints: -0.09 splits along Y (taller, hand-computed)');
+// The deformed field, exact: a squashed sphere's flank sits at exactly
+// split + r; and under BOTH extremes hopper's mouth endpoints stay
+// SUBMERGED (both deformations bulge the face OUTWARD past the slit —
+// the safe direction; the run-off rule holds mid-hop).
+{
+  const sq = squashEndpoints(SQ_PRIM, 0.07);
+  assert(Math.abs(sdCapsule([0.57, 0.62, 0], sq.a, sq.b, 0.5)) < 1e-12, 'squashed flank at exactly split + r = 0.57 (hand-computed)');
+  const mouthH = hopper.prims.find((p) => p.id === 'mouth');
+  const bodyRest = hopper.prims.find((p) => p.id === 'body');
+  for (const s of [0.07, -0.09]) {
+    const d = squashEndpoints(bodyRest, s);
+    const deformed = { a: d.a, b: d.b, r: bodyRest.r };
+    for (const end of [mouthH.a, mouthH.b]) {
+      assert(sdPrim(end, deformed) < -0.005, `mouth endpoint stays submerged under deformation s=${s} (sd ${sdPrim(end, deformed).toFixed(4)})`);
+    }
+  }
+}
 assert(GROUND_RADIUS > ROAM_HARD_RADIUS, `the ground outreaches the roamers (${GROUND_RADIUS} > ${ROAM_HARD_RADIUS}) — nobody walks off the world`);
 
 // Idle envelope, hand-computed: exactly 1 outside the window, exactly 0
@@ -609,6 +633,11 @@ assert(hopper.hop && hopper.step && hopper.step.feet.length === 2, 'hopper hops 
   let plantedMoved = false;
   let airFeetOk = true;
   let groundFeetOk = true;
+  let sawSquash = false; // CROUCH: endpoints split along X (wider)
+  let sawStretch = false; // AIR: endpoints split along Y (taller)
+  let restRestored = false; // PAUSE after >= 1 hop: exact rest sphere back
+  const bodyIdx = hopper.prims.findIndex((p) => p.id === 'body');
+  const bodyRestA = new THREE.Vector3(...hopper.prims[bodyIdx].a);
   let prevD = null;
   const prevAnchor = hop.feet.map(() => null);
   let disp = null;
@@ -617,6 +646,11 @@ assert(hopper.hop && hopper.step && hopper.step.feet.length === 2, 'hopper hops 
     disp = hop.update(1 / 60, { x: -tt * 0.35, z: 0, heading: 0 }, [hMat]);
     const st = hop.current();
     if (st === 'AIR' && prevState !== 'AIR') hops++;
+    const uA = hMat.uniforms.uA.value[bodyIdx];
+    const uB = hMat.uniforms.uB.value[bodyIdx];
+    if (st === 'CROUCH' && uB.x - uA.x > 0.05) sawSquash = true;
+    if (st === 'AIR' && uB.y - uA.y > 0.05) sawStretch = true;
+    if (st === 'PAUSE' && hops >= 1 && uA.distanceTo(uB) === 0 && uA.distanceTo(bodyRestA) === 0) restRestored = true;
     maxY = Math.max(maxY, disp.y);
     minY = Math.min(minY, disp.y);
     if (prevD) maxStep = Math.max(maxStep, Math.hypot(disp.x - prevD.x, disp.z - prevD.z));
@@ -643,6 +677,9 @@ assert(hopper.hop && hopper.step && hopper.step.feet.length === 2, 'hopper hops 
   assert(airFeetOk, 'mid-air, both feet are off the ground (tucked with the body)');
   assert(groundFeetOk, 'grounded, both anchors sit exactly at rest height (planted on the ground)');
   assert(!plantedMoved, 'planted anchors are world-fixed within a grounded state');
+  assert(sawSquash, 'CROUCH squashes the body (endpoints split along X — anticipation, measured live)');
+  assert(sawStretch, 'AIR stretches the body (endpoints split along Y — measured live)');
+  assert(restRestored, 'PAUSE restores the EXACT rest sphere (absolute-from-rest writes cannot drift, bit-exact)');
   assert(HOP_AIR_TIME > 0 && HOP_TRIGGER > 0, 'hop constants are live');
 }
 

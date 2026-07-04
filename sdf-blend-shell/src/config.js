@@ -93,6 +93,19 @@ export const STRIDE_LIFT = 0.03;
 export const LEAN_GAIN = 0.35;
 export const LEAN_MAX = 0.18; // rad (~10 degrees)
 export const LEAN_SMOOTH = 6.0;
+// The body is a MASS: it low-passes the stride. sin^2 softened each
+// hump's endpoints, but discrete full-range humps at the irregular
+// drift-triggered step cadence still read as convulsing — the
+// suspension smoothing turns them into one continuous sway.
+// Lower = heavier body.
+export const LIFT_SMOOTH = 5.0;
+
+// Squash & stretch (A3.2), hop-driven via endpoint deformation (see
+// feel.js squashEndpoints). Amounts are the endpoint HALF-splits in
+// world units; per-creature overridable via hop.squash / hop.stretch /
+// hop.squashPrim (?? these defaults / 'body').
+export const SQUASH_AMOUNT = 0.07;
+export const STRETCH_AMOUNT = 0.09;
 
 // The field (all creatures share one stage). Separation steering: each
 // roamer turns away from any neighbor inside SEP_RADIUS, gain scaled by
