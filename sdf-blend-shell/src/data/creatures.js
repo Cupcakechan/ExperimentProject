@@ -59,6 +59,9 @@
 //     comfortably wider than the host's inter-vertex spacing or the
 //     bowl looks starved (levers: sphere segments in buildShell,
 //     CAPSULE_RINGS_PER_UNIT for capsule hosts).
+//   - MOUTHS are CAPSULE carves spanning z (a wide slit) — a sphere
+//     carve intersects the host in a circle, which reads as a shocked
+//     hole, not a mouth (browser-confirmed on the first two carves).
 // ============================================================
 
 export const CREATURES = [
@@ -94,12 +97,13 @@ export const CREATURES = [
       { id: 'foot_r', type: 'capsule', a: [-0.05, 0.16, -0.18], b: [-0.38, 0.12, -0.22], r: 0.15, color: 0x9b4f96 },
       { id: 'ear_l', type: 'capsule', a: [-0.05, 1.0, 0.15], b: [-0.12, 1.38, 0.22], r: 0.16, color: 0xe09ade },
       { id: 'ear_r', type: 'capsule', a: [-0.05, 1.0, -0.15], b: [-0.12, 1.38, -0.22], r: 0.16, color: 0xe09ade },
-      // The demo CARVE: a dark mouth dented into the face. Center sits
-      // 0.053 OUTSIDE the body surface with r 0.16 -> a 0.107-deep,
-      // ~0.30-wide bowl (dent, not pierce); kCap 0.11 (~0.7*r) keeps it
-      // from being erased at high slider k; the color tints the bowl and
-      // fades at the rim. Delete this one line to remove the mouth.
-      { id: 'mouth', type: 'sphere', a: [-0.54, 0.5, 0.0], r: 0.16, kCap: 0.11, negative: true, color: 0x2b1626 },
+      // The demo CARVE, now a WIDE slit: a horizontal capsule spanning z.
+      // (A sphere carve intersects a sphere host in a CIRCLE — a small
+      // dark circle under big eyes reads as a shocked hole, not a mouth.)
+      // Midpoint sits 0.019 outside the face -> ~0.08-deep, ~0.38-wide
+      // slit, tapering slightly at the corners; kCap 0.07 (~0.7*r) keeps
+      // it from being erased at high slider k. Delete to remove the mouth.
+      { id: 'mouth', type: 'capsule', a: [-0.5, 0.48, 0.1], b: [-0.5, 0.48, -0.1], r: 0.1, kCap: 0.07, negative: true, color: 0x2b1626 },
       { id: 'sclera_l', type: 'sphere', a: [-0.42, 0.78, 0.16], r: 0.12, color: 0xf2f4f6, paint: true },
       { id: 'sclera_r', type: 'sphere', a: [-0.42, 0.78, -0.16], r: 0.12, color: 0xf2f4f6, paint: true },
       { id: 'pupil_l', type: 'sphere', a: [-0.423, 0.781, 0.161], r: 0.055, color: 0x241a28, paint: true },
@@ -144,9 +148,9 @@ export const CREATURES = [
       { id: 'leg_bl', type: 'capsule', a: [0.34, 0.38, 0.2], b: [0.36, 0.08, 0.23], r: 0.12, kCap: 0.08, color: 0x6f9bd1 },
       { id: 'leg_br', type: 'capsule', a: [0.34, 0.38, -0.2], b: [0.36, 0.08, -0.23], r: 0.12, kCap: 0.08, color: 0x6f9bd1 },
       { id: 'tail', type: 'capsule', a: [0.42, 0.55, 0.0], b: [0.62, 0.68, 0.0], r: 0.11, kCap: 0.08, color: 0x7fa8dd },
-      // Second carve in the gallery, first CARVE + DILATE combo: the dent
-      // survives dilation because the whole surface offsets together.
-      { id: 'mouth', type: 'sphere', a: [-0.78, 0.64, 0.0], r: 0.1, kCap: 0.07, negative: true, color: 0x2d2438 },
+      // Wide mouth slit (capsule carve — see hopper's mouth note); the
+      // dent survives dilation because the whole surface offsets together.
+      { id: 'mouth', type: 'capsule', a: [-0.735, 0.63, 0.075], b: [-0.735, 0.63, -0.075], r: 0.065, kCap: 0.045, negative: true, color: 0x2d2438 },
       { id: 'sclera_l', type: 'sphere', a: [-0.72, 0.8, 0.11], r: 0.075, color: 0xf2f4f6, paint: true },
       { id: 'sclera_r', type: 'sphere', a: [-0.72, 0.8, -0.11], r: 0.075, color: 0xf2f4f6, paint: true },
       { id: 'pupil_l', type: 'sphere', a: [-0.73, 0.804, 0.1155], r: 0.032, color: 0x1e2430, paint: true },

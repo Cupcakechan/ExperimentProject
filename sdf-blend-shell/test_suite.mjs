@@ -208,10 +208,14 @@ for (const creature of CREATURES) {
   // bowl lined by donor vertices — GENERALIZED: any future carve on any
   // creature flows through these with no extra wiring.
   for (const neg of prims.filter((p) => p.negative)) {
+    // Anchor checks at the carve's MIDPOINT — for a capsule negative,
+    // neg.a is one END of the slit, not its center (spheres: identical).
+    const nb = neg.b ?? neg.a;
+    const negMid = [(neg.a[0] + nb[0]) / 2, (neg.a[1] + nb[1]) / 2, (neg.a[2] + nb[2]) / 2];
     let host = null;
     let hostSd = Infinity;
     for (const s of solids) {
-      const sd = sdPrim(neg.a, s);
+      const sd = sdPrim(negMid, s);
       if (sd < hostSd) { hostSd = sd; host = s; }
     }
     assert(hostSd < neg.r, `${tag} ${neg.id} reaches into its host '${host?.id}' (sd ${hostSd.toFixed(4)} < r ${neg.r})`);
@@ -808,8 +812,8 @@ const INFL_CEILING = {
 // hand-computed penetration depth 0.1068, confirmed by the field).
 const CARVE_BOUNDS = {
   hopper: {
-    0.25: { hardBand: 0.048, carveFloor: 0.127 },
-    0.6: { hardBand: 0.03, carveFloor: 0.127 },
+    0.25: { hardBand: 0.037, carveFloor: 0.101 },
+    0.6: { hardBand: 0.021, carveFloor: 0.101 },
   },
   pudge: {
     // MEASURED: min hard is POSITIVE (+0.0228 / +0.0281) — the 0.04 dilate
@@ -817,8 +821,8 @@ const CARVE_BOUNDS = {
     // excludes dilate), so the band never even engages; carveFloor from
     // measured min inflation -0.0479 = penetration 0.088 - inflate 0.04
     // (theory confirmed to the third decimal).
-    0.25: { hardBand: 0.02, carveFloor: 0.068 },
-    0.6: { hardBand: 0.02, carveFloor: 0.068 },
+    0.25: { hardBand: 0.02, carveFloor: 0.072 },
+    0.6: { hardBand: 0.02, carveFloor: 0.072 },
   },
 };
 
@@ -907,9 +911,11 @@ for (const creature of CREATURES) {
   const bodyH = hopper.prims.find((p) => p.id === 'body');
   assert(mouth && mouth.negative === true && typeof mouth.color === 'number', 'hopper has the demo mouth carve (negative, colored)');
   // The carve actually removes skin: the body-surface point on the ray
-  // toward the mouth center sat ON the skin pre-carve; post-carve the
-  // field there must be clearly positive (that skin is gone).
-  const dir = [mouth.a[0] - bodyH.a[0], mouth.a[1] - bodyH.a[1], mouth.a[2] - bodyH.a[2]];
+  // toward the mouth's MIDPOINT (it is a capsule slit now) sat ON the
+  // skin pre-carve; post-carve the field there must be clearly positive.
+  const mb = mouth.b ?? mouth.a;
+  const mMid = [(mouth.a[0] + mb[0]) / 2, (mouth.a[1] + mb[1]) / 2, (mouth.a[2] + mb[2]) / 2];
+  const dir = [mMid[0] - bodyH.a[0], mMid[1] - bodyH.a[1], mMid[2] - bodyH.a[2]];
   const dl = Math.hypot(...dir);
   const P = [bodyH.a[0] + (dir[0] / dl) * bodyH.r, bodyH.a[1] + (dir[1] / dl) * bodyH.r, bodyH.a[2] + (dir[2] / dl) * bodyH.r];
   assert(mapField(P, hopper.prims, BLEND_K) > 0.02, `the mouth removed skin (field at the old skin point = ${mapField(P, hopper.prims, BLEND_K).toFixed(4)} > 0.02)`);
