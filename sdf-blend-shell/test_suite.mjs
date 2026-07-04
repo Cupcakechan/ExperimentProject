@@ -1011,6 +1011,7 @@ const INFL_CEILING = {
   longneck: { 0.25: 0.114, 0.6: 0.317 },
   pudge: { 0.25: 0.142, 0.6: 0.229 }, // at breath peak (dilate 0.04 + amplitude 0.02)
   snail: { 0.25: 0.094, 0.6: 0.182 }, // at breath peak (+0.012); the shell's absolute k still caps compounding
+  skitter: { 0.25: 0.03, 0.6: 0.03 }, // fully authored blends: MEASURED 0.0097 at BOTH k (every close pair capped)
 };
 // Carved creatures: MEASURED bounds (+0.02 margin) for the generalized
 // invariants. hardBand = how far the smooth contour may sit inside the
@@ -1108,10 +1109,18 @@ for (const creature of CREATURES) {
     assert(maxInfl <= ceiling, `${tag} k=${k}: max inflation ${maxInfl.toFixed(4)} <= ${ceiling} (MEASURED ceiling)`);
   }
   // The mechanism behind the k=0.6 vanishing-decals defect, now a live
-  // probe: inflation must actually GROW with k (an inert sampler that
-  // measured 0 everywhere would pass every ceiling).
+  // probe: inflation must actually GROW with k — UNLESS the creature is
+  // fully authored (every close pair kCap'd/k'd below the slider range:
+  // Skitter — six thin legs NEED caps, so the slider legitimately has
+  // nothing left to govern; measured 0.0097 at BOTH k). Strict growth
+  // applies only where >= 2 solids are slider-governed.
   assert(measured[BLEND_K] > 0.005, `${tag} inflation is live at k=${BLEND_K} (${measured[BLEND_K].toFixed(4)} > 0.005 — the sampler is not inert)`);
-  assert(measured[K_MAX] > measured[BLEND_K], `${tag} inflation grows with k (${measured[K_MAX].toFixed(4)} > ${measured[BLEND_K].toFixed(4)}) — the decal-defect mechanism, measured live`);
+  const sliderGoverned = solids.filter((p) => p.k == null && (p.kCap == null || p.kCap >= K_MAX)).length >= 2;
+  if (sliderGoverned) {
+    assert(measured[K_MAX] > measured[BLEND_K], `${tag} inflation grows with k (${measured[K_MAX].toFixed(4)} > ${measured[BLEND_K].toFixed(4)}) — the decal-defect mechanism, measured live`);
+  } else {
+    assert(measured[K_MAX] >= measured[BLEND_K] - 1e-9, `${tag} fully AUTHORED blends: slider-immune by design (${measured[K_MAX].toFixed(4)} vs ${measured[BLEND_K].toFixed(4)} — every close pair capped)`);
+  }
 }
 
 // --- carve regression anchors (hopper's mouth: the first carve) ---

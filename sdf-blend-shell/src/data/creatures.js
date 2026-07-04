@@ -76,6 +76,12 @@
 //   - MOUTHS are CAPSULE carves spanning z (a wide slit) — a sphere
 //     carve intersects the host in a circle, which reads as a shocked
 //     hole, not a mouth (browser-confirmed on the first two carves).
+//   - PROTRUDING BALL EYES (the reference look): a small SOLID white
+//     sphere rooted just inside the head (kCap ~0.03 so it stays a
+//     ball), with the dark iris as a PAINT decal hosted ON the eyeball
+//     (nearest-solid hosting finds it). Name irises 'iris_*', not
+//     'pupil_*' — the pupil/sclera layering probe assumes a spherical
+//     paint pair, and here the sclera IS a solid.
 // ============================================================
 
 export const CREATURES = [
@@ -165,7 +171,7 @@ export const CREATURES = [
     breath: { amplitude: 0.02, speed: 1.6 },
     anim: { primId: 'tail', axis: [0, 1, 0], amplitude: 0.5, speed: 3.0 },
     step: { feet: ['leg_fl', 'leg_fr', 'leg_bl', 'leg_br'], groups: [[0, 3], [1, 2]] },
-    // 12 prims — exactly at MAX_PRIMS: the capacity ceiling, demonstrated.
+    // 12 prims (the old MAX_PRIMS ceiling; capacity is 16 since Skitter).
     prims: [
       { id: 'body', type: 'sphere', a: [0.05, 0.5, 0.0], r: 0.4, color: 0x8fb4e3 },
       { id: 'head', type: 'sphere', a: [-0.52, 0.72, 0.0], r: 0.26, color: 0xa7c7ec },
@@ -214,6 +220,42 @@ export const CREATURES = [
       // the layered-decal probe on purpose).
       { id: 'eye_l', type: 'sphere', a: [-0.815, 0.725, 0.11], r: 0.045, color: 0x2a2430, paint: true },
       { id: 'eye_r', type: 'sphere', a: [-0.815, 0.725, -0.11], r: 0.045, color: 0x2a2430, paint: true },
+    ],
+  },
+  {
+    id: 'skitter',
+    name: 'Skitter',
+    // The reference six-legger, built from EXISTING vocabulary only:
+    // TRIPOD gait (two groups of three — "leg count is pure data",
+    // now proven at 2, 4, and 6), thin kCap'd legs for the pointy read,
+    // green-tipped antennae, and the reference's PROTRUDING BALL EYES
+    // (solid eyeballs + iris decals hosted on them). 15 prims — the
+    // creature that raised MAX_PRIMS to 16. No anim: the antennae carry
+    // tip prims (attached prims don't follow), and the legs belong to
+    // the gait.
+    step: {
+      feet: ['leg_fl', 'leg_fr', 'leg_ml', 'leg_mr', 'leg_bl', 'leg_br'],
+      groups: [[0, 3, 4], [1, 2, 5]], // alternating tripods: fl+mr+bl / fr+ml+br
+    },
+    prims: [
+      { id: 'body', type: 'capsule', a: [-0.3, 0.42, 0.0], b: [0.28, 0.46, 0.0], r: 0.26, color: 0x7b5fc9 },
+      { id: 'leg_fl', type: 'capsule', a: [-0.2, 0.36, 0.14], b: [-0.3, 0.06, 0.3], r: 0.055, kCap: 0.04, color: 0x52418f },
+      { id: 'leg_fr', type: 'capsule', a: [-0.2, 0.36, -0.14], b: [-0.3, 0.06, -0.3], r: 0.055, kCap: 0.04, color: 0x52418f },
+      { id: 'leg_ml', type: 'capsule', a: [0.0, 0.36, 0.15], b: [0.02, 0.06, 0.34], r: 0.055, kCap: 0.04, color: 0x52418f },
+      { id: 'leg_mr', type: 'capsule', a: [0.0, 0.36, -0.15], b: [0.02, 0.06, -0.34], r: 0.055, kCap: 0.04, color: 0x52418f },
+      { id: 'leg_bl', type: 'capsule', a: [0.2, 0.36, 0.14], b: [0.32, 0.06, 0.3], r: 0.055, kCap: 0.04, color: 0x52418f },
+      { id: 'leg_br', type: 'capsule', a: [0.2, 0.36, -0.14], b: [0.32, 0.06, -0.3], r: 0.055, kCap: 0.04, color: 0x52418f },
+      { id: 'antenna_l', type: 'capsule', a: [-0.24, 0.6, 0.07], b: [-0.38, 0.86, 0.12], r: 0.05, kCap: 0.035, color: 0x6b53b8 },
+      { id: 'antenna_r', type: 'capsule', a: [-0.24, 0.6, -0.07], b: [-0.38, 0.86, -0.12], r: 0.05, kCap: 0.035, color: 0x6b53b8 },
+      { id: 'tip_l', type: 'sphere', a: [-0.38, 0.86, 0.12], r: 0.055, kCap: 0.04, color: 0x3bbd8e },
+      { id: 'tip_r', type: 'sphere', a: [-0.38, 0.86, -0.12], r: 0.055, kCap: 0.04, color: 0x3bbd8e },
+      // The reference's PROTRUDING eyes: solid white balls rooted 0.022
+      // inside the body, poking 0.048 out; irises are decals hosted ON
+      // the eyeballs (their nearest solid).
+      { id: 'eyeball_l', type: 'sphere', a: [-0.48, 0.54, 0.1], r: 0.07, kCap: 0.03, color: 0xf2f4f6 },
+      { id: 'eyeball_r', type: 'sphere', a: [-0.48, 0.54, -0.1], r: 0.07, kCap: 0.03, color: 0xf2f4f6 },
+      { id: 'iris_l', type: 'sphere', a: [-0.545, 0.545, 0.112], r: 0.03, color: 0x201a30, paint: true },
+      { id: 'iris_r', type: 'sphere', a: [-0.545, 0.545, -0.112], r: 0.03, color: 0x201a30, paint: true },
     ],
   },
 ];

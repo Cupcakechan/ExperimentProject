@@ -18,8 +18,11 @@ export const K_STEP = 0.01;
 export const SNAP_ITERS = 5;
 
 // Uniform array capacity compiled into the shader. The creature may define
-// FEWER primitives than this, never more.
-export const MAX_PRIMS = 12;
+// FEWER primitives than this, never more. Raised 12 -> 16 for the
+// reference six-legged spider (15 prims); the uCount guard makes unused
+// slots near-free per pixel, and the uniform budget (16 mat4 + the vec3
+// arrays) stays comfortably inside desktop limits.
+export const MAX_PRIMS = 16;
 
 // Fallback color for any primitive that omits its own (guards hand-authored
 // registry entries — a colorless prim must never break the shader).
