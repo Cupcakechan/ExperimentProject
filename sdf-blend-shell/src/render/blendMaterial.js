@@ -42,6 +42,7 @@ uniform float uR[MAX_PRIMS];
 uniform vec3 uColors[MAX_PRIMS];
 uniform float uPaint[MAX_PRIMS]; // 1.0 = color-only prim: no surface, no mesh
 uniform float uKCap[MAX_PRIMS]; // per-prim blend-radius ceiling (thin-part trick)
+uniform float uKPrim[MAX_PRIMS]; // ABSOLUTE per-prim blend radius; <= 0.0 = unset (follow the slider)
 uniform float uPaintEdge; // decal edge softness, world units
 uniform int uCount;
 uniform float uK;
@@ -72,10 +73,14 @@ float mapSDF(vec3 p) {
   float d = 1e9;
   for (int i = 0; i < MAX_PRIMS; i++) {
     if (i < uCount && uPaint[i] < 0.5) { // paint prims have no surface
-      // The thin-part trick: a prim's kCap CLAMPS how wide it may blend,
-      // no matter where the global slider goes — so a thin neck or antenna
-      // keeps its shape instead of dissolving into the nearest big mass.
-      float k = min(uK, uKCap[i]);
+      // Blend-radius resolution, in authoring-priority order:
+      //   1. uKPrim (absolute, authored): this prim blends THIS wide,
+      //      period — the slider does not move it (authored beats ambient).
+      //   2. uK (the slider): the global mood for unauthored prims.
+      //   3. uKCap: a CEILING over either — the thin-part trick; a thin
+      //      neck or antenna keeps its shape no matter what 1 or 2 say.
+      float base = uKPrim[i] > 0.0 ? uKPrim[i] : uK;
+      float k = min(base, uKCap[i]);
       d = smin(d, sdCapsule(p, uA[i], uB[i], uR[i]), k);
     }
   }
@@ -174,7 +179,7 @@ void main() {
     }
   }
   // CONTINUOUS burial: 0 at the boundary (-uBuryEps), 1 once uBuryBand
-  // deeper. Binary tucking built 0.055-tall triangle cliffs across the
+  // deeper. Binary tucking made 0.055-tall triangle cliffs across the
   // boundary whose back faces flashed as black slivers in the ink pass;
   // the ramp turns cliffs into slopes that hug the surface.
   float buryT = 1.0 - smoothstep(-uBuryEps - uBuryBand, -uBuryEps, dOther);
@@ -247,6 +252,7 @@ function buildUniforms(prims, snapOffset) {
   const uColors = [];
   const uPaint = [];
   const uKCap = [];
+  const uKPrim = [];
   for (let i = 0; i < MAX_PRIMS; i++) {
     const prim = prims[i];
     uA.push(new THREE.Vector3(...(prim ? prim.a : [0, 0, 0])));
@@ -259,6 +265,10 @@ function buildUniforms(prims, snapOffset) {
     // kCap is optional; absent = uncapped. The sentinel just has to be
     // larger than any slider value so min(uK, sentinel) === uK.
     uKCap.push(prim && prim.kCap != null ? prim.kCap : 1e3);
+    // k is optional; absent = follow the slider. Sentinel must be <= 0
+    // (a legal k is always > 0 — smin divides by it), so the shader's
+    // "uKPrim > 0.0" test cleanly separates authored from unauthored.
+    uKPrim.push(prim && prim.k != null ? prim.k : -1.0);
   }
   return {
     uA: { value: uA },
@@ -267,6 +277,7 @@ function buildUniforms(prims, snapOffset) {
     uColors: { value: uColors },
     uPaint: { value: uPaint },
     uKCap: { value: uKCap },
+    uKPrim: { value: uKPrim },
     uCount: { value: Math.min(prims.length, MAX_PRIMS) },
     uK: { value: BLEND_K },
     uColorSoft: { value: COLOR_SOFT },

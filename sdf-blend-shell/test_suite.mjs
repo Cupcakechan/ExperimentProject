@@ -124,7 +124,8 @@ for (const creature of CREATURES) {
       typeof prim.r === 'number' && prim.r > 0 &&
       (prim.color === undefined || typeof prim.color === 'number') &&
       (prim.paint === undefined || typeof prim.paint === 'boolean') &&
-      (prim.kCap === undefined || (typeof prim.kCap === 'number' && prim.kCap > 0));
+      (prim.kCap === undefined || (typeof prim.kCap === 'number' && prim.kCap > 0)) &&
+      (prim.k === undefined || (typeof prim.k === 'number' && prim.k > 0)); // smin divides by k
     assert(ok, `${tag} ${prim.id}: well-formed prim`);
   }
   assert(prims.length <= MAX_PRIMS, `${tag} fits shader capacity (${prims.length} <= ${MAX_PRIMS})`);
@@ -207,6 +208,8 @@ for (const creature of CREATURES) {
   assert(prims.every((p, i) => mat.uniforms.uPaint.value[i] === (p.paint ? 1.0 : 0.0)), `${tag} uPaint flags mirror the registry`);
   assert(mat.uniforms.uKCap.value.length === MAX_PRIMS, `${tag} uKCap padded to MAX_PRIMS`);
   assert(prims.every((p, i) => mat.uniforms.uKCap.value[i] === (p.kCap != null ? p.kCap : 1e3)), `${tag} uKCap mirrors the registry (uncapped = sentinel 1e3)`);
+  assert(mat.uniforms.uKPrim.value.length === MAX_PRIMS, `${tag} uKPrim padded to MAX_PRIMS`);
+  assert(prims.every((p, i) => mat.uniforms.uKPrim.value[i] === (p.k != null ? p.k : -1.0)), `${tag} uKPrim mirrors the registry (unauthored = sentinel -1, follows the slider)`);
   assert(mat.uniforms.uSnapOffset.value === 0.0, `${tag} skin material snaps to the zero surface`);
   const IDENTITY = new THREE.Matrix4();
   assert(mat.uniforms.uPrimMat.value.length === MAX_PRIMS, `${tag} uPrimMat padded to MAX_PRIMS`);
@@ -480,7 +483,10 @@ function mapField(p, prims, k) {
   let d = 1e9;
   for (const prim of prims) {
     if (prim.paint) continue;
-    d = smin(d, sdPrim(p, prim), Math.min(k, prim.kCap != null ? prim.kCap : 1e3));
+    // Same resolution order as the shader: authored absolute k beats the
+    // slider; kCap ceilings either.
+    const base = prim.k != null ? prim.k : k;
+    d = smin(d, sdPrim(p, prim), Math.min(base, prim.kCap != null ? prim.kCap : 1e3));
   }
   return d;
 }
@@ -510,6 +516,22 @@ assert(Math.abs(rawMinSolid([0, RIDGE_Y, 0], PAIR) - 0.0625) < 1e-12, 'ridge inf
 // kCap parity: capping the SECOND prim caps the pair fold: field = -kCap/4.
 const PAIR_CAPPED = [PAIR[0], { ...PAIR[1], kCap: 0.1 }];
 assert(Math.abs(mapField([0, 0, 0], PAIR_CAPPED, 0.25) - -0.025) < 1e-12, 'mapField mirror honors kCap: capped pair midpoint = -0.025 (hand-computed)');
+// Absolute per-prim k (Pass 2): authored k governs that prim's fold —
+// wider OR narrower than the slider — and HOLDS when the slider moves
+// (authored beats ambient). kCap still ceilings it. All hand-computed
+// from field(midpoint) = -kEff/4.
+const PAIR_ABS = [PAIR[0], { ...PAIR[1], k: 0.4 }];
+assert(Math.abs(mapField([0, 0, 0], PAIR_ABS, 0.25) - -0.1) < 1e-12, 'absolute k=0.4 overrides slider 0.25: pair midpoint = -0.1 (hand-computed)');
+assert(Math.abs(mapField([0, 0, 0], PAIR_ABS, 0.6) - -0.1) < 1e-12, 'absolute k HOLDS against slider 0.6: pair midpoint still -0.1');
+const PAIR_ABS_NARROW = [PAIR[0], { ...PAIR[1], k: 0.08 }];
+assert(Math.abs(mapField([0, 0, 0], PAIR_ABS_NARROW, 0.25) - -0.02) < 1e-12, 'absolute k=0.08 narrows below slider 0.25: pair midpoint = -0.02 (hand-computed)');
+const PAIR_ABS_CAPPED = [PAIR[0], { ...PAIR[1], k: 0.4, kCap: 0.1 }];
+assert(Math.abs(mapField([0, 0, 0], PAIR_ABS_CAPPED, 0.25) - -0.025) < 1e-12, 'kCap ceilings an authored k: min(0.4, 0.1) -> midpoint = -0.025 (hand-computed)');
+// The shader carries the same resolution order (the mirror above is only
+// trustworthy if the GLSL it mirrors actually does this).
+const kMat = createBlendMaterial(PAIR_ABS);
+assert(kMat.vertexShader.includes('uKPrim[i] > 0.0 ? uKPrim[i] : uK'), 'GLSL resolves authored k over the slider (uKPrim override expression present)');
+assert(kMat.uniforms.uKPrim.value[0] === -1.0 && kMat.uniforms.uKPrim.value[1] === 0.4, 'material mirrors a synthetic authored k (sentinel -1 beside 0.4)');
 
 // --- the slice sampler ---
 // Grid-sample one axis-aligned plane, bisect every sign-change edge to the

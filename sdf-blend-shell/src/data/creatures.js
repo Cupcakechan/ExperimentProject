@@ -9,6 +9,11 @@
 //               it never blends wider than this, no matter the global k.
 //               The post's thin-part trick: thin appendages keep their
 //               shape instead of dissolving into big neighbors.
+//   k (per prim, optional) — ABSOLUTE blend radius (world units) for
+//               that prim's folds: authored final intent, holds against
+//               the slider (which keeps driving unauthored prims). kCap
+//               still ceilings it. Use kCap for "never wider than";
+//               use k for "exactly this, always". Must be > 0 if set.
 //   anim        optional single-prim wave:
 //               { primId, axis, amplitude (rad), speed (rad/s) }
 //               The prim's endpoint b rotates about its endpoint a.
