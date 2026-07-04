@@ -154,7 +154,11 @@ renderer.setAnimationLoop(() => {
       actor.rig.position.set(disp.x, disp.y, disp.z);
       actor.rig.rotation.y = disp.heading;
     } else {
-      const bobY = BOB_AMPLITUDE * Math.sin(tAnim * BOB_SPEED + actor.bobPhase);
+      // The free-sine bob is the WALKERS' between-steps life (queued to
+      // become step-synced in A3). A creature with no gait is glued to
+      // the ground by design (Shelby slides) — bobbing lifted her whole
+      // body 0.035 while the breath swells only 0.012, drowning it 3:1.
+      const bobY = actor.gait ? BOB_AMPLITUDE * Math.sin(tAnim * BOB_SPEED + actor.bobPhase) : 0;
       actor.rig.position.set(pose.x, bobY, pose.z);
       actor.rig.rotation.y = pose.heading;
 
