@@ -29,6 +29,12 @@
 //               carve edge, outline). The suite audits the field at the
 //               BREATH PEAK; keep inflate + amplitude under the thinnest
 //               solid r.
+//   idle (per CREATURE, optional) — roam-level rest schedule override:
+//               { period?, duration?, ramp? } (?? config defaults).
+//               Roamers stop walking for `duration` out of every
+//               `period` seconds (smooth shoulders) — feet plant and
+//               hops cease automatically (both are drift-triggered),
+//               so breathing gets stage time. duration >= 2*ramp.
 //   negative (per prim, optional) — CARVE prim (smooth difference):
 //               subtracted from the union of ALL solids, so its registry
 //               position never changes the result. No mesh, no burial,
@@ -185,6 +191,9 @@ export const CREATURES = [
     name: 'Shelby',
     // Very slow breath — a snail's tempo (base inflate 0: pure breath).
     breath: { amplitude: 0.012, speed: 0.9 },
+    // Snails rest long: a bigger idle window inside a longer cycle
+    // (the per-creature override path — others use config defaults).
+    idle: { period: 11, duration: 4.5 },
     // NO anim and NO step — a snail SLIDES (roam moves the rig; the gait
     // null path and the animPrimIndex -1 no-op get their first live users,
     // by design not omission). The antennae carry eye decals, so per the

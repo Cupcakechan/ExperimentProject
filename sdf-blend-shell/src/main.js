@@ -73,7 +73,7 @@ const actors = CREATURES.map((creature, i) => {
     material,
     ink,
     rig,
-    roam: createRoam(i, CREATURES.length), // seed = index; count-spaced spawn ring
+    roam: createRoam(i, CREATURES.length, creature.idle), // seed = index; count-spaced spawn ring; per-creature idle
     // A hopping creature's feet belong to the HOP state machine — running
     // the reactive gait underneath it would fight over the same anchors.
     hop: createHop(creature),

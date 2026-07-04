@@ -147,6 +147,13 @@ for (const creature of CREATURES) {
     const minR = Math.min(...prims.filter((p) => !p.paint && !p.negative).map((p) => p.r));
     assert(peak < minR, `${tag} breath peak ${peak.toFixed(3)} stays under the thinnest solid r ${minR} (no ballooning past a limb)`);
   }
+  if (creature.idle) {
+    const ip = creature.idle;
+    const period = ip.period ?? 9;
+    const duration = ip.duration ?? 2.8;
+    const ramp = ip.ramp ?? 0.6;
+    assert(duration > 0 && period > duration && duration >= 2 * ramp, `${tag} idle override is coherent (0 < 2*ramp <= duration < period)`);
+  }
   assert(new Set(prims.map((p) => p.id)).size === prims.length, `${tag} prim ids are unique`);
 
   // geometry: solids meshed, paints not, aPrim carries registry indices
@@ -387,10 +394,38 @@ assert(Math.abs(buryT(-BURY_EPS - BURY_BAND / 2) - 0.5) < 1e-9, 'buryT at half d
 assert(buryT(0.1) === 0, 'exposed verts never tuck (buryT = 0)');
 
 // Roam: deterministic, seeded, bounded, separated, resettable.
-const { createRoam } = await import('./src/roam.js');
+const { createRoam, idleSpeedMul } = await import('./src/roam.js');
 const { ROAM_SPEED, ROAM_HARD_RADIUS, ROAM_SEP_RADIUS, GROUND_RADIUS, BOB_AMPLITUDE, BOB_SPEED } = await import('./src/config.js');
+const { IDLE_PERIOD, IDLE_DURATION, IDLE_RAMP } = await import('./src/config.js');
 assert(ROAM_SPEED > 0 && BOB_AMPLITUDE > 0 && BOB_SPEED > 0, 'roam/bob constants are live');
 assert(GROUND_RADIUS > ROAM_HARD_RADIUS, `the ground outreaches the roamers (${GROUND_RADIUS} > ${ROAM_HARD_RADIUS}) — nobody walks off the world`);
+
+// Idle envelope, hand-computed: exactly 1 outside the window, exactly 0
+// on the plateau (a genuine stop), smooth shoulders in between.
+const IP = { period: IDLE_PERIOD, duration: IDLE_DURATION, ramp: IDLE_RAMP };
+assert(idleSpeedMul(IDLE_DURATION, IP) === 1, 'idle envelope = 1 exactly at the window end (hand-computed)');
+assert(idleSpeedMul(IDLE_PERIOD - 0.1, IP) === 1, 'idle envelope = 1 outside the window');
+assert(idleSpeedMul(IDLE_RAMP, IP) === 0, 'idle envelope = 0 exactly once the shoulder completes (hand-computed)');
+assert(idleSpeedMul(IDLE_DURATION / 2, IP) === 0, 'idle envelope = 0 on the plateau (a genuine stop, not a creep)');
+assert(Math.abs(idleSpeedMul(IDLE_RAMP / 2, IP) - 0.5) < 1e-12, 'idle shoulder midpoint = 0.5 exactly (smoothstep, hand-computed)');
+// The stop is REAL: seed 0 spawns at wander-clock 0 — inside the idle
+// window — so with no neighbors its position must be BIT-IDENTICAL
+// across the plateau, then walking must resume after the window.
+{
+  const r0 = createRoam(0);
+  let pA = null;
+  let pB = null;
+  let pEnd = null;
+  for (let i = 1; i <= 300; i++) {
+    const p = r0.update(1 / 60);
+    if (i === 60) pA = { ...p }; // t = 1.0s (plateau)
+    if (i === 120) pB = { ...p }; // t = 2.0s (still plateau)
+    if (i === 300) pEnd = { ...p }; // t = 5.0s (walking again)
+  }
+  assert(pA.x === pB.x && pA.z === pB.z, 'idle plateau: position bit-identical for a full second (stopped)');
+  assert(Math.hypot(pEnd.x - pB.x, pEnd.z - pB.z) > 0.3, `walking resumes after the window (moved ${Math.hypot(pEnd.x - pB.x, pEnd.z - pB.z).toFixed(3)} by t=5s)`);
+  assert(pA.heading !== pB.heading, 'idle keeps looking around (heading still drifts while stopped)');
+}
 
 // Determinism + reset (same seed = same path, forever).
 const roamA = createRoam(0);

@@ -143,3 +143,17 @@ export const HOP_HEIGHT = 0.24;
 export const HOP_CROUCH_DIP = 0.07; // body sink while loading + absorbing
 export const HOP_LEAD_TIME = 0.1; // land this much logical velocity AHEAD
 export const HOP_FOOT_TUCK = 0.07; // feet pull up toward the body in AIR
+
+// Idle (A2 follow-up): roamers periodically stop walking so life that
+// only shows at rest (breathing!) gets stage time. A deterministic
+// schedule keyed to the wander clock (already seed-offset, so idles
+// decorrelate for free); the speed envelope ramps 1 -> 0 -> 1 with
+// smoothstep shoulders — creatures decelerate into the idle and ease
+// back out instead of slamming to a statue. Because gait steps and hops
+// launch on LOGICAL DRIFT, both stop automatically when roam stops —
+// zero changes in gait.js or hop.js. Separation (turn + push) and
+// boundary steering stay at FULL strength while idle.
+export const IDLE_PERIOD = 9.0; // seconds per walk+idle cycle
+export const IDLE_DURATION = 2.8; // idle window inside each cycle
+export const IDLE_RAMP = 0.6; // decelerate/accelerate shoulder
+export const IDLE_TURN_FACTOR = 0.35; // wander turning kept while idle (looking around)

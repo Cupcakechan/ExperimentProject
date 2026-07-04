@@ -23,7 +23,28 @@ import {
   ROAM_SEP_PUSH,
   ROAM_SPAWN_RADIUS,
   ROAM_HARD_RADIUS,
+  IDLE_PERIOD,
+  IDLE_DURATION,
+  IDLE_RAMP,
+  IDLE_TURN_FACTOR,
 } from './config.js';
+
+function smoothstep(a, b, x) {
+  const t = Math.min(Math.max((x - a) / (b - a), 0), 1);
+  return t * t * (3 - 2 * t);
+}
+
+// Pure (suite-anchored): the idle speed envelope. Inside each period a
+// window of `duration` ramps speed 1 -> 0 -> 1 with `ramp`-wide
+// smoothstep shoulders; the multiplier is EXACTLY 0 on the window's
+// plateau (a genuine stop, not a slow creep) and exactly 1 outside.
+export function idleSpeedMul(t, P) {
+  const u = ((t % P.period) + P.period) % P.period;
+  if (u >= P.duration) return 1;
+  const down = smoothstep(0, P.ramp, u);
+  const up = smoothstep(P.duration - P.ramp, P.duration, u);
+  return 1 - down * (1 - up);
+}
 
 // Shortest signed angle from a to b, in (-PI, PI] — steering must turn the
 // short way around or the creature pirouettes at the boundary.
@@ -31,7 +52,14 @@ function angleDiff(a, b) {
   return ((b - a + Math.PI) % (2 * Math.PI) + 2 * Math.PI) % (2 * Math.PI) - Math.PI;
 }
 
-export function createRoam(seed = 0, total = 3) {
+export function createRoam(seed = 0, total = 3, idle = {}) {
+  // Per-creature idle character with config defaults (the hop/breath
+  // pattern) — a missing field must never change the plain case.
+  const P = {
+    period: idle.period ?? IDLE_PERIOD,
+    duration: idle.duration ?? IDLE_DURATION,
+    ramp: idle.ramp ?? IDLE_RAMP,
+  };
   let x = 0;
   let z = 0;
   let h = 0;
@@ -59,10 +87,18 @@ export function createRoam(seed = 0, total = 3) {
     update(dt, others = []) {
       t += dt;
 
+      // The idle envelope (keyed to t, which is already seed-offset —
+      // idles decorrelate for free). Only the WANDER turn attenuates
+      // while idle (slow looking-around reads as attention); boundary
+      // and separation steering below stay at FULL strength — an idle
+      // creature being walked at must still defend its space.
+      const mul = idleSpeedMul(t, P);
+
       // Wander: bounded, smooth, deterministic turn rate.
       let rate =
-        ROAM_TURN_A * Math.sin(t * ROAM_TURN_W1) +
-        ROAM_TURN_B * Math.sin(t * ROAM_TURN_W2 + ROAM_TURN_PHASE);
+        (IDLE_TURN_FACTOR + (1 - IDLE_TURN_FACTOR) * mul) *
+        (ROAM_TURN_A * Math.sin(t * ROAM_TURN_W1) +
+          ROAM_TURN_B * Math.sin(t * ROAM_TURN_W2 + ROAM_TURN_PHASE));
 
       // Boundary steering: proportional to how far past the soft radius we
       // are, toward the heading whose facing points at the center.
@@ -85,8 +121,8 @@ export function createRoam(seed = 0, total = 3) {
       }
 
       h += rate * dt;
-      x += -Math.cos(h) * ROAM_SPEED * dt;
-      z += Math.sin(h) * ROAM_SPEED * dt;
+      x += -Math.cos(h) * ROAM_SPEED * mul * dt;
+      z += Math.sin(h) * ROAM_SPEED * mul * dt;
 
       // Positional separation: heading steering makes them TURN politely,
       // but only a direct shove GUARANTEES they never interpenetrate
