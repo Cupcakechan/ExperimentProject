@@ -457,5 +457,252 @@ assert(Math.abs(smin(1, 1, effK(0.6, neck.kCap)) - 0.97) < 1e-9, 'capped smin at
 assert(Math.abs(smin(1, 1, effK(0.6, 1e3)) - 0.85) < 1e-9, 'uncapped smin at slider 0.60 = 0.85 (sentinel does not clamp)');
 assert(longneck.prims.find((p) => p.id === 'tail').kCap === 0.07, 'longneck tail kCap = 0.07');
 
+// ---------- Section 2: field inspector ----------
+// A JS mirror of the shader's mapSDF plus a plane-slice sampler (the
+// fogleman show_slice idea, Node-only): sample the field on axis-aligned
+// slices through every solid prim, bisect the zero contour, and MEASURE
+// how far the smin skin inflates above the raw primitives. Every later
+// field-mutating pass (per-prim k, dilate, subtraction) gets audited
+// against these measured numbers. See REFERENCE_FOGLEMAN.md.
+console.log('Section 2: field inspector');
+
+const { K_MAX } = await import('./src/config.js');
+
+// Test tunables (suite-local: these tune the PROBES, not the runtime).
+const FIELD_RES = 96; // grid nodes per slice axis (~0.03 world units/cell)
+const FIELD_PAD = 0.35; // bbox padding: contour bulge never exceeds this
+const BISECT_ITERS = 30; // zero-crossing precision ~ cell / 2^30
+
+// Mirror of the shader's mapSDF: sequential smin in REGISTRY ORDER, per-prim
+// kCap clamp, paint prims skipped — semantics must match character-for-
+// character or every measurement below audits the wrong field.
+function mapField(p, prims, k) {
+  let d = 1e9;
+  for (const prim of prims) {
+    if (prim.paint) continue;
+    d = smin(d, sdPrim(p, prim), Math.min(k, prim.kCap != null ? prim.kCap : 1e3));
+  }
+  return d;
+}
+function rawMinSolid(p, prims) {
+  let m = Infinity;
+  for (const s of prims) {
+    if (s.paint) continue;
+    m = Math.min(m, sdPrim(p, s));
+  }
+  return m;
+}
+
+// --- mirror parity, hand-computed on a synthetic pair (exact theory) ---
+// Two spheres r=0.3 at x=+-0.3, k=0.25. At the origin both raw distances
+// are 0, so the pair fold hits smin's h=0.5 midpoint: field = -k/4.
+const PAIR = [
+  { id: 's1', type: 'sphere', a: [-0.3, 0, 0], r: 0.3 },
+  { id: 's2', type: 'sphere', a: [0.3, 0, 0], r: 0.3 },
+];
+assert(Math.abs(mapField([0, 0, 0], PAIR, 0.25) - -0.0625) < 1e-12, 'mapField mirror: pair midpoint = -k/4 = -0.0625 (hand-computed)');
+// On the equidistant ridge the contour sits where raw d = k/4: at
+// y = sqrt((r + k/4)^2 - 0.09) the field is exactly zero and the local
+// inflation (min raw distance) is exactly k/4 = 0.0625.
+const RIDGE_Y = Math.sqrt(0.3625 * 0.3625 - 0.09);
+assert(Math.abs(mapField([0, RIDGE_Y, 0], PAIR, 0.25)) < 1e-12, 'mapField mirror: ridge contour point is on the zero surface (hand-computed)');
+assert(Math.abs(rawMinSolid([0, RIDGE_Y, 0], PAIR) - 0.0625) < 1e-12, 'ridge inflation = k/4 exactly (hand-computed)');
+// kCap parity: capping the SECOND prim caps the pair fold: field = -kCap/4.
+const PAIR_CAPPED = [PAIR[0], { ...PAIR[1], kCap: 0.1 }];
+assert(Math.abs(mapField([0, 0, 0], PAIR_CAPPED, 0.25) - -0.025) < 1e-12, 'mapField mirror honors kCap: capped pair midpoint = -0.025 (hand-computed)');
+
+// --- the slice sampler ---
+// Grid-sample one axis-aligned plane, bisect every sign-change edge to the
+// zero contour, and measure the inflation (min raw solid distance) there.
+function solidBBox(prims, pad) {
+  const lo = [Infinity, Infinity, Infinity];
+  const hi = [-Infinity, -Infinity, -Infinity];
+  for (const s of prims) {
+    if (s.paint) continue;
+    for (const e of [s.a, s.b ?? s.a]) {
+      for (let i = 0; i < 3; i++) {
+        lo[i] = Math.min(lo[i], e[i] - s.r - pad);
+        hi[i] = Math.max(hi[i], e[i] + s.r + pad);
+      }
+    }
+  }
+  return { lo, hi };
+}
+
+function sampleSlice(prims, k, axis, value) {
+  const box = solidBBox(prims, FIELD_PAD);
+  const [u, v] = [0, 1, 2].filter((i) => i !== axis);
+  const point = (uu, vv) => {
+    const p = [0, 0, 0];
+    p[axis] = value;
+    p[u] = uu;
+    p[v] = vv;
+    return p;
+  };
+  const du = (box.hi[u] - box.lo[u]) / (FIELD_RES - 1);
+  const dv = (box.hi[v] - box.lo[v]) / (FIELD_RES - 1);
+  const f = new Float64Array(FIELD_RES * FIELD_RES);
+  for (let j = 0; j < FIELD_RES; j++) {
+    for (let i = 0; i < FIELD_RES; i++) {
+      f[j * FIELD_RES + i] = mapField(point(box.lo[u] + i * du, box.lo[v] + j * dv), prims, k);
+    }
+  }
+  // Bisect a sign-change edge to the contour. The endpoint kept is the one
+  // whose sign matches fA, so the return converges onto the zero surface.
+  function crossing(pA, pB, fA) {
+    let a = pA;
+    let b = pB;
+    for (let it = 0; it < BISECT_ITERS; it++) {
+      const m = [(a[0] + b[0]) / 2, (a[1] + b[1]) / 2, (a[2] + b[2]) / 2];
+      if (mapField(m, prims, k) < 0 === fA < 0) a = m;
+      else b = m;
+    }
+    return a;
+  }
+  let count = 0;
+  let maxInfl = -Infinity;
+  let minInfl = Infinity;
+  let maxAt = null;
+  for (let j = 0; j < FIELD_RES; j++) {
+    for (let i = 0; i < FIELD_RES; i++) {
+      const idx = j * FIELD_RES + i;
+      const here = point(box.lo[u] + i * du, box.lo[v] + j * dv);
+      const edges = [];
+      if (i + 1 < FIELD_RES && f[idx] < 0 !== f[idx + 1] < 0) edges.push(point(box.lo[u] + (i + 1) * du, box.lo[v] + j * dv));
+      if (j + 1 < FIELD_RES && f[idx] < 0 !== f[idx + FIELD_RES] < 0) edges.push(point(box.lo[u] + i * du, box.lo[v] + (j + 1) * dv));
+      for (const there of edges) {
+        const p = crossing(here, there, f[idx]);
+        const infl = rawMinSolid(p, prims);
+        count++;
+        if (infl > maxInfl) {
+          maxInfl = infl;
+          maxAt = p;
+        }
+        minInfl = Math.min(minInfl, infl);
+      }
+    }
+  }
+  return { axis, value, f, count, maxInfl, minInfl, maxAt };
+}
+
+// ASCII field dump — printed ONLY when a slice's probe fails, so the field
+// is visible in the terminal instead of reverse-engineered from symptoms.
+// '#' deep inside, '+' just inside, 'o' the near-contour band, '.' outside.
+function dumpSlice(slice) {
+  const AXIS = 'xyz';
+  console.log(`  ---- field slice ${AXIS[slice.axis]}=${slice.value.toFixed(2)} ----`);
+  for (let j = FIELD_RES - 1; j >= 0; j -= 2) {
+    let line = '';
+    for (let i = 0; i < FIELD_RES; i++) {
+      const d = slice.f[j * FIELD_RES + i];
+      line += d < -0.05 ? '#' : d < 0 ? '+' : d < 0.05 ? 'o' : '.';
+    }
+    console.log('  ' + line);
+  }
+}
+
+// Sampler validated against the synthetic pair before it measures anything
+// real: on the z=0 slice its measured max inflation must land on the
+// hand-computed ridge value k/4 (grid can only UNDERSHOOT the ridge peak).
+const pairSlice = sampleSlice(PAIR, 0.25, 2, 0);
+assert(pairSlice.count > 100, `sampler finds the pair contour (${pairSlice.count} crossings)`);
+assert(pairSlice.minInfl > -1e-6, `sampler: pair contour never dips below a raw surface (min ${pairSlice.minInfl.toExponential(2)})`);
+// Crossings live on grid EDGES, and inflation falls off steeply along the
+// contour away from the ridge crease — so the sampler UNDERSHOOTS the true
+// peak by up to ~a cell (MEASURED 0.0545 at res 96) and must never exceed
+// it. The exact ridge value itself is anchored analytically above.
+assert(pairSlice.maxInfl > 0.05 && pairSlice.maxInfl <= 0.0625 + 1e-9, `sampler lands within a cell of the pair ridge (${pairSlice.maxInfl.toFixed(4)}, true peak 0.0625, MEASURED 0.0545)`);
+
+// --- per-creature measurement: y- and z-slices through every solid prim ---
+// (creatures are elongated along x, so y/z slices are the ones that cut
+// across joins; slices dedupe at 0.01 world units).
+function creatureSlices(prims) {
+  const seen = new Map();
+  for (const s of prims) {
+    if (s.paint) continue;
+    const b = s.b ?? s.a;
+    const mid = [(s.a[0] + b[0]) / 2, (s.a[1] + b[1]) / 2, (s.a[2] + b[2]) / 2];
+    for (const axis of [1, 2]) {
+      const key = axis + ':' + mid[axis].toFixed(2);
+      if (!seen.has(key)) seen.set(key, { axis, value: mid[axis] });
+    }
+  }
+  return [...seen.values()];
+}
+
+// MEASURED inflation ceilings (max over the sampled slices, +0.02 margin).
+// FINDING: the pairwise theory bound k/4 is WRONG for 3+ close prims —
+// mapSDF folds smin sequentially, so each fold can deepen the deficit
+// again. Measured: hopper 0.0969 at k=0.25 (k/4 = 0.0625, +55%: body +
+// both feet fold under the belly); longneck 0.2969 at k=0.6 (k/4 = 0.15,
+// ~2x). This is why the decal fix subtracts ACTUAL local inflation, never
+// an assumed k/4. Re-measure (the INFO lines print live values) whenever
+// a pass changes the field, and update this table.
+const INFL_CEILING = {
+  critter: { 0.25: 0.083, 0.6: 0.26 },
+  hopper: { 0.25: 0.117, 0.6: 0.255 },
+  longneck: { 0.25: 0.114, 0.6: 0.317 },
+};
+
+for (const creature of CREATURES) {
+  const tag = `[${creature.id}]`;
+  const prims = creature.prims;
+  const solids = prims.filter((p) => !p.paint);
+  const slices = creatureSlices(prims);
+
+  // Sign sanity at BLEND_K: the field is negative at every solid's core
+  // (smin can only deepen the raw -r there) and positive at the padded
+  // bbox corner (everything is at least FIELD_PAD away out there).
+  for (const s of solids) {
+    const b = s.b ?? s.a;
+    const mid = [(s.a[0] + b[0]) / 2, (s.a[1] + b[1]) / 2, (s.a[2] + b[2]) / 2];
+    assert(mapField(mid, prims, BLEND_K) < 0, `${tag} field is negative inside '${s.id}'`);
+  }
+  const corner = solidBBox(prims, FIELD_PAD).hi;
+  assert(mapField(corner, prims, K_MAX) > 0, `${tag} field is positive at the padded bbox corner (even at k=${K_MAX})`);
+
+  const measured = {};
+  for (const k of [BLEND_K, K_MAX]) {
+    let count = 0;
+    let maxInfl = -Infinity;
+    let minInfl = Infinity;
+    let maxSlice = null;
+    let minSlice = null;
+    for (const sl of slices) {
+      const r = sampleSlice(prims, k, sl.axis, sl.value);
+      count += r.count;
+      if (r.maxInfl > maxInfl) {
+        maxInfl = r.maxInfl;
+        maxSlice = r;
+      }
+      if (r.minInfl < minInfl) {
+        minInfl = r.minInfl;
+        minSlice = r;
+      }
+    }
+    measured[k] = maxInfl;
+    const at = maxSlice.maxAt;
+    console.log(`  INFO  ${tag} k=${k}: ${slices.length} slices, ${count} crossings, max inflation ${maxInfl.toFixed(4)} at (${at[0].toFixed(2)}, ${at[1].toFixed(2)}, ${at[2].toFixed(2)}) [pairwise k/4 = ${(k / 4).toFixed(4)}]`);
+
+    if (!(count > 500)) dumpSlice(maxSlice ?? sampleSlice(prims, k, 2, 0));
+    assert(count > 500, `${tag} k=${k}: the slices see the creature (${count} contour crossings > 500)`);
+    // smin <= min means the skin can only sit ON or ABOVE every raw
+    // surface — a contour point below one would mean the mirror and the
+    // shader disagree about what smin is.
+    if (!(minInfl > -1e-6)) dumpSlice(minSlice);
+    assert(minInfl > -1e-6, `${tag} k=${k}: contour never dips below a raw surface (min inflation ${minInfl.toExponential(2)})`);
+    // Regression ceiling: MEASURED max + margin. If a pass legitimately
+    // moves this, re-measure from the INFO line and update the table.
+    const ceiling = INFL_CEILING[creature.id]?.[k] ?? k / 4 + 0.02;
+    if (!(maxInfl <= ceiling)) dumpSlice(maxSlice);
+    assert(maxInfl <= ceiling, `${tag} k=${k}: max inflation ${maxInfl.toFixed(4)} <= ${ceiling} (MEASURED ceiling)`);
+  }
+  // The mechanism behind the k=0.6 vanishing-decals defect, now a live
+  // probe: inflation must actually GROW with k (an inert sampler that
+  // measured 0 everywhere would pass every ceiling).
+  assert(measured[BLEND_K] > 0.005, `${tag} inflation is live at k=${BLEND_K} (${measured[BLEND_K].toFixed(4)} > 0.005 — the sampler is not inert)`);
+  assert(measured[K_MAX] > measured[BLEND_K], `${tag} inflation grows with k (${measured[K_MAX].toFixed(4)} > ${measured[BLEND_K].toFixed(4)}) — the decal-defect mechanism, measured live`);
+}
+
 console.log(failures === 0 ? '\nALL PASS' : `\n${failures} FAILURE(S)`);
 process.exit(failures === 0 ? 0 : 1);
