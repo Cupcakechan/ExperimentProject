@@ -1,14 +1,26 @@
 // ============================================================
-// blink.js — A4 stage 2: decal-driven blinking.
+// blink.js — A4 stage 2: blinking, for DECAL and SOLID eyes.
 //
-// A blink is the eye decals SUBMERGING into their host: coverage
-// fades as the paint prim sinks below poke depth, and what shows
-// is simply the host's skin — the "eyelid" for free, no shader
-// change, no new color model. Each eye translates along the
-// direction toward the CLOSEST POINT on its host (capsule hosts —
-// the snail's stalks — need the segment point, not the center),
-// by depth = 2r + PAINT_EDGE: enough that coverage is provably
-// zero at full close (suite-anchored).
+// A blink SUBMERGES each listed prim into the creature:
+//   - a PAINT eye (decal) sinks below poke depth — coverage fades
+//     and the host's skin is the lid;
+//   - a SOLID eyeball sinks until it is buried — the existing
+//     buried-vertex tuck hides its mesh under the skin (the same
+//     machinery that hides limb roots), the lid again for free.
+// Zero shader change either way.
+//
+// TARGETING: each eye submerges toward the closest point on the
+// nearest solid EXCLUDING itself and anything else in the blink
+// list — an iris must NOT aim at its eyeball when the eyeball is
+// blinking too (it would land where the ball used to be and poke
+// a dark dot through the closed lid); it aims at the body BEHIND
+// the ball instead. Capsule hosts (snail stalks) use the segment
+// point, not the center.
+//
+// DEPTH = hostSd + 2r + PAINT_EDGE: sd falls 1:1 along the ray
+// to the host core, so every eye ends EXACTLY (2r + edge) below
+// its target's surface — r + edge of clearance past its own
+// radius, wherever it started (suite-anchored).
 //
 // Writes go through anim.js's setPrimTransform (the lockstep
 // path), ABSOLUTE from the rest pose every frame — closeT = 0
@@ -43,20 +55,22 @@ const _hp = new THREE.Vector3();
 export function createBlink(creature, phase = 0) {
   if (!creature.blink || !Array.isArray(creature.blink.eyes)) return null;
 
+  const listed = new Set(creature.blink.eyes);
   const eyes = creature.blink.eyes
     .map((id) => {
-      const idx = creature.prims.findIndex((p) => p.id === id && p.paint);
+      const idx = creature.prims.findIndex((p) => p.id === id && !p.negative);
       if (idx < 0) return null; // graceful: a bad id is a no-op, not a crash
       const prim = creature.prims[idx];
-      // Host = nearest solid (the same rule the paint system lives by).
+      // Target = nearest solid that is NOT itself and NOT also blinking
+      // (see the header: a blinked host is not a lid).
       let host = null;
-      let best = Infinity;
+      let hostSd = Infinity;
       for (const s of creature.prims) {
-        if (s.paint || s.negative) continue;
+        if (s === prim || s.paint || s.negative || listed.has(s.id)) continue;
         hostPoint(prim.a, s, _hp);
         const d = _hp.distanceTo(new THREE.Vector3(...prim.a)) - s.r;
-        if (d < best) {
-          best = d;
+        if (d < hostSd) {
+          hostSd = d;
           host = s;
         }
       }
@@ -64,7 +78,7 @@ export function createBlink(creature, phase = 0) {
       const dir = hostPoint(prim.a, host, new THREE.Vector3()).sub(new THREE.Vector3(...prim.a));
       if (dir.lengthSq() < 1e-10) dir.set(0, -1, 0); // degenerate: eye AT the core
       dir.normalize();
-      return { idx, prim, dir, depth: prim.r * 2 + PAINT_EDGE };
+      return { idx, prim, dir, depth: hostSd + prim.r * 2 + PAINT_EDGE };
     })
     .filter(Boolean);
 

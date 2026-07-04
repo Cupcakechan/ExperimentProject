@@ -347,11 +347,27 @@ function paintSd(creature, paintId, hostId) {
   const host = creature.prims.find((p) => p.id === hostId);
   return sdPrim(paint.a, host);
 }
-assert(Math.abs(paintSd(critter, 'sclera_l', 'head') - -0.0631) < 1e-3, 'critter sclera_l sd vs head = -0.0631 (hand-computed)');
-assert(Math.abs(paintSd(hopper, 'sclera_l', 'body') - -0.0229) < 1e-3, 'hopper sclera_l sd vs body = -0.0229 (hand-computed)');
-assert(Math.abs(paintSd(longneck, 'sclera_l', 'head') - -0.0381) < 1e-3, 'longneck sclera_l sd vs head = -0.0381 (hand-computed)');
-assert(Math.abs(paintSd(pudge, 'sclera_l', 'head') - -0.0181) < 1e-3, 'pudge sclera_l sd vs head = -0.0181 (hand-computed)');
-assert(Math.abs(paintSd(snail, 'eye_l', 'antenna_l') - -0.0292) < 1e-3, 'snail eye_l sd vs antenna_l = -0.0292 (hand-computed, capsule end-cap host)');
+// Ball-eye rooting anchors (the cast conversion): eyeball CENTERS sit
+// this far inside their host — solid, so paintSd doubles as a rooting
+// probe. Hand-computed from the constructed placements (tol 3e-3 for
+// coordinate rounding).
+assert(Math.abs(paintSd(critter, 'eyeball_l', 'head') - -0.0195) < 3e-3, 'critter eyeball_l rooted -0.0195 in the head (hand-computed)');
+assert(Math.abs(paintSd(hopper, 'eyeball_l', 'body') - -0.0196) < 3e-3, 'hopper eyeball_l rooted -0.0196 in the body (hand-computed)');
+assert(Math.abs(paintSd(longneck, 'eyeball_l', 'head') - -0.0153) < 3e-3, 'longneck eyeball_l rooted -0.0153 in the head (hand-computed)');
+assert(Math.abs(paintSd(pudge, 'eyeball_l', 'head') - -0.0149) < 3e-3, 'pudge eyeball_l rooted -0.0149 in the head (hand-computed)');
+assert(Math.abs(paintSd(snail, 'eyeball_l', 'antenna_l') - -0.0151) < 3e-3, 'snail eyeball_l rooted -0.0151 in the stalk tip (hand-computed, capsule end-cap host)');
+// Every eyeball must POKE (protrude past its host) and every iris must
+// poke ITS eyeball — the generic paint probes cover irises; this covers
+// the solid balls across the whole cast.
+for (const c of CREATURES) {
+  for (const eb of c.prims.filter((p) => p.id.startsWith('eyeball_'))) {
+    let hostSd = Infinity;
+    for (const s2 of c.prims.filter((p) => !p.paint && !p.negative && p !== eb && !p.id.startsWith('eyeball_'))) {
+      hostSd = Math.min(hostSd, sdPrim(eb.a, s2));
+    }
+    assert(hostSd < 0 && hostSd > -eb.r, `[${c.id}] ${eb.id} rooted AND poking (sd ${hostSd.toFixed(4)} in (-${eb.r}, 0))`);
+  }
+}
 assert(snail.prims.find((p) => p.id === 'shell').k === 0.06, 'snail shell carries the FIRST authored absolute k (0.06 — holds against the slider)');
 assert(pudge.inflate === 0.04 && pudge.prims.some((p) => p.negative), 'pudge is the first carve + dilate combo (inflate 0.04 + mouth)');
 assert(Math.abs(sdPrim(critter.prims.find((p) => p.id === 'tail').a, critter.prims.find((p) => p.id === 'body')) - -0.27) < 1e-9, 'critter tail root buried d = -0.27 exactly (hand-computed)');
@@ -366,8 +382,9 @@ function smoothstep(a, b, x) {
 function coverage(paintSd, infl) {
   return 1 - smoothstep(0, PAINT_EDGE, paintSd - infl);
 }
-// Test point: on the eye's gaze ray, on a skin inflated by 0.15 (~k=0.6's
-// max deficit k/4). Hand-computed paint distances at that point:
+// Test point (HISTORICAL GEOMETRY — the defect's original decal eyes,
+// preserved as the bug-then-fix record): gaze-ray point on a skin
+// inflated by 0.15 (~k=0.6 deficit). Hand-computed paint distances:
 //   hopper pupil:   |0.5+0.15 - 0.48| - 0.055 = 0.115
 //   longneck pupil: |0.22+0.15 - 0.20| - 0.03  = 0.14
 // OLD model (infl ignored) -> coverage 0 (the reported bug).
@@ -714,31 +731,40 @@ for (const creature of CREATURES) {
   if (!creature.blink) continue;
   for (const id of creature.blink.eyes) {
     const prim = creature.prims.find((p) => p.id === id);
-    assert(prim && prim.paint === true, `[${creature.id}] blink eye '${id}' is a paint prim`);
+    assert(prim && !prim.negative, `[${creature.id}] blink eye '${id}' is a non-negative prim (decal or solid — both blink)`);
   }
 }
 {
   const bMat = createBlendMaterial(hopper.prims);
   const blink = createBlink(hopper, 0);
-  const si = hopper.prims.findIndex((p) => p.id === 'sclera_l');
-  const restA = new THREE.Vector3(...hopper.prims[si].a);
+  const ei = hopper.prims.findIndex((p) => p.id === 'eyeball_l');
+  const ii = hopper.prims.findIndex((p) => p.id === 'iris_l');
+  const restE = new THREE.Vector3(...hopper.prims[ei].a);
+  const bodyC = new THREE.Vector3(0, 0.62, 0);
   assert(blink.closeT(0) === 0, 'blink closeT(0) = 0 — eyes open at rest (the t=0 convention)');
   assert(Math.abs(blink.closeT(BLINK_TIME / 2) - 1) < 1e-9, 'blink closeT(mid) = 1 — fully closed (sine peak, hand-computed)');
   assert(blink.closeT(BLINK_TIME + 0.01) === 0, 'blink closeT past the window = 0');
-  // Full close: sclera_l submerges by depth = 2r + edge = 0.26 toward the
-  // body. Hand-computed: rest center sits 0.4771 from the body center
-  // (host sd -0.0229, the existing anchor); submerged it sits 0.2171 —
-  // the skin point on its gaze ray is then 0.2829 away, paint sd 0.1629,
-  // coverage ~0 (the lid is just the skin coming back).
   blink.update(BLINK_TIME / 2, [bMat]);
-  const closedA = bMat.uniforms.uA.value[si];
-  const bodyC = new THREE.Vector3(0, 0.62, 0);
-  assert(Math.abs(closedA.distanceTo(bodyC) - 0.2171) < 1e-3, `closed eye center sits 0.2171 from the body center (hand-computed, got ${closedA.distanceTo(bodyC).toFixed(4)})`);
-  assert(coverage(0.1629, 0) < 0.01, 'submerged sclera coverage ~ 0 at the skin (hand-computed sd 0.1629) — the blink actually hides the eye');
+  // Depth = hostSd + 2r + edge lands every eye EXACTLY 2r+edge below its
+  // target's surface. Hand-computed at full close:
+  //   eyeball_l (solid, r 0.13): rest 0.4804 from the body center ->
+  //     depth 0.2604 -> closed at 0.2200; sd -0.28: BURIED 0.15 under
+  //     the skin (the tuck hides its mesh — the lid).
+  //   iris_l (decal, r 0.055): its eyeball is ALSO blinking, so it
+  //     retargets the BODY behind it (rest sd +0.1005) -> depth 0.2305
+  //     -> closed at 0.3700 from the body center; sd -0.13 = -(2r+edge)
+  //     exactly: under the lid, no dark dot.
+  const closedE = bMat.uniforms.uA.value[ei].distanceTo(bodyC);
+  const closedI = bMat.uniforms.uA.value[ii].distanceTo(bodyC);
+  assert(Math.abs(closedE - 0.22) < 3e-3, `closed eyeball center 0.220 from the body center (hand-computed, got ${closedE.toFixed(4)})`);
+  assert(closedE + hopper.prims[ei].r < 0.5 - 0.1, 'closed eyeball is BURIED >= 0.1 under the skin (the tuck is the lid)');
+  assert(Math.abs(closedI - 0.37) < 3e-3, `closed iris center 0.370 from the body center (hand-computed, got ${closedI.toFixed(4)})`);
+  assert(closedI + hopper.prims[ii].r + PAINT_EDGE <= 0.5 + 1e-9, 'closed iris sits >= r+edge under the lid — no dark dot pokes through');
   // Reopen: bit-exact registry restoration (absolute-from-rest writes).
   blink.update(BLINK_TIME + 0.01, [bMat]);
-  assert(bMat.uniforms.uA.value[si].distanceTo(restA) === 0, 'reopened eye is the EXACT registry pose (bit-exact — blinking cannot drift)');
+  assert(bMat.uniforms.uA.value[ei].distanceTo(restE) === 0, 'reopened eye is the EXACT registry pose (bit-exact — blinking cannot drift)');
 }
+
 }
 
 // World-space lighting: the fragment shader must rotate the creature-space

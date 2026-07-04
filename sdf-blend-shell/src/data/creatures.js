@@ -59,8 +59,9 @@
 //   - Solid + paint prims combined <= MAX_PRIMS (12).
 //   - Paint decal on a host: -r < dist(center, host surface) < 0
 //     (anchored inside, poking through) — suite-enforced.
-//   - Pupils sit ON the sclera's ray, slightly further out; pupil
-//     entries come AFTER sclera entries (decal order) — suite-enforced.
+//   - LEGACY (flat decal eyes): pupils sit ON the sclera's ray, pupil
+//     entries AFTER sclera entries (decal order) — still suite-enforced
+//     if the pupil_/sclera_ naming is used; the cast now uses BALL EYES.
 //   - Anim moves ONE prim; attached prims do NOT follow (don't
 //     animate a neck that carries a head — animate tails/ears).
 //   - Thin parts near big masses melt unless capped: give any prim
@@ -76,12 +77,15 @@
 //   - MOUTHS are CAPSULE carves spanning z (a wide slit) — a sphere
 //     carve intersects the host in a circle, which reads as a shocked
 //     hole, not a mouth (browser-confirmed on the first two carves).
-//   - PROTRUDING BALL EYES (the reference look): a small SOLID white
-//     sphere rooted just inside the head (kCap ~0.03 so it stays a
-//     ball), with the dark iris as a PAINT decal hosted ON the eyeball
-//     (nearest-solid hosting finds it). Name irises 'iris_*', not
-//     'pupil_*' — the pupil/sclera layering probe assumes a spherical
-//     paint pair, and here the sclera IS a solid.
+//   - BALL EYES (the CAST STANDARD): a small SOLID white sphere rooted
+//     0.015-0.02 inside the head (kCap ~0.03 so it stays a ball), the
+//     dark iris a PAINT decal hosted ON the eyeball (nearest-solid
+//     hosting finds it). Name irises 'iris_*', not 'pupil_*' (the
+//     layering probe assumes a paint pair; here the sclera is solid).
+//     BLINK both: eyes: [eyeball_l, eyeball_r, iris_l, iris_r] — a
+//     blinked prim submerges toward the nearest solid EXCLUDING other
+//     blinked prims, so the iris automatically retargets the body
+//     behind its departing eyeball.
 //   - DECALS BELONG ON LOW-INFLATION SITES (head fronts, tips): decal
 //     coverage compensates MEASURED local inflation uncapped, which is
 //     correct at sane sites but balloons at high-inflation joins
@@ -100,7 +104,7 @@ export const CREATURES = [
     name: 'Critter',
     anim: { primId: 'tail', axis: [1, 0, 0], amplitude: 0.6, speed: 2.5 },
     step: { feet: ['leg_fl', 'leg_fr', 'leg_bl', 'leg_br'], groups: [[0, 3], [1, 2]] },
-    blink: { eyes: ['sclera_l', 'sclera_r', 'pupil_l', 'pupil_r'] },
+    blink: { eyes: ['eyeball_l', 'eyeball_r', 'iris_l', 'iris_r'] },
     prims: [
       { id: 'body', type: 'capsule', a: [-0.5, 0.55, 0.0], b: [0.5, 0.55, 0.0], r: 0.42, color: 0x4fd1a5 },
       { id: 'head', type: 'sphere', a: [-0.85, 0.95, 0.0], r: 0.32, color: 0xf2b05a },
@@ -109,10 +113,13 @@ export const CREATURES = [
       { id: 'leg_bl', type: 'capsule', a: [0.42, 0.45, 0.22], b: [0.46, 0.08, 0.26], r: 0.13, color: 0x3bbd8e },
       { id: 'leg_br', type: 'capsule', a: [0.42, 0.45, -0.22], b: [0.46, 0.08, -0.26], r: 0.13, color: 0x3bbd8e },
       { id: 'tail', type: 'capsule', a: [0.5, 0.7, 0.0], b: [1.05, 1.05, 0.0], r: 0.14, color: 0x6f8cff },
-      { id: 'sclera_l', type: 'sphere', a: [-1.05, 1.03, 0.14], r: 0.095, color: 0xf2f4f6, paint: true },
-      { id: 'sclera_r', type: 'sphere', a: [-1.05, 1.03, -0.14], r: 0.095, color: 0xf2f4f6, paint: true },
-      { id: 'pupil_l', type: 'sphere', a: [-1.09, 1.05, 0.15], r: 0.04, color: 0x1b1f26, paint: true },
-      { id: 'pupil_r', type: 'sphere', a: [-1.09, 1.05, -0.15], r: 0.04, color: 0x1b1f26, paint: true },
+      // Ball eyes (the cast standard since the reference screenshots):
+      // solid whites rooted 0.02 inside the head, poking 0.08; irises
+      // are decals ON the eyeballs.
+      { id: 'eyeball_l', type: 'sphere', a: [-1.084, 1.043, 0.164], r: 0.1, kCap: 0.03, color: 0xffffff },
+      { id: 'eyeball_r', type: 'sphere', a: [-1.084, 1.043, -0.164], r: 0.1, kCap: 0.03, color: 0xffffff },
+      { id: 'iris_l', type: 'sphere', a: [-1.156, 1.072, 0.214], r: 0.045, color: 0x1b1f26, paint: true },
+      { id: 'iris_r', type: 'sphere', a: [-1.156, 1.072, -0.214], r: 0.045, color: 0x1b1f26, paint: true },
     ],
   },
   {
@@ -129,7 +136,7 @@ export const CREATURES = [
     // crouchTime, airTime, landTime, restMin, height, dip, leadTime,
     // footTuck).
     hop: {},
-    blink: { eyes: ['sclera_l', 'sclera_r', 'pupil_l', 'pupil_r'] },
+    blink: { eyes: ['eyeball_l', 'eyeball_r', 'iris_l', 'iris_r'] },
     // Subtle, quick breath — continues mid-hop (alive in the air too).
     breath: { amplitude: 0.012, speed: 2.2 },
     prims: [
@@ -146,10 +153,12 @@ export const CREATURES = [
       // exceeds the carve's radius and the mouth GEOMETRY is swallowed —
       // a design boundary (see the authoring rules), not a color bug.
       { id: 'mouth', type: 'capsule', a: [-0.455, 0.48, 0.08], b: [-0.455, 0.48, -0.08], r: 0.09, kCap: 0.06, negative: true, color: 0x2b1626 },
-      { id: 'sclera_l', type: 'sphere', a: [-0.42, 0.78, 0.16], r: 0.12, color: 0xf2f4f6, paint: true },
-      { id: 'sclera_r', type: 'sphere', a: [-0.42, 0.78, -0.16], r: 0.12, color: 0xf2f4f6, paint: true },
-      { id: 'pupil_l', type: 'sphere', a: [-0.423, 0.781, 0.161], r: 0.055, color: 0x241a28, paint: true },
-      { id: 'pupil_r', type: 'sphere', a: [-0.423, 0.781, -0.161], r: 0.055, color: 0x241a28, paint: true },
+      // Ball eyes: rooted 0.02 inside the body, poking 0.11 (clear of
+      // the mouth carve by 0.09 raw).
+      { id: 'eyeball_l', type: 'sphere', a: [-0.423, 0.781, 0.161], r: 0.13, kCap: 0.03, color: 0xffffff },
+      { id: 'eyeball_r', type: 'sphere', a: [-0.423, 0.781, -0.161], r: 0.13, kCap: 0.03, color: 0xffffff },
+      { id: 'iris_l', type: 'sphere', a: [-0.529, 0.821, 0.201], r: 0.055, color: 0x241a28, paint: true },
+      { id: 'iris_r', type: 'sphere', a: [-0.529, 0.821, -0.201], r: 0.055, color: 0x241a28, paint: true },
     ],
   },
   {
@@ -158,7 +167,7 @@ export const CREATURES = [
     // Tail wags — NOT the neck: the head would not follow it (see rules).
     anim: { primId: 'tail', axis: [1, 0, 0], amplitude: 0.7, speed: 2.8 },
     step: { feet: ['leg_fl', 'leg_fr', 'leg_bl', 'leg_br'], groups: [[0, 3], [1, 2]] },
-    blink: { eyes: ['sclera_l', 'sclera_r', 'pupil_l', 'pupil_r'] },
+    blink: { eyes: ['eyeball_l', 'eyeball_r', 'iris_l', 'iris_r'] },
     prims: [
       { id: 'body', type: 'capsule', a: [-0.35, 0.55, 0.0], b: [0.45, 0.55, 0.0], r: 0.38, color: 0xe8b04b },
       { id: 'neck', type: 'capsule', a: [-0.35, 0.6, 0.0], b: [-0.75, 1.35, 0.0], r: 0.17, kCap: 0.12, color: 0xe8b04b },
@@ -168,10 +177,11 @@ export const CREATURES = [
       { id: 'leg_bl', type: 'capsule', a: [0.38, 0.45, 0.18], b: [0.4, 0.08, 0.21], r: 0.11, color: 0xcf8f39 },
       { id: 'leg_br', type: 'capsule', a: [0.38, 0.45, -0.18], b: [0.4, 0.08, -0.21], r: 0.11, color: 0xcf8f39 },
       { id: 'tail', type: 'capsule', a: [0.45, 0.62, 0.0], b: [0.85, 0.85, 0.0], r: 0.1, kCap: 0.07, color: 0xdf9b3f },
-      { id: 'sclera_l', type: 'sphere', a: [-1.0, 1.5, 0.09], r: 0.065, color: 0xf2f4f6, paint: true },
-      { id: 'sclera_r', type: 'sphere', a: [-1.0, 1.5, -0.09], r: 0.065, color: 0xf2f4f6, paint: true },
-      { id: 'pupil_l', type: 'sphere', a: [-1.015, 1.505, 0.099], r: 0.03, color: 0x2a2118, paint: true },
-      { id: 'pupil_r', type: 'sphere', a: [-1.015, 1.505, -0.099], r: 0.03, color: 0x2a2118, paint: true },
+      // Ball eyes: rooted 0.015 inside the head, poking 0.06.
+      { id: 'eyeball_l', type: 'sphere', a: [-1.019, 1.506, 0.101], r: 0.075, kCap: 0.03, color: 0xffffff },
+      { id: 'eyeball_r', type: 'sphere', a: [-1.019, 1.506, -0.101], r: 0.075, kCap: 0.03, color: 0xffffff },
+      { id: 'iris_l', type: 'sphere', a: [-1.075, 1.525, 0.135], r: 0.032, color: 0x2a2118, paint: true },
+      { id: 'iris_r', type: 'sphere', a: [-1.075, 1.525, -0.135], r: 0.032, color: 0x2a2118, paint: true },
     ],
   },
   {
@@ -182,7 +192,7 @@ export const CREATURES = [
     inflate: 0.04,
     // Deep, slow breath — the chubby creature breathes like one.
     breath: { amplitude: 0.02, speed: 1.6 },
-    blink: { eyes: ['sclera_l', 'sclera_r', 'pupil_l', 'pupil_r'] },
+    blink: { eyes: ['eyeball_l', 'eyeball_r', 'iris_l', 'iris_r'] },
     anim: { primId: 'tail', axis: [0, 1, 0], amplitude: 0.5, speed: 3.0 },
     step: { feet: ['leg_fl', 'leg_fr', 'leg_bl', 'leg_br'], groups: [[0, 3], [1, 2]] },
     // 12 prims (the old MAX_PRIMS ceiling; capacity is 16 since Skitter).
@@ -200,10 +210,13 @@ export const CREATURES = [
       // analytically; picked from a probe sweep). Same known high-k
       // fade limit as hopper's mouth.
       { id: 'mouth', type: 'capsule', a: [-0.73, 0.63, 0.05], b: [-0.73, 0.63, -0.05], r: 0.068, kCap: 0.048, negative: true, color: 0x2d2438 },
-      { id: 'sclera_l', type: 'sphere', a: [-0.72, 0.8, 0.11], r: 0.075, color: 0xf2f4f6, paint: true },
-      { id: 'sclera_r', type: 'sphere', a: [-0.72, 0.8, -0.11], r: 0.075, color: 0xf2f4f6, paint: true },
-      { id: 'pupil_l', type: 'sphere', a: [-0.73, 0.804, 0.1155], r: 0.032, color: 0x1e2430, paint: true },
-      { id: 'pupil_r', type: 'sphere', a: [-0.73, 0.804, -0.1155], r: 0.032, color: 0x1e2430, paint: true },
+      // Ball eyes: rooted 0.015 inside the head, poking 0.07 raw (the
+      // dilate lifts eye and head skins equally — protrusion survives);
+      // eyeball clears the mouth carve by 0.029 raw.
+      { id: 'eyeball_l', type: 'sphere', a: [-0.723, 0.801, 0.111], r: 0.085, kCap: 0.03, color: 0xffffff },
+      { id: 'eyeball_r', type: 'sphere', a: [-0.723, 0.801, -0.111], r: 0.085, kCap: 0.03, color: 0xffffff },
+      { id: 'iris_l', type: 'sphere', a: [-0.787, 0.827, 0.146], r: 0.036, color: 0x1e2430, paint: true },
+      { id: 'iris_r', type: 'sphere', a: [-0.787, 0.827, -0.146], r: 0.036, color: 0x1e2430, paint: true },
     ],
   },
   {
@@ -214,7 +227,7 @@ export const CREATURES = [
     // Snails rest long: a bigger idle window inside a longer cycle
     // (the per-creature override path — others use config defaults).
     idle: { period: 11, duration: 4.5 },
-    blink: { eyes: ['eye_l', 'eye_r'] },
+    blink: { eyes: ['eyeball_l', 'eyeball_r', 'iris_l', 'iris_r'] },
     // NO anim and NO step — a snail SLIDES (roam moves the rig; the gait
     // null path and the animPrimIndex -1 no-op get their first live users,
     // by design not omission). The antennae carry eye decals, so per the
@@ -229,12 +242,13 @@ export const CREATURES = [
       { id: 'shell', type: 'sphere', a: [0.1, 0.52, 0.0], r: 0.34, k: 0.06, color: 0x9a6fb8 },
       { id: 'antenna_l', type: 'capsule', a: [-0.66, 0.44, 0.06], b: [-0.8, 0.7, 0.1], r: 0.06, kCap: 0.04, color: 0xcbb56e },
       { id: 'antenna_r', type: 'capsule', a: [-0.66, 0.44, -0.06], b: [-0.8, 0.7, -0.1], r: 0.06, kCap: 0.04, color: 0xcbb56e },
-      // Dot eyes ON the stalk tips (single dark decals, not sclera+pupil
-      // layering: the pupil-fits-in-sclera math assumes a SPHERICAL host,
-      // and these ride capsules — the id prefix 'eye_' keeps them out of
-      // the layered-decal probe on purpose).
-      { id: 'eye_l', type: 'sphere', a: [-0.815, 0.725, 0.11], r: 0.045, color: 0x2a2430, paint: true },
-      { id: 'eye_r', type: 'sphere', a: [-0.815, 0.725, -0.11], r: 0.045, color: 0x2a2430, paint: true },
+      // Ball eyes ON the stalk tips (rooted 0.015 into the tip, poking
+      // 0.035) — replaces the flat dots; PROVISIONAL: revert to dots if
+      // tiny balls read worse than decals at this scale.
+      { id: 'eyeball_l', type: 'sphere', a: [-0.821, 0.739, 0.106], r: 0.05, kCap: 0.03, color: 0xffffff },
+      { id: 'eyeball_r', type: 'sphere', a: [-0.821, 0.739, -0.106], r: 0.05, kCap: 0.03, color: 0xffffff },
+      { id: 'iris_l', type: 'sphere', a: [-0.842, 0.778, 0.112], r: 0.022, color: 0x2a2430, paint: true },
+      { id: 'iris_r', type: 'sphere', a: [-0.842, 0.778, -0.112], r: 0.022, color: 0x2a2430, paint: true },
     ],
   },
   {
@@ -254,7 +268,7 @@ export const CREATURES = [
     },
     // Irises submerge into the solid eyeballs — a beat of blank white
     // ball, the cartoon eye-roll blink. Browser judges whether it reads.
-    blink: { eyes: ['iris_l', 'iris_r'] },
+    blink: { eyes: ['eyeball_l', 'eyeball_r', 'iris_l', 'iris_r'] },
     prims: [
       { id: 'body', type: 'capsule', a: [-0.3, 0.42, 0.0], b: [0.28, 0.46, 0.0], r: 0.26, color: 0x7b5fc9 },
       { id: 'leg_fl', type: 'capsule', a: [-0.2, 0.36, 0.14], b: [-0.3, 0.06, 0.3], r: 0.055, kCap: 0.04, color: 0x52418f },

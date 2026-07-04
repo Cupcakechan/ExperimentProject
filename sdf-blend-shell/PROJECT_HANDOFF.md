@@ -1,8 +1,8 @@
 # PROJECT_HANDOFF — SDF Blend-Shell Experiment
 
-_Last updated: 2026-07-04 (A3.2 + Skitter + eye tune + A4 stage 1 all CONFIRMED
-+ pushed; A4 STAGE 2 blink + jaw-drop DELIVERED — awaiting browser confirmation;
-next: A5 knees, then C-track)_
+_Last updated: 2026-07-04 (A4 stage 2 CONFIRMED + pushed; STAGE 2.1 cast
+ball-eyes + blink v2 DELIVERED — awaiting browser confirmation; next: A5
+knees, then C-track)_
 
 ## What this is
 The "SDF blend-shell" character technique (capsule/sphere prims whose mesh
@@ -116,7 +116,7 @@ DONE (Skitter).
   junction-crease folds reported as INFO. Perf scare resolved: system/
   driver state, not the app (memory flat, snipping-tool lag was
   system-wide; restart fixed it — zero code changed).
-- A4 STAGE 2 (**awaiting browser confirm**): (1) BLINK, decal-driven:
+- A4 STAGE 2: (1) BLINK, decal-driven:
   src/blink.js — eye decals SUBMERGE into their host (depth 2r + edge,
   direction = toward the closest point on the nearest solid — capsule
   hosts need the segment point, snail stalks); the 'lid' is the skin
@@ -131,7 +131,24 @@ DONE (Skitter).
   + 0.012 outward push; hand-computed apex midpoint y 0.3806 MEASURED
   EXACTLY in the sim; endpoints stay >= 0.005 submerged every frame
   (suite invariant); hop.mouthPrim ?? 'mouth', graceful -1.
-- Suite: 741 probes ALL PASS. Sections: 0 imports, 1 creature invariants
+- A4 STAGE 2.1 — CAST BALL-EYES + BLINK v2 (**awaiting browser
+  confirm**): all six creatures now wear the reference ball eyes (solid
+  white sphere rooted 0.015-0.02 in the host, kCap 0.03, iris_* decal
+  ON the eyeball); sclera_*/pupil_* decal eyes deleted registry-wide
+  (the layered-decal probe now guards a legacy pattern). Snail got tiny
+  stalk-tip balls (r 0.05) — PROVISIONAL, revert to dots if they read
+  worse. blink.js v2: SOLID prims blink too (a retracting eyeball is
+  buried and the vertex tuck hides it — the lid via existing
+  machinery); submerge target = nearest solid EXCLUDING self and other
+  blink-listed prims (an iris retargets the body behind its departing
+  eyeball — else a dark dot pokes the closed lid); depth = hostSd + 2r
+  + PAINT_EDGE lands every eye EXACTLY 2r+edge under its lid (hopper
+  hand-anchors: eyeball closed at 0.220 from the body center, iris at
+  0.370 — both measured exact). 727 probes ALL PASS FIRST RUN; all
+  INFL ceilings held (kCap'd eyeballs add ~nothing; pudge 0.1219 vs
+  0.122); fold scans 0 open-skin (crease counts grew — the bboxes now
+  contain eyeball junctions, benign class).
+- Suite: 727 probes ALL PASS. Sections: 0 imports, 1 creature invariants
   + measured sims (walk, hop w/ deformation, field w/ idle) + carve rules
   (midpoint dent/pierce, SUBMERSION, decal clearance, donors), 2 field
   inspector (operator anchors, measured INFL_CEILING / CARVE_BOUNDS at
@@ -169,9 +186,9 @@ DONE (Skitter).
   caught by the suite run, per the GI rule).
 
 ## Open items
-1. **Daniel: browser-verify A4 stage 2** (all six blink, staggered;
-   hopper's mouth opens through each hop, widest at the apex) +
-   checkpoint.
+1. **Daniel: browser-verify stage 2.1** (whole cast wears protruding
+   ball eyes; blinks now close the WHOLE eye — ball retracts, lid is
+   skin; snail's tiny stalk-tip balls = provisional) + checkpoint.
 2. A5 two-segment knees (options round next).
 3. Reference queue: floater (hover mini-pass), propeller flyer
    (continuous-spin anim + hover).
