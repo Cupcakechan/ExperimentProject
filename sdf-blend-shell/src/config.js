@@ -59,6 +59,7 @@ export const CAPSULE_RINGS_PER_UNIT = 14;
 // edges (the reference look); larger = airbrushed.
 export const PAINT_EDGE = 0.02;
 
+
 // Toon outline: a second draw of the shell snapped to the surface this far
 // OUTSIDE the skin (world units), flat-colored, back faces only. Keep it
 // SMALLER than the thinnest solid prim radius or the ink swallows thin
@@ -181,3 +182,19 @@ export const IDLE_PERIOD = 9.0; // seconds per walk+idle cycle
 export const IDLE_DURATION = 2.8; // idle window inside each cycle
 export const IDLE_RAMP = 0.6; // decelerate/accelerate shoulder
 export const IDLE_TURN_FACTOR = 0.35; // wander turning kept while idle (looking around)
+
+// Blink (A4 stage 2): eye decals submerge into their host briefly — the
+// "lid" is just the skin color returning (zero shader change; pure
+// setPrimTransform lockstep, absolute from rest). Deterministic schedule:
+// one blink per PERIOD, lasting BLINK_TIME (sine close-open), phase-offset
+// per actor so the field never blinks in unison.
+export const BLINK_PERIOD = 4.2;
+export const BLINK_TIME = 0.18;
+
+// Hop-mouth (A4 stage 2): hopper's carve JAW-DROPS through the AIR arc —
+// a rotation about the body center (constant depth: a translated carve
+// that crossed the surface would graze, the corner-run-off lesson) plus
+// a small outward PUSH that deepens the cut while staying submerged
+// (rest depth 0.024; at full open 0.012 — hand-computed, suite-anchored).
+export const MOUTH_OPEN_ANGLE = 0.22; // rad, at the apex
+export const MOUTH_OPEN_PUSH = 0.012; // world units outward, at the apex

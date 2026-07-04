@@ -100,6 +100,7 @@ export const CREATURES = [
     name: 'Critter',
     anim: { primId: 'tail', axis: [1, 0, 0], amplitude: 0.6, speed: 2.5 },
     step: { feet: ['leg_fl', 'leg_fr', 'leg_bl', 'leg_br'], groups: [[0, 3], [1, 2]] },
+    blink: { eyes: ['sclera_l', 'sclera_r', 'pupil_l', 'pupil_r'] },
     prims: [
       { id: 'body', type: 'capsule', a: [-0.5, 0.55, 0.0], b: [0.5, 0.55, 0.0], r: 0.42, color: 0x4fd1a5 },
       { id: 'head', type: 'sphere', a: [-0.85, 0.95, 0.0], r: 0.32, color: 0xf2b05a },
@@ -128,6 +129,7 @@ export const CREATURES = [
     // crouchTime, airTime, landTime, restMin, height, dip, leadTime,
     // footTuck).
     hop: {},
+    blink: { eyes: ['sclera_l', 'sclera_r', 'pupil_l', 'pupil_r'] },
     // Subtle, quick breath — continues mid-hop (alive in the air too).
     breath: { amplitude: 0.012, speed: 2.2 },
     prims: [
@@ -140,9 +142,9 @@ export const CREATURES = [
       // inside the face (old geometry grazed with the midpoint 0.019
       // OUTSIDE the surface — grazing coverage smears into corner
       // run-offs; measured analytically, suite-enforced below).
-      // KNOWN LIMIT: at extreme slider k the union-inflated skin lifts
-      // past the carve's color reach and the mouth fades — the fix is a
-      // decal-compensation rework queued for the living-face pass.
+      // K-VALIDITY (A4, measured): at extreme slider k the union deficit
+      // exceeds the carve's radius and the mouth GEOMETRY is swallowed —
+      // a design boundary (see the authoring rules), not a color bug.
       { id: 'mouth', type: 'capsule', a: [-0.455, 0.48, 0.08], b: [-0.455, 0.48, -0.08], r: 0.09, kCap: 0.06, negative: true, color: 0x2b1626 },
       { id: 'sclera_l', type: 'sphere', a: [-0.42, 0.78, 0.16], r: 0.12, color: 0xf2f4f6, paint: true },
       { id: 'sclera_r', type: 'sphere', a: [-0.42, 0.78, -0.16], r: 0.12, color: 0xf2f4f6, paint: true },
@@ -156,6 +158,7 @@ export const CREATURES = [
     // Tail wags — NOT the neck: the head would not follow it (see rules).
     anim: { primId: 'tail', axis: [1, 0, 0], amplitude: 0.7, speed: 2.8 },
     step: { feet: ['leg_fl', 'leg_fr', 'leg_bl', 'leg_br'], groups: [[0, 3], [1, 2]] },
+    blink: { eyes: ['sclera_l', 'sclera_r', 'pupil_l', 'pupil_r'] },
     prims: [
       { id: 'body', type: 'capsule', a: [-0.35, 0.55, 0.0], b: [0.45, 0.55, 0.0], r: 0.38, color: 0xe8b04b },
       { id: 'neck', type: 'capsule', a: [-0.35, 0.6, 0.0], b: [-0.75, 1.35, 0.0], r: 0.17, kCap: 0.12, color: 0xe8b04b },
@@ -179,6 +182,7 @@ export const CREATURES = [
     inflate: 0.04,
     // Deep, slow breath — the chubby creature breathes like one.
     breath: { amplitude: 0.02, speed: 1.6 },
+    blink: { eyes: ['sclera_l', 'sclera_r', 'pupil_l', 'pupil_r'] },
     anim: { primId: 'tail', axis: [0, 1, 0], amplitude: 0.5, speed: 3.0 },
     step: { feet: ['leg_fl', 'leg_fr', 'leg_bl', 'leg_br'], groups: [[0, 3], [1, 2]] },
     // 12 prims (the old MAX_PRIMS ceiling; capacity is 16 since Skitter).
@@ -210,6 +214,7 @@ export const CREATURES = [
     // Snails rest long: a bigger idle window inside a longer cycle
     // (the per-creature override path — others use config defaults).
     idle: { period: 11, duration: 4.5 },
+    blink: { eyes: ['eye_l', 'eye_r'] },
     // NO anim and NO step — a snail SLIDES (roam moves the rig; the gait
     // null path and the animPrimIndex -1 no-op get their first live users,
     // by design not omission). The antennae carry eye decals, so per the
@@ -247,6 +252,9 @@ export const CREATURES = [
       feet: ['leg_fl', 'leg_fr', 'leg_ml', 'leg_mr', 'leg_bl', 'leg_br'],
       groups: [[0, 3, 4], [1, 2, 5]], // alternating tripods: fl+mr+bl / fr+ml+br
     },
+    // Irises submerge into the solid eyeballs — a beat of blank white
+    // ball, the cartoon eye-roll blink. Browser judges whether it reads.
+    blink: { eyes: ['iris_l', 'iris_r'] },
     prims: [
       { id: 'body', type: 'capsule', a: [-0.3, 0.42, 0.0], b: [0.28, 0.46, 0.0], r: 0.26, color: 0x7b5fc9 },
       { id: 'leg_fl', type: 'capsule', a: [-0.2, 0.36, 0.14], b: [-0.3, 0.06, 0.3], r: 0.055, kCap: 0.04, color: 0x52418f },

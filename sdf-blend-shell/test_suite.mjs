@@ -638,6 +638,14 @@ assert(hopper.hop && hopper.step && hopper.step.feet.length === 2, 'hopper hops 
   let restRestored = false; // PAUSE after >= 1 hop: exact rest sphere back
   const bodyIdx = hopper.prims.findIndex((p) => p.id === 'body');
   const bodyRestA = new THREE.Vector3(...hopper.prims[bodyIdx].a);
+  // Jaw-drop (A4 stage 2): the mouth carve through the arc.
+  const mouthIdx = hopper.prims.findIndex((p) => p.id === 'mouth');
+  const mouthRestMid = new THREE.Vector3(...hopper.prims[mouthIdx].a)
+    .add(new THREE.Vector3(...hopper.prims[mouthIdx].b))
+    .multiplyScalar(0.5);
+  let mouthMinY = 9; // lowest midpoint y — the drop, hand-computed 0.3806 at the apex
+  let mouthMaxDist = 0; // farthest endpoint from the body center — the submersion invariant
+  let mouthRested = false; // PAUSE after >= 1 hop: exact registry pose back
   let prevD = null;
   const prevAnchor = hop.feet.map(() => null);
   let disp = null;
@@ -651,6 +659,11 @@ assert(hopper.hop && hopper.step && hopper.step.feet.length === 2, 'hopper hops 
     if (st === 'CROUCH' && uB.x - uA.x > 0.05) sawSquash = true;
     if (st === 'AIR' && uB.y - uA.y > 0.05) sawStretch = true;
     if (st === 'PAUSE' && hops >= 1 && uA.distanceTo(uB) === 0 && uA.distanceTo(bodyRestA) === 0) restRestored = true;
+    const mA = hMat.uniforms.uA.value[mouthIdx];
+    const mB = hMat.uniforms.uB.value[mouthIdx];
+    mouthMinY = Math.min(mouthMinY, (mA.y + mB.y) / 2);
+    mouthMaxDist = Math.max(mouthMaxDist, mA.distanceTo(bodyRestA), mB.distanceTo(bodyRestA));
+    if (st === 'PAUSE' && hops >= 1 && (mA.x + mB.x) / 2 === mouthRestMid.x && (mA.y + mB.y) / 2 === mouthRestMid.y) mouthRested = true;
     maxY = Math.max(maxY, disp.y);
     minY = Math.min(minY, disp.y);
     if (prevD) maxStep = Math.max(maxStep, Math.hypot(disp.x - prevD.x, disp.z - prevD.z));
@@ -680,7 +693,52 @@ assert(hopper.hop && hopper.step && hopper.step.feet.length === 2, 'hopper hops 
   assert(sawSquash, 'CROUCH squashes the body (endpoints split along X — anticipation, measured live)');
   assert(sawStretch, 'AIR stretches the body (endpoints split along Y — measured live)');
   assert(restRestored, 'PAUSE restores the EXACT rest sphere (absolute-from-rest writes cannot drift, bit-exact)');
+  // Jaw-drop (A4 stage 2), hand-computed at full open (angle 0.22 about
+  // the body center + push 0.012 outward): mouth midpoint y drops from
+  // 0.48 to 0.62 - 0.4550*sin(.22) - 0.14*cos(.22)... = 0.3806, and the
+  // farthest endpoint reaches |rel| 0.4827 + 0.012 = at most 0.4947 from
+  // the body center — always >= 0.005 INSIDE the r=0.5 body: the carve
+  // stays SUBMERGED at any openness (the corner-run-off guard, live).
+  assert(mouthMinY < 0.40 && mouthMinY > 0.36, `the mouth jaw-drops through the arc (lowest midpoint y ${mouthMinY.toFixed(4)}, hand-computed 0.3806 at the apex)`);
+  assert(mouthMaxDist < 0.5 - 0.004, `the open mouth stays SUBMERGED every frame (max endpoint dist ${mouthMaxDist.toFixed(4)} < 0.496 — never grazes)`);
+  assert(mouthRested, 'PAUSE restores the EXACT registry mouth (jaw writes are absolute from rest, bit-exact)');
   assert(HOP_AIR_TIME > 0 && HOP_TRIGGER > 0, 'hop constants are live');
+
+// ---- Blink (A4 stage 2): decal submersion, deterministic, drift-proof ----
+const { createBlink } = await import('./src/blink.js');
+const { BLINK_PERIOD, BLINK_TIME } = await import('./src/config.js');
+assert(createBlink({ prims: [] }) === null, 'creatures without blink data get no blink (graceful null)');
+assert(BLINK_TIME < BLINK_PERIOD, 'a blink is shorter than its period');
+// Every declared blink eye must resolve to a PAINT prim (registry rule).
+for (const creature of CREATURES) {
+  if (!creature.blink) continue;
+  for (const id of creature.blink.eyes) {
+    const prim = creature.prims.find((p) => p.id === id);
+    assert(prim && prim.paint === true, `[${creature.id}] blink eye '${id}' is a paint prim`);
+  }
+}
+{
+  const bMat = createBlendMaterial(hopper.prims);
+  const blink = createBlink(hopper, 0);
+  const si = hopper.prims.findIndex((p) => p.id === 'sclera_l');
+  const restA = new THREE.Vector3(...hopper.prims[si].a);
+  assert(blink.closeT(0) === 0, 'blink closeT(0) = 0 — eyes open at rest (the t=0 convention)');
+  assert(Math.abs(blink.closeT(BLINK_TIME / 2) - 1) < 1e-9, 'blink closeT(mid) = 1 — fully closed (sine peak, hand-computed)');
+  assert(blink.closeT(BLINK_TIME + 0.01) === 0, 'blink closeT past the window = 0');
+  // Full close: sclera_l submerges by depth = 2r + edge = 0.26 toward the
+  // body. Hand-computed: rest center sits 0.4771 from the body center
+  // (host sd -0.0229, the existing anchor); submerged it sits 0.2171 —
+  // the skin point on its gaze ray is then 0.2829 away, paint sd 0.1629,
+  // coverage ~0 (the lid is just the skin coming back).
+  blink.update(BLINK_TIME / 2, [bMat]);
+  const closedA = bMat.uniforms.uA.value[si];
+  const bodyC = new THREE.Vector3(0, 0.62, 0);
+  assert(Math.abs(closedA.distanceTo(bodyC) - 0.2171) < 1e-3, `closed eye center sits 0.2171 from the body center (hand-computed, got ${closedA.distanceTo(bodyC).toFixed(4)})`);
+  assert(coverage(0.1629, 0) < 0.01, 'submerged sclera coverage ~ 0 at the skin (hand-computed sd 0.1629) — the blink actually hides the eye');
+  // Reopen: bit-exact registry restoration (absolute-from-rest writes).
+  blink.update(BLINK_TIME + 0.01, [bMat]);
+  assert(bMat.uniforms.uA.value[si].distanceTo(restA) === 0, 'reopened eye is the EXACT registry pose (bit-exact — blinking cannot drift)');
+}
 }
 
 // World-space lighting: the fragment shader must rotate the creature-space

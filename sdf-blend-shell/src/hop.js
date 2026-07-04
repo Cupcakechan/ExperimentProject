@@ -44,6 +44,8 @@ import {
   STRETCH_AMOUNT,
   STRETCH_MIN,
   STRETCH_MAX,
+  MOUTH_OPEN_ANGLE,
+  MOUTH_OPEN_PUSH,
 } from './config.js';
 
 // Pure (suite-anchored): the continuous hop arc. u in [0,1].
@@ -58,6 +60,9 @@ const _home = new THREE.Vector3();
 const _local = new THREE.Vector3();
 const _dir = new THREE.Vector3();
 const _mat = new THREE.Matrix4();
+const _jaw = new THREE.Matrix4();
+const _jawRot = new THREE.Matrix4();
+const _jawBack = new THREE.Matrix4();
 
 export function createHop(creature) {
   if (!creature.hop) return null; // most creatures walk or slide
@@ -85,6 +90,27 @@ export function createHop(creature) {
     (p) => p.id === (h.squashPrim ?? 'body') && !p.paint && !p.negative && (p.b === undefined)
   );
   const sPrim = sIdx >= 0 ? creature.prims[sIdx] : null;
+
+  // Jaw-drop target (A4 stage 2): the mouth CARVE, opening through the
+  // AIR arc. A carve's radius is not matrix-transformable, so "open" is
+  // a ROTATION about the body center (constant depth — a translated
+  // carve that crossed the surface would graze: the corner-run-off
+  // lesson) plus a small outward PUSH that deepens the cut while
+  // provably staying submerged (rest 0.024 deep, full open 0.012 —
+  // suite-anchored). Needs the squash prim as the rotation center;
+  // missing either -> -1, hop works without the mouth (graceful).
+  const mIdx = sPrim
+    ? creature.prims.findIndex((p) => p.id === (h.mouthPrim ?? 'mouth') && p.negative)
+    : -1;
+  const mPrim = mIdx >= 0 ? creature.prims[mIdx] : null;
+  const _mCenter = sPrim ? new THREE.Vector3(...sPrim.a) : null;
+  const _mOut = mPrim
+    ? new THREE.Vector3(...mPrim.a)
+        .add(new THREE.Vector3(...(mPrim.b ?? mPrim.a)))
+        .multiplyScalar(0.5)
+        .sub(_mCenter)
+        .normalize()
+    : null;
 
   // The hop OWNS the feet, but the foot DEFINITIONS are the same step
   // data the gait uses — one source of truth for which prims are legs.
@@ -239,6 +265,29 @@ export function createHop(creature) {
         for (const m of materials) {
           m.uniforms.uA.value[sIdx].set(d.a[0], d.a[1], d.a[2]);
           m.uniforms.uB.value[sIdx].set(d.b[0], d.b[1], d.b[2]);
+        }
+      }
+
+      // --- jaw-drop (A4 stage 2): the mouth opens through the arc ---
+      // openT = sin(pi*u) in AIR: closed at launch, widest at the apex
+      // (where the stretch is zero — the two reads trade off cleanly),
+      // closed again exactly at touchdown. ABSOLUTE from rest each frame
+      // (openT = 0 writes the registry pose bit-for-bit).
+      if (mPrim) {
+        let o = 0;
+        if (state === 'AIR') {
+          o = Math.sin(Math.PI * Math.min(tState / P.airTime, 1));
+        }
+        _jaw.makeTranslation(-_mCenter.x, -_mCenter.y, -_mCenter.z);
+        _jawRot.makeRotationZ(MOUTH_OPEN_ANGLE * o);
+        _jawBack.makeTranslation(
+          _mCenter.x + _mOut.x * MOUTH_OPEN_PUSH * o,
+          _mCenter.y + _mOut.y * MOUTH_OPEN_PUSH * o,
+          _mCenter.z + _mOut.z * MOUTH_OPEN_PUSH * o
+        );
+        _jawBack.multiply(_jawRot).multiply(_jaw);
+        for (const m of materials) {
+          setPrimTransform(m, mIdx, mPrim, _jawBack);
         }
       }
 

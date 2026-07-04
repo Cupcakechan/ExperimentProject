@@ -16,6 +16,7 @@ import { createControls } from './ui/controls.js';
 import { createRoam } from './roam.js';
 import { createGait } from './gait.js';
 import { createHop } from './hop.js';
+import { createBlink } from './blink.js';
 import {
   BLEND_K,
   BACKGROUND_COLOR,
@@ -84,6 +85,7 @@ const actors = CREATURES.map((creature, i) => {
     gait: creature.hop ? null : createGait(creature), // null for creatures without feet
     animIdx: animPrimIndex(creature),
     bobPhase: i * 2.1, // breath decorrelator (synchronized breathing is uncanny)
+    blink: createBlink(creature, i * 1.3), // staggered — unison blinking is worse
     pos: { x: 0, z: 0 }, // last frame's position, read by the OTHERS' separation
     lift: 0, // last frame's stride lift — rig and gait must AGREE on y, so both use it
     lean: 0, // smoothed bank angle
@@ -141,6 +143,11 @@ renderer.setAnimationLoop(() => {
     // Skin and ink own separate uniforms — both must move, in lockstep.
     updateAnim(actor.material, tAnim, actor.creature, actor.animIdx);
     updateAnim(actor.ink, tAnim, actor.creature, actor.animIdx);
+
+    // Blink (A4): eye decals submerge into their host on a deterministic,
+    // phase-staggered schedule — absolute from rest, so a non-blinking
+    // frame writes the exact registry pose.
+    if (actor.blink) actor.blink.update(tAnim, [actor.material, actor.ink]);
 
     // Breathing (A2): the field itself inhales. Both draws get the SAME
     // value or the outline detaches from the swelling skin; bobPhase

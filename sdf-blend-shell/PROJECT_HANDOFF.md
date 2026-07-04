@@ -1,15 +1,15 @@
 # PROJECT_HANDOFF — SDF Blend-Shell Experiment
 
-_Last updated: 2026-07-04 (roadmap A-track: A1 hop + A2 breathing/idle + A3.1 feel
-CONFIRMED + pushed; A3.2 squash-stretch + bob-suspension fix DELIVERED — awaiting
-browser confirmation; next: A4 living face, A5 knees)_
+_Last updated: 2026-07-04 (A3.2 + Skitter + eye tune + A4 stage 1 all CONFIRMED
++ pushed; A4 STAGE 2 blink + jaw-drop DELIVERED — awaiting browser confirmation;
+next: A5 knees, then C-track)_
 
 ## What this is
 The "SDF blend-shell" character technique (capsule/sphere prims whose mesh
 vertices snap onto the combined smooth-min SDF in a vertex shader) — **end
 goal: a game-creation tool; the harvest into a dev-method SKILL is Daniel's
 call on timing** (natural checkpoint flagged: A-track completion). Harvest
-sources: this handoff, LESSONS.md (11 entries), REFERENCE_FOGLEMAN.md,
+sources: this handoff, LESSONS.md (12 entries), REFERENCE_FOGLEMAN.md,
 creatures.js authoring rules, the suite's measured tables.
 
 **Stack:** Three.js pinned 0.170.0 (CDN import map, no bundler), VS Code
@@ -18,13 +18,15 @@ https://github.com/Cupcakechan/ExperimentProject, subfolder
 `sdf-blend-shell\` (git runs from the container root).
 
 ## The locked roadmap (Daniel-approved order)
-A1 hop ✅ -> A2 breathing ✅ (+ idle rests ✅, an unplanned insert) ->
-A3.1 step-bob+lean ✅ -> **A3.2 squash-stretch (DELIVERED, unconfirmed)**
--> A4 LIVING FACE (expressive/animated mouths via setPrimTransform on
-carves; blink; + the deferred debts: decal-compensation rework, high-k
-mouth fade, fold-detector as a permanent probe) -> A5 two-segment knees
--> C-track: JSON import/export, SEEDED CREATURE GENERATOR (suite-graded),
-terrarium; B-track breathers: in-browser slice viewer, Pass-5 morphing.
+A1 hop ✅ -> A2 breathing ✅ (+ idle rests ✅) -> A3.1 step-bob+lean ✅ ->
+A3.2 squash-stretch ✅ -> A4 stage 1 (debts, resolved by MEASUREMENT) ✅
+-> **A4 STAGE 2 blink + jaw-drop (DELIVERED, unconfirmed)** -> A5
+two-segment knees -> C-track: JSON import/export, SEEDED CREATURE
+GENERATOR (suite-graded), terrarium; B-track breathers: slice viewer,
+Pass-5 morphing. REFERENCE-CREATURE QUEUE (from the original post's
+screenshots): floater (hover locomotion mini-pass), propeller flyer
+(continuous-spin anim mode + hover); six-legs + protruding ball eyes
+DONE (Skitter).
 
 ## Current state (confirmed + pushed unless noted)
 - Fogleman harvest Passes 1-4 (field inspector w/ measured ceilings +
@@ -66,7 +68,7 @@ terrarium; B-track breathers: in-browser slice viewer, Pass-5 morphing.
   clamp against steering spikes). Free bob RETIRED (BOB_* deleted;
   bobPhase survives as the breath decorrelator). Lean sign confirmed in
   browser.
-- A3.2 SQUASH-STRETCH + BOB SUSPENSION (**awaiting browser confirm**):
+- A3.2 SQUASH-STRETCH + BOB SUSPENSION:
   (1) squashEndpoints in feel.js — anisotropic squash/stretch via
   ENDPOINT splits (X = wider/flatter, Y = taller), r untouched, no new
   uniform, NO shader change: uPrimMat stays identity and the vertex SNAP
@@ -85,7 +87,51 @@ terrarium; B-track breathers: in-browser slice viewer, Pass-5 morphing.
   full-range humps at irregular drift-triggered cadence still twitch;
   the body is a MASS: actor.lift = approach(lift, target, LIFT_SMOOTH
   5.0, dt) — the suspension. Lever: lower = heavier.
-- Suite: 614 probes ALL PASS. Sections: 0 imports, 1 creature invariants
+- SKITTER (the reference six-legger, PURE DATA — zero engine code):
+  15 prims -> MAX_PRIMS 12->16; TRIPOD gait groups [[0,3,4],[1,2,5]]
+  (leg-count-is-data proven at 2/4/6); thin kCap'd pointy legs (r 0.055,
+  kCap 0.04); green-tipped antennae; PROTRUDING BALL EYES = solid white
+  eyeballs (r 0.085, kCap 0.03, pure white after the eye tune — the
+  fixed-width ink ring reads huge on small balls) + 'iris_*' decals
+  hosted ON the eyeballs (nearest-solid hosting; the iris_ name dodges
+  the pupil/sclera layering probe by design). Suite graded it COLD:
+  120 steps, drift 0.297, 6-actor field closest 1.291. First FULLY
+  AUTHORED-BLEND creature: inflation identical at both k (0.0097 —
+  every close pair capped, slider-immune by design; the growth probe is
+  now conditional on slider-governed pairs).
+- A4 STAGE 1 (debts, resolved by MEASUREMENT — no shader surgery):
+  (1) capped-measured carve compensation KILLED by probe (floods pudge
+  at k=0.6: threshold 0.12 on a 0.26 head); (2) the high-k mouth fade
+  closed as a MEASURED DESIGN BOUNDARY — at extreme k the union deficit
+  (~0.15+) EXCEEDS the carve r (0.068): the mouth GEOMETRY is swallowed;
+  no color model paints dissolved geometry (authoring rule: mouth r
+  comfortably above the site's expected inflation); (3) the decal-rework
+  debt DISSOLVED (the balloon was on the never-shipped decal-mouth;
+  shipped decals sound — rule: decals on low-inflation sites); (4) FOLD
+  DETECTOR shipped as a permanent probe: full ink-pipeline mirror over
+  indexed triangles at every carve — it discovered 7 pre-existing
+  BENIGN folds at hopper's body-foot junction (the offset surface
+  pinches at any concave junction; slivers nest in the join's dark
+  crevice) -> the probe CLASSIFIES: OPEN-SKIN folds asserted ZERO,
+  junction-crease folds reported as INFO. Perf scare resolved: system/
+  driver state, not the app (memory flat, snipping-tool lag was
+  system-wide; restart fixed it — zero code changed).
+- A4 STAGE 2 (**awaiting browser confirm**): (1) BLINK, decal-driven:
+  src/blink.js — eye decals SUBMERGE into their host (depth 2r + edge,
+  direction = toward the closest point on the nearest solid — capsule
+  hosts need the segment point, snail stalks); the 'lid' is the skin
+  returning, zero shader change; deterministic schedule (BLINK_PERIOD
+  4.2 / BLINK_TIME 0.18, sine close-open, per-actor phase stagger);
+  absolute-from-rest via setPrimTransform, both draws. All six
+  creatures blink (skitter's irises submerge into the solid eyeballs =
+  a beat of blank white ball — browser judges). (2) JAW-DROP: hopper's
+  carve opens through the AIR arc — sin(pi*u), widest at the apex
+  (where stretch is zero: the reads trade off) — as a ROTATION about
+  the body center (0.22 rad; constant depth, the corner-run-off guard)
+  + 0.012 outward push; hand-computed apex midpoint y 0.3806 MEASURED
+  EXACTLY in the sim; endpoints stay >= 0.005 submerged every frame
+  (suite invariant); hop.mouthPrim ?? 'mouth', graceful -1.
+- Suite: 741 probes ALL PASS. Sections: 0 imports, 1 creature invariants
   + measured sims (walk, hop w/ deformation, field w/ idle) + carve rules
   (midpoint dent/pierce, SUBMERSION, decal clearance, donors), 2 field
   inspector (operator anchors, measured INFL_CEILING / CARVE_BOUNDS at
@@ -95,11 +141,13 @@ terrarium; B-track breathers: in-browser slice viewer, Pass-5 morphing.
 - src/feel.js — pure presentation helpers (stridePulse, leanTarget,
   approach, headingDelta, squashEndpoints). main.js consumes; hop.js
   consumes squashEndpoints.
-- src/hop.js — the state machine + feet + squash-stretch writes.
+- src/hop.js — the state machine + feet + squash-stretch + jaw-drop.
+- src/blink.js — decal-submersion blinking (deterministic, per-actor phase).
 - roam.js — createRoam(seed, total, idle); idleSpeedMul exported.
 - anim.js — + breathInflate.
 - config.js — + HOP_*, IDLE_*, STRIDE_LIFT/LEAN_*/LIFT_SMOOTH,
-  SQUASH_AMOUNT/STRETCH_AMOUNT; BOB_* deleted.
+  SQUASH_AMOUNT/STRETCH_AMOUNT, BLINK_PERIOD/BLINK_TIME,
+  MOUTH_OPEN_ANGLE/MOUTH_OPEN_PUSH, MAX_PRIMS 16; BOB_* deleted.
 - Resources: fogleman/sdf (harvested); GLSL Noises gist
   (patriciogonzalezvivo) bookmarked for a possible texture pass;
   awesome-threejs list reviewed — otherwise low direct value (React-
@@ -121,11 +169,13 @@ terrarium; B-track breathers: in-browser slice viewer, Pass-5 morphing.
   caught by the suite run, per the GI rule).
 
 ## Open items
-1. **Daniel: browser-verify A3.2** (hopper squashes/stretches through
-   hops; walkers' sway now slow and smooth) + checkpoint.
-2. A4 LIVING FACE options round (carries: decal-compensation rework,
-   high-k mouth fade, fold-detector suite probe).
-3. Walker stride squash: one-value experiment IF the hop version earns
+1. **Daniel: browser-verify A4 stage 2** (all six blink, staggered;
+   hopper's mouth opens through each hop, widest at the apex) +
+   checkpoint.
+2. A5 two-segment knees (options round next).
+3. Reference queue: floater (hover mini-pass), propeller flyer
+   (continuous-spin anim + hover).
+4. Walker stride squash: one-value experiment IF the hop version earns
    it (deferred by design).
-4. SKILL HARVEST — Daniel's timing; A-track completion (after A5) is the
+5. SKILL HARVEST — Daniel's timing; A-track completion (after A5) is the
    flagged natural checkpoint.
