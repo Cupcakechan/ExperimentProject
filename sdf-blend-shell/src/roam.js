@@ -31,7 +31,7 @@ function angleDiff(a, b) {
   return ((b - a + Math.PI) % (2 * Math.PI) + 2 * Math.PI) % (2 * Math.PI) - Math.PI;
 }
 
-export function createRoam(seed = 0) {
+export function createRoam(seed = 0, total = 3) {
   let x = 0;
   let z = 0;
   let h = 0;
@@ -39,7 +39,10 @@ export function createRoam(seed = 0) {
 
   function reset() {
     // Spawn on a ring, evenly spaced by seed — nobody starts inside anybody.
-    const spawnAngle = seed * ((2 * Math.PI) / 3) + 0.7;
+    // Spacing divides by the ACTOR COUNT (total), not a constant: with the
+    // old hardcoded 3, seed 3 wrapped onto seed 0's exact angle — two
+    // creatures spawning inside each other the moment the gallery grew.
+    const spawnAngle = seed * ((2 * Math.PI) / total) + 0.7;
     x = Math.cos(spawnAngle) * ROAM_SPAWN_RADIUS;
     z = Math.sin(spawnAngle) * ROAM_SPAWN_RADIUS;
     h = spawnAngle;

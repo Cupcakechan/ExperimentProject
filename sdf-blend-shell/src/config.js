@@ -37,7 +37,7 @@ export const COLOR_POW = 2.0;
 // Scene / camera
 export const BACKGROUND_COLOR = 0x14161a;
 export const CAMERA_FOV = 50;
-export const CAMERA_START = [-2.8, 2.4, 5.4]; // x, y, z — pulled back to frame the field
+export const CAMERA_START = [-4.4, 3.6, 8.6]; // x, y, z — same angle, distance scaled to the expanded field
 export const ORBIT_TARGET = [0, 0.45, 0]; // center of the field
 // Buried-geometry tuck (seam fix). A vertex starting inside a DIFFERENT
 // primitive sinks this far beneath the skin instead of z-fighting the mesh
@@ -74,7 +74,7 @@ export const BURY_BAND = 0.04;
 // plus a steering term that bends it back toward center beyond the soft
 // radius. Speeds are world units / second; turn params are rad/s.
 export const ROAM_SPEED = 0.35;
-export const ROAM_SOFT_RADIUS = 1.8; // beyond this, steering ramps in (field-sized)
+export const ROAM_SOFT_RADIUS = 3.0; // beyond this, steering ramps in (field-sized)
 export const ROAM_STEER_GAIN = 2.2;
 export const ROAM_TURN_A = 1.2;
 export const ROAM_TURN_W1 = 0.7;
@@ -96,16 +96,17 @@ export const ROAM_SEP_GAIN = 3.0;
 // roamers reached 0.008 apart) — the positional push is the guarantee:
 // units/second of shove per unit of intrusion depth.
 export const ROAM_SEP_PUSH = 2.5;
-export const ROAM_SPAWN_RADIUS = 1.1;
-// Hard clamp: steering fights (boundary vs separation) let a roamer
-// overshoot to r=3.29 (measured) — past the 2.9 ground disc. Nobody
-// exceeds this radius, ever.
-export const ROAM_HARD_RADIUS = 2.4;
+export const ROAM_SPAWN_RADIUS = 1.9;
+// Hard clamp: steering fights (boundary vs separation) can push a roamer
+// well past the soft radius (measured at the ORIGINAL scale: overshoot to
+// r=3.29 vs soft 1.8 — past the then-2.9 ground disc). The clamp is the
+// guarantee at any scale; the suite re-measures the max every run.
+export const ROAM_HARD_RADIUS = 4.0;
 
 // Ground disc: a flat, unlit stage floor (toon look wants flat). Radius
 // must exceed the roamers' hard extent (soft radius + overshoot) so nobody
 // ever wanders off the edge of the world — suite-enforced.
-export const GROUND_RADIUS = 2.9;
+export const GROUND_RADIUS = 4.6;
 export const GROUND_COLOR = 0x1b1f24;
 
 // Reactive gait (stage 3). A planted foot steps when its HOME (rest spot

@@ -358,10 +358,23 @@ const loneP = lone.update(1 / 60);
 const crowdedP = crowded.update(1 / 60, [{ x: loneP.x - 0.1, z: loneP.z }]);
 assert(loneP.heading !== crowdedP.heading || loneP.x !== crowdedP.x, 'a neighbor inside SEP_RADIUS alters the update');
 
-// The field simulation, MEASURED (3 seeded roamers, mutual separation,
-// ~100 simulated seconds): closest approach 1.234, max radius exactly
-// 2.400 (the hard clamp). Thresholds set from measurement with margin.
-const fieldRoams = [createRoam(0), createRoam(1), createRoam(2)];
+// The field simulation, MEASURED (one seeded roamer PER GALLERY CREATURE —
+// the sim grows with the gallery automatically — mutual separation, ~100
+// simulated seconds at the EXPANDED field scale). Thresholds set from
+// measurement with margin; re-measure whenever the gallery or the roam
+// constants change (the labels carry the live numbers).
+const N_ACTORS = CREATURES.length;
+// Spawn ring: count-spaced — the old hardcoded /3 spacing made seed 3 wrap
+// onto seed 0's exact angle (two creatures spawning inside each other).
+// Chord at N on the 1.9 ring: 2*1.9*sin(PI/N) — holds > 1.2 through N~8.
+const spawnPoses = Array.from({ length: N_ACTORS }, (_, i) => createRoam(i, N_ACTORS).update(1 / 60));
+for (let a = 0; a < N_ACTORS; a++) {
+  for (let b = a + 1; b < N_ACTORS; b++) {
+    const d = Math.hypot(spawnPoses[a].x - spawnPoses[b].x, spawnPoses[a].z - spawnPoses[b].z);
+    assert(d > 1.2, `spawns ${a} and ${b} are distinct (${d.toFixed(3)} > 1.2 — the seed-wrap regression guard)`);
+  }
+}
+const fieldRoams = Array.from({ length: N_ACTORS }, (_, i) => createRoam(i, N_ACTORS));
 const fieldPos = fieldRoams.map(() => ({ x: 0, z: 0 }));
 let minPair = Infinity;
 let fieldMaxR = 0;
@@ -371,13 +384,14 @@ for (let i = 0; i < 6000; i++) {
     fieldPos[j] = { x: p.x, z: p.z };
     fieldMaxR = Math.max(fieldMaxR, Math.hypot(p.x, p.z));
   });
-  for (let a = 0; a < 3; a++) {
-    for (let b = a + 1; b < 3; b++) {
+  for (let a = 0; a < N_ACTORS; a++) {
+    for (let b = a + 1; b < N_ACTORS; b++) {
       minPair = Math.min(minPair, Math.hypot(fieldPos[a].x - fieldPos[b].x, fieldPos[a].z - fieldPos[b].z));
     }
   }
 }
-assert(minPair > 1.0, `actors never touch (closest approach ${minPair.toFixed(3)} > 1.0, MEASURED 1.234)`);
+console.log(`  INFO  field sim: ${N_ACTORS} actors, closest approach ${minPair.toFixed(3)}, max radius ${fieldMaxR.toFixed(3)} (hard clamp ${ROAM_HARD_RADIUS})`);
+assert(minPair > 1.0, `actors never touch (closest approach ${minPair.toFixed(3)} > 1.0, MEASURED at this scale — see INFO)`);
 assert(fieldMaxR <= ROAM_HARD_RADIUS + 1e-9, `hard clamp holds (max radius ${fieldMaxR.toFixed(3)} <= ${ROAM_HARD_RADIUS})`);
 assert(ROAM_SEP_RADIUS > 1.0, 'personal space exceeds the touch threshold');
 

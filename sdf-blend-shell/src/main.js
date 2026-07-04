@@ -72,7 +72,7 @@ const actors = CREATURES.map((creature, i) => {
     material,
     ink,
     rig,
-    roam: createRoam(i), // seed = index: distinct spawn + wander phase
+    roam: createRoam(i, CREATURES.length), // seed = index; count-spaced spawn ring
     gait: createGait(creature), // null for creatures without feet
     animIdx: animPrimIndex(creature),
     bobPhase: i * 2.1, // decorrelated bobbing — synchronized bouncing is uncanny

@@ -120,3 +120,41 @@
   clamp band — thresholds MEASURED (drift 0.298, hopper floor 0.55).
 - Route: skill reference candidates (stale-snapshot gates; pinned-length
   clamps; simulate stateful systems before shipping).
+
+## 2026-07-03 — the pairwise k/4 inflation bound was the wrong mental model
+- What broke / what happened: nothing in the browser — a wrong assumption
+  ("smin inflation <= k/4") lived in comments and reasoning since the decal
+  bug, and was one keystroke from being encoded as suite ceilings in the
+  field-inspector pass.
+- Root cause: the k/4 bound is a PAIRWISE fact, but mapSDF folds smin
+  SEQUENTIALLY — each fold can deepen the deficit against the already-
+  deficited running minimum, so 3+ mutually-close prims exceed it.
+  MEASURED: hopper 0.0969 at k=0.25 (k/4 = 0.0625, +55%: body + both feet
+  folding under the belly); longneck 0.2969 at k=0.6 (~2x k/4).
+- Verification gap it exposed: no instrument measured the FIELD itself —
+  every existing guard watched field CONSUMERS (decals, outline, gait).
+- Plug shipped: field inspector (suite Section 2) measures per-creature
+  inflation on every run; ceilings are MEASURED values + margin, never
+  derived bounds; INFO lines re-measure automatically on any field change.
+  Retroactive validation: the decal fix subtracts MEASURED local inflation
+  rather than an assumed k/4 — which is why it survived this correction
+  untouched.
+- Route: skill reference candidate (pairwise bounds do not survive
+  sequential folds — instrument the invariant, measure, THEN encode).
+
+## 2026-07-03 — carve donor density measured AT the probe floor pre-delivery
+- What broke / what happened: nothing shipped — the donor-density probe
+  written WITH the negative-prims feature measured exactly 8 host vertices
+  inside hopper's mouth bowl, precisely the probe's minimum: the bowl was
+  about to ship starved (the detached-legs defect class, sphere edition).
+- Root cause: sphere meshes at 24x16 segments have ~0.13 inter-vertex
+  spacing against a 0.30-wide bowl; a snapped shell can only line a bowl
+  where host vertices exist to snap inward.
+- Verification gap it exposed: none — the probe caught it before delivery
+  (the gait-sim pattern again: ship the probe WITH the feature it guards).
+- Plug shipped: sphere density raised to 32x24 (14 donors measured, floor
+  encoded at 11); authoring rule added (carve footprint comfortably wider
+  than host inter-vertex spacing; levers named: sphere segments,
+  CAPSULE_RINGS_PER_UNIT).
+- Route: skill reference candidate (when a feature depends on donor
+  geometry, its density probe ships in the same pass — never after).
