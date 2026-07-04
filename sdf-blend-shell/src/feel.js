@@ -8,10 +8,17 @@
 // swinging feet (gait exposes swingT: -1 planted, 0..1 swinging).
 // All feet planted -> 0, so an idle walker is genuinely still —
 // the old free-sine bob bounced through idles and masked breath.
+// sin^2, not sin: sine's slope at its endpoints is MAXIMUM (+-PI),
+// so each bump attacked at full velocity — reported as "micro
+// jumps". sin^2 has ZERO slope at both ends: the body eases into
+// and out of every rise, same exact peak at mid-swing.
 export function stridePulse(feet) {
   let s = 0;
   for (const f of feet) {
-    if (f.swingT >= 0) s = Math.max(s, Math.sin(Math.PI * f.swingT));
+    if (f.swingT >= 0) {
+      const w = Math.sin(Math.PI * f.swingT);
+      s = Math.max(s, w * w);
+    }
   }
   return s;
 }

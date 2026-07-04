@@ -402,7 +402,12 @@ assert(ROAM_SPEED > 0 && STRIDE_LIFT > 0 && LEAN_MAX > 0, 'roam/feel constants a
 // Gait feel (A3.1), hand-computed:
 assert(stridePulse([{ swingT: -1 }, { swingT: -1 }]) === 0, 'stridePulse: all planted = 0 (an idle walker is genuinely still)');
 assert(stridePulse([{ swingT: 0.5 }, { swingT: -1 }]) === 1, 'stridePulse: mid-swing = 1 exactly (hand-computed)');
+assert(Math.abs(stridePulse([{ swingT: 0.25 }]) - 0.5) < 1e-12, 'stridePulse: quarter-swing = 0.5 exactly (sin^2(PI/4), hand-computed)');
 assert(Math.abs(stridePulse([{ swingT: 0.25 }, { swingT: 0.5 }]) - 1) < 1e-12, 'stridePulse: max over swinging feet');
+// The micro-jump fix: at 10% into the swing the OLD sine pulse was
+// already at 0.309 (full-velocity attack); sin^2 is 0.0955 — the body
+// eases in (zero endpoint slope, hand-computed).
+assert(Math.abs(stridePulse([{ swingT: 0.1 }]) - 0.09549150281252627) < 1e-12, 'stridePulse: soft onset (0.0955 at 10% vs the old 0.309 attack, hand-computed)');
 assert(leanTarget(0.2, 0.35, 0.18) === 0.2 * 0.35, 'leanTarget: proportional below the clamp (hand-computed)');
 assert(leanTarget(9, 0.35, 0.18) === 0.18 && leanTarget(-9, 0.35, 0.18) === -0.18, 'leanTarget: clamped both ways (steering spikes cannot flip the body)');
 assert(approach(0.7, 1, 6, 0) === 0.7, 'approach: dt=0 is an exact identity (pause-safe)');
