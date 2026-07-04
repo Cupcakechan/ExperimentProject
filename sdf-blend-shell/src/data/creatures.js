@@ -127,4 +127,55 @@ export const CREATURES = [
       { id: 'pupil_r', type: 'sphere', a: [-1.015, 1.505, -0.099], r: 0.03, color: 0x2a2118, paint: true },
     ],
   },
+  {
+    id: 'pudge',
+    name: 'Pudge',
+    // First user of INFLATE (Pass 3): same skeleton reads chubbier by one
+    // number. 0.04 stays well under the thinnest solid r (tail 0.11).
+    inflate: 0.04,
+    anim: { primId: 'tail', axis: [0, 1, 0], amplitude: 0.5, speed: 3.0 },
+    step: { feet: ['leg_fl', 'leg_fr', 'leg_bl', 'leg_br'], groups: [[0, 3], [1, 2]] },
+    // 12 prims — exactly at MAX_PRIMS: the capacity ceiling, demonstrated.
+    prims: [
+      { id: 'body', type: 'sphere', a: [0.05, 0.5, 0.0], r: 0.4, color: 0x8fb4e3 },
+      { id: 'head', type: 'sphere', a: [-0.52, 0.72, 0.0], r: 0.26, color: 0xa7c7ec },
+      { id: 'leg_fl', type: 'capsule', a: [-0.28, 0.38, 0.2], b: [-0.3, 0.08, 0.23], r: 0.12, kCap: 0.08, color: 0x6f9bd1 },
+      { id: 'leg_fr', type: 'capsule', a: [-0.28, 0.38, -0.2], b: [-0.3, 0.08, -0.23], r: 0.12, kCap: 0.08, color: 0x6f9bd1 },
+      { id: 'leg_bl', type: 'capsule', a: [0.34, 0.38, 0.2], b: [0.36, 0.08, 0.23], r: 0.12, kCap: 0.08, color: 0x6f9bd1 },
+      { id: 'leg_br', type: 'capsule', a: [0.34, 0.38, -0.2], b: [0.36, 0.08, -0.23], r: 0.12, kCap: 0.08, color: 0x6f9bd1 },
+      { id: 'tail', type: 'capsule', a: [0.42, 0.55, 0.0], b: [0.62, 0.68, 0.0], r: 0.11, kCap: 0.08, color: 0x7fa8dd },
+      // Second carve in the gallery, first CARVE + DILATE combo: the dent
+      // survives dilation because the whole surface offsets together.
+      { id: 'mouth', type: 'sphere', a: [-0.78, 0.64, 0.0], r: 0.1, kCap: 0.07, negative: true, color: 0x2d2438 },
+      { id: 'sclera_l', type: 'sphere', a: [-0.72, 0.8, 0.11], r: 0.075, color: 0xf2f4f6, paint: true },
+      { id: 'sclera_r', type: 'sphere', a: [-0.72, 0.8, -0.11], r: 0.075, color: 0xf2f4f6, paint: true },
+      { id: 'pupil_l', type: 'sphere', a: [-0.73, 0.804, 0.1155], r: 0.032, color: 0x1e2430, paint: true },
+      { id: 'pupil_r', type: 'sphere', a: [-0.73, 0.804, -0.1155], r: 0.032, color: 0x1e2430, paint: true },
+    ],
+  },
+  {
+    id: 'snail',
+    name: 'Shelby',
+    // NO anim and NO step — a snail SLIDES (roam moves the rig; the gait
+    // null path and the animPrimIndex -1 no-op get their first live users,
+    // by design not omission). The antennae carry eye decals, so per the
+    // authoring rules they must never be the animated prim.
+    prims: [
+      { id: 'body', type: 'capsule', a: [-0.55, 0.18, 0.0], b: [0.45, 0.18, 0.0], r: 0.18, color: 0xd9c47a },
+      { id: 'head', type: 'sphere', a: [-0.62, 0.35, 0.0], r: 0.16, color: 0xdfcc85 },
+      // First user of ABSOLUTE k (Pass 2): the shell-body join blends at
+      // 0.06, PERIOD — crank the slider to 0.6 and the shell stays a
+      // crisp, distinct shell while everything else melts (authored
+      // intent holding against ambient control, visible in one look).
+      { id: 'shell', type: 'sphere', a: [0.1, 0.52, 0.0], r: 0.34, k: 0.06, color: 0x9a6fb8 },
+      { id: 'antenna_l', type: 'capsule', a: [-0.66, 0.44, 0.06], b: [-0.8, 0.7, 0.1], r: 0.06, kCap: 0.04, color: 0xcbb56e },
+      { id: 'antenna_r', type: 'capsule', a: [-0.66, 0.44, -0.06], b: [-0.8, 0.7, -0.1], r: 0.06, kCap: 0.04, color: 0xcbb56e },
+      // Dot eyes ON the stalk tips (single dark decals, not sclera+pupil
+      // layering: the pupil-fits-in-sclera math assumes a SPHERICAL host,
+      // and these ride capsules — the id prefix 'eye_' keeps them out of
+      // the layered-decal probe on purpose).
+      { id: 'eye_l', type: 'sphere', a: [-0.815, 0.725, 0.11], r: 0.045, color: 0x2a2430, paint: true },
+      { id: 'eye_r', type: 'sphere', a: [-0.815, 0.725, -0.11], r: 0.045, color: 0x2a2430, paint: true },
+    ],
+  },
 ];

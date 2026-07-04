@@ -204,6 +204,34 @@ for (const creature of CREATURES) {
     assert(gazeSep + aP <= aS, `${tag} ${pupil.id} disc fits inside sclera disc (${(gazeSep + aP).toFixed(3)} <= ${aS.toFixed(3)})`);
   }
 
+  // carve prims (negatives): dent-don't-pierce, clear of every decal,
+  // bowl lined by donor vertices — GENERALIZED: any future carve on any
+  // creature flows through these with no extra wiring.
+  for (const neg of prims.filter((p) => p.negative)) {
+    let host = null;
+    let hostSd = Infinity;
+    for (const s of solids) {
+      const sd = sdPrim(neg.a, s);
+      if (sd < hostSd) { hostSd = sd; host = s; }
+    }
+    assert(hostSd < neg.r, `${tag} ${neg.id} reaches into its host '${host?.id}' (sd ${hostSd.toFixed(4)} < r ${neg.r})`);
+    assert(neg.r - hostSd < host.r, `${tag} ${neg.id} is a dent, not a pierce (penetration ${(neg.r - hostSd).toFixed(4)} < host r ${host.r})`);
+    // A carve's influence reaches ~kCap beyond its surface; decals must
+    // sit clear of it or the bowl eats the eyes.
+    for (const paint of prims.filter((p) => p.paint)) {
+      const sdP = sdPrim(paint.a, neg);
+      assert(sdP > (neg.kCap ?? 0), `${tag} ${neg.id} stays clear of ${paint.id} (sd ${sdP.toFixed(3)} > reach ${(neg.kCap ?? 0).toFixed(3)})`);
+    }
+    // Donor density: the bowl is lined by HOST vertices snapping inward
+    // (detached-legs lesson, sphere edition — floor MEASURED, hopper 14).
+    let donors = 0;
+    const gpos = geo.getAttribute('position');
+    for (let i = 0; i < gpos.count; i++) {
+      if (sdPrim([gpos.getX(i), gpos.getY(i), gpos.getZ(i)], neg) < 0) donors++;
+    }
+    assert(donors >= 11, `${tag} ${neg.id}'s bowl has donor vertices (${donors} >= 11)`);
+  }
+
   // material: padding + honest flags
   const mat = createBlendMaterial(prims, creature.inflate);
   assert(mat.uniforms.uInflate.value === (creature.inflate ?? 0), `${tag} uInflate mirrors the registry (absent = 0)`);
@@ -270,7 +298,9 @@ for (const creature of CREATURES) {
 const critter = CREATURES.find((c) => c.id === 'critter');
 const hopper = CREATURES.find((c) => c.id === 'hopper');
 const longneck = CREATURES.find((c) => c.id === 'longneck');
-assert(critter && hopper && longneck, 'gallery holds critter, hopper, longneck');
+const pudge = CREATURES.find((c) => c.id === 'pudge');
+const snail = CREATURES.find((c) => c.id === 'snail');
+assert(critter && hopper && longneck && pudge && snail, 'gallery holds critter, hopper, longneck, pudge, snail');
 function paintSd(creature, paintId, hostId) {
   const paint = creature.prims.find((p) => p.id === paintId);
   const host = creature.prims.find((p) => p.id === hostId);
@@ -279,6 +309,10 @@ function paintSd(creature, paintId, hostId) {
 assert(Math.abs(paintSd(critter, 'sclera_l', 'head') - -0.0631) < 1e-3, 'critter sclera_l sd vs head = -0.0631 (hand-computed)');
 assert(Math.abs(paintSd(hopper, 'sclera_l', 'body') - -0.0229) < 1e-3, 'hopper sclera_l sd vs body = -0.0229 (hand-computed)');
 assert(Math.abs(paintSd(longneck, 'sclera_l', 'head') - -0.0381) < 1e-3, 'longneck sclera_l sd vs head = -0.0381 (hand-computed)');
+assert(Math.abs(paintSd(pudge, 'sclera_l', 'head') - -0.0181) < 1e-3, 'pudge sclera_l sd vs head = -0.0181 (hand-computed)');
+assert(Math.abs(paintSd(snail, 'eye_l', 'antenna_l') - -0.0292) < 1e-3, 'snail eye_l sd vs antenna_l = -0.0292 (hand-computed, capsule end-cap host)');
+assert(snail.prims.find((p) => p.id === 'shell').k === 0.06, 'snail shell carries the FIRST authored absolute k (0.06 — holds against the slider)');
+assert(pudge.inflate === 0.04 && pudge.prims.some((p) => p.negative), 'pudge is the first carve + dilate combo (inflate 0.04 + mouth)');
 assert(Math.abs(sdPrim(critter.prims.find((p) => p.id === 'tail').a, critter.prims.find((p) => p.id === 'body')) - -0.27) < 1e-9, 'critter tail root buried d = -0.27 exactly (hand-computed)');
 
 // Decals ride the inflated skin (the k=0.6 vanishing-eyes defect):
@@ -762,6 +796,8 @@ const INFL_CEILING = {
   critter: { 0.25: 0.083, 0.6: 0.26 },
   hopper: { 0.25: 0.117, 0.6: 0.255 },
   longneck: { 0.25: 0.114, 0.6: 0.317 },
+  pudge: { 0.25: 0.122, 0.6: 0.21 }, // includes the 0.04 dilate (rawMin at the contour rides it)
+  snail: { 0.25: 0.082, 0.6: 0.17 }, // k=0.6 measured 0.1496 ~ k/4 EXACTLY: the shell's absolute k caps compounding
 };
 // Carved creatures: MEASURED bounds (+0.02 margin) for the generalized
 // invariants. hardBand = how far the smooth contour may sit inside the
@@ -774,6 +810,15 @@ const CARVE_BOUNDS = {
   hopper: {
     0.25: { hardBand: 0.048, carveFloor: 0.127 },
     0.6: { hardBand: 0.03, carveFloor: 0.127 },
+  },
+  pudge: {
+    // MEASURED: min hard is POSITIVE (+0.0228 / +0.0281) — the 0.04 dilate
+    // lifts the whole smooth contour OUTSIDE the hard-CSG surface (which
+    // excludes dilate), so the band never even engages; carveFloor from
+    // measured min inflation -0.0479 = penetration 0.088 - inflate 0.04
+    // (theory confirmed to the third decimal).
+    0.25: { hardBand: 0.02, carveFloor: 0.068 },
+    0.6: { hardBand: 0.02, carveFloor: 0.068 },
   },
 };
 
@@ -852,16 +897,15 @@ for (const creature of CREATURES) {
   assert(measured[K_MAX] > measured[BLEND_K], `${tag} inflation grows with k (${measured[K_MAX].toFixed(4)} > ${measured[BLEND_K].toFixed(4)}) — the decal-defect mechanism, measured live`);
 }
 
-// --- carve regression anchors (hopper's mouth: the demo carve) ---
+// --- carve regression anchors (hopper's mouth: the first carve) ---
+// The generalizable checks (dent/pierce, decal clearance, donor density)
+// moved into the per-creature Section 1 loop; what stays here is the
+// hand-computed skin-removal anchor for the first-ever carve, and the
+// design probe that the demo mouth exists at all.
 {
   const mouth = hopper.prims.find((p) => p.id === 'mouth');
   const bodyH = hopper.prims.find((p) => p.id === 'body');
   assert(mouth && mouth.negative === true && typeof mouth.color === 'number', 'hopper has the demo mouth carve (negative, colored)');
-  // Dent, don't pierce: the carve must reach INTO the body (sd < r) but
-  // never through it (penetration < body diameter along the carve).
-  const sdMouth = sdPrim(mouth.a, bodyH);
-  assert(sdMouth < mouth.r, `mouth reaches into the body (sd ${sdMouth.toFixed(4)} < r ${mouth.r})`);
-  assert(mouth.r - sdMouth < bodyH.r, `mouth is a dent, not a pierce (penetration ${(mouth.r - sdMouth).toFixed(4)} < body r ${bodyH.r})`);
   // The carve actually removes skin: the body-surface point on the ray
   // toward the mouth center sat ON the skin pre-carve; post-carve the
   // field there must be clearly positive (that skin is gone).
@@ -869,22 +913,6 @@ for (const creature of CREATURES) {
   const dl = Math.hypot(...dir);
   const P = [bodyH.a[0] + (dir[0] / dl) * bodyH.r, bodyH.a[1] + (dir[1] / dl) * bodyH.r, bodyH.a[2] + (dir[2] / dl) * bodyH.r];
   assert(mapField(P, hopper.prims, BLEND_K) > 0.02, `the mouth removed skin (field at the old skin point = ${mapField(P, hopper.prims, BLEND_K).toFixed(4)} > 0.02)`);
-  // Donor density: the bowl is lined by HOST vertices snapping inward —
-  // the detached-legs lesson says fillets (and bowls) need vertices.
-  const hgeo = buildShellGeometry(hopper.prims);
-  const hpos = hgeo.getAttribute('position');
-  let donors = 0;
-  for (let i = 0; i < hpos.count; i++) {
-    if (sdPrim([hpos.getX(i), hpos.getY(i), hpos.getZ(i)], mouth) < 0) donors++;
-  }
-  assert(donors >= 11, `the bowl has donor vertices to line it (${donors} host verts start inside the carve, need >= 11, MEASURED 14 at 32x24 spheres)`);
-  // The mouth must not eat the eyes: the carve's reach (r + its kCap)
-  // stays clear of both sclera decal centers.
-  for (const side of ['sclera_l', 'sclera_r']) {
-    const s = hopper.prims.find((p) => p.id === side);
-    const dEye = Math.hypot(s.a[0] - mouth.a[0], s.a[1] - mouth.a[1], s.a[2] - mouth.a[2]);
-    assert(dEye > mouth.r + (mouth.kCap ?? 0), `mouth stays clear of ${side} (${dEye.toFixed(3)} > reach ${(mouth.r + (mouth.kCap ?? 0)).toFixed(3)})`);
-  }
 }
 
 console.log(failures === 0 ? '\nALL PASS' : `\n${failures} FAILURE(S)`);
