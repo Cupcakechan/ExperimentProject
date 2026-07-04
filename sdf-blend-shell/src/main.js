@@ -22,11 +22,14 @@ import {
   CAMERA_FOV,
   CAMERA_START,
   ORBIT_TARGET,
-  BOB_AMPLITUDE,
-  BOB_SPEED,
+  STRIDE_LIFT,
+  LEAN_GAIN,
+  LEAN_MAX,
+  LEAN_SMOOTH,
   GROUND_RADIUS,
   GROUND_COLOR,
 } from './config.js';
+import { stridePulse, leanTarget, approach, headingDelta } from './feel.js';
 
 const renderer = new THREE.WebGLRenderer({ antialias: true });
 renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2)); // cap DPR: retina 3x is wasted work here
@@ -79,10 +82,18 @@ const actors = CREATURES.map((creature, i) => {
     hop: createHop(creature),
     gait: creature.hop ? null : createGait(creature), // null for creatures without feet
     animIdx: animPrimIndex(creature),
-    bobPhase: i * 2.1, // decorrelated bobbing — synchronized bouncing is uncanny
+    bobPhase: i * 2.1, // breath decorrelator (synchronized breathing is uncanny)
     pos: { x: 0, z: 0 }, // last frame's position, read by the OTHERS' separation
+    lift: 0, // last frame's stride lift — rig and gait must AGREE on y, so both use it
+    lean: 0, // smoothed bank angle
+    prevHeading: null, // for wrap-safe omega
   };
 });
+
+// Banking rolls about the creature's FORWARD axis, which is LOCAL X
+// (creatures face -X). Order YXZ applies heading first, then the roll
+// happens in the already-yawed frame.
+for (const a of actors) a.rig.rotation.order = 'YXZ';
 
 const ui = createControls({
   initialK: BLEND_K,
@@ -146,28 +157,38 @@ renderer.setAnimationLoop(() => {
     const pose = actor.roam.update(dt, others);
     actor.pos.x = pose.x;
     actor.pos.z = pose.z;
+    // Banking (all actors — a hopper leaning mid-air is free charm):
+    // wrap-safe omega from the logical heading, clamped and smoothed so
+    // steering spikes and wander jitter never wobble the body.
+    if (actor.prevHeading === null) actor.prevHeading = pose.heading;
+    const omega = dt > 0 ? headingDelta(actor.prevHeading, pose.heading) / dt : 0;
+    actor.prevHeading = pose.heading;
+    actor.lean = approach(actor.lean, leanTarget(omega, LEAN_GAIN, LEAN_MAX), LEAN_SMOOTH, dt);
+
     if (actor.hop) {
       // The hop returns the DISPLAYED pose (bursting between points on
-      // the logical path) and owns the feet; no bob — the arc IS the
-      // vertical life for this creature.
+      // the logical path) and owns the feet; no stride lift — the arc IS
+      // the vertical life for this creature.
       const disp = actor.hop.update(dt, pose, [actor.material, actor.ink]);
       actor.rig.position.set(disp.x, disp.y, disp.z);
       actor.rig.rotation.y = disp.heading;
     } else {
-      // The free-sine bob is the WALKERS' between-steps life (queued to
-      // become step-synced in A3). A creature with no gait is glued to
-      // the ground by design (Shelby slides) — bobbing lifted her whole
-      // body 0.035 while the breath swells only 0.012, drowning it 3:1.
-      const bobY = actor.gait ? BOB_AMPLITUDE * Math.sin(tAnim * BOB_SPEED + actor.bobPhase) : 0;
-      actor.rig.position.set(pose.x, bobY, pose.z);
-      actor.rig.rotation.y = pose.heading;
-
-      // Feet plant in the world and step reactively; the gait writes the leg
-      // prims through the SDF-lockstep path on both draws.
+      // STEP-SYNCED bob (A3.1): the body lifts with the ACTUAL stride,
+      // so an idle walker is genuinely still and the breath shows.
+      // The rig and the gait must agree on y (planted anchors are pinned
+      // against the rig), and the lift depends on the swing state gait
+      // produces — so BOTH use last frame's lift: a fully consistent
+      // pair, one invisible frame of lag (the separation-lag pattern).
       if (actor.gait) {
-        actor.gait.update(dt, { x: pose.x, y: bobY, z: pose.z, heading: pose.heading }, [actor.material, actor.ink]);
+        actor.gait.update(dt, { x: pose.x, y: actor.lift, z: pose.z, heading: pose.heading }, [actor.material, actor.ink]);
       }
+      actor.rig.position.set(pose.x, actor.lift, pose.z);
+      actor.rig.rotation.y = pose.heading;
+      actor.lift = actor.gait ? STRIDE_LIFT * stridePulse(actor.gait.feet) : 0;
     }
+    // SIGN CHECK (flagged): positive omega should bank INTO the turn —
+    // if the field reads as leaning OUT of turns, flip this one sign.
+    actor.rig.rotation.x = actor.lean;
   }
 
   controls.update(); // required every frame when damping is on

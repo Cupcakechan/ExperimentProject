@@ -82,9 +82,17 @@ export const ROAM_TURN_B = 0.9;
 export const ROAM_TURN_W2 = 1.9;
 export const ROAM_TURN_PHASE = 2.0;
 
-// Idle bob: subtle whole-body rise/fall while roaming (no stepping yet).
-export const BOB_AMPLITUDE = 0.035;
-export const BOB_SPEED = 4.0;
+// Idle bob is RETIRED (A3.1): walkers' body lift is now STEP-SYNCED —
+// it derives from the actual stride, so resting creatures are genuinely
+// still and the breath shows. (actor.bobPhase survives as the breath
+// decorrelator.)
+// STRIDE_LIFT: body rise at mid-swing. LEAN_*: banking into turns —
+// roll = clamp(GAIN * heading angular velocity, +-LEAN_MAX), smoothed
+// at LEAN_SMOOTH (1/s) so wander jitter never wobbles the body.
+export const STRIDE_LIFT = 0.03;
+export const LEAN_GAIN = 0.35;
+export const LEAN_MAX = 0.18; // rad (~10 degrees)
+export const LEAN_SMOOTH = 6.0;
 
 // The field (all creatures share one stage). Separation steering: each
 // roamer turns away from any neighbor inside SEP_RADIUS, gain scaled by

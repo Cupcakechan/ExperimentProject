@@ -395,9 +395,20 @@ assert(buryT(0.1) === 0, 'exposed verts never tuck (buryT = 0)');
 
 // Roam: deterministic, seeded, bounded, separated, resettable.
 const { createRoam, idleSpeedMul } = await import('./src/roam.js');
-const { ROAM_SPEED, ROAM_HARD_RADIUS, ROAM_SEP_RADIUS, GROUND_RADIUS, BOB_AMPLITUDE, BOB_SPEED } = await import('./src/config.js');
+const { ROAM_SPEED, ROAM_HARD_RADIUS, ROAM_SEP_RADIUS, GROUND_RADIUS, STRIDE_LIFT, LEAN_MAX } = await import('./src/config.js');
 const { IDLE_PERIOD, IDLE_DURATION, IDLE_RAMP } = await import('./src/config.js');
-assert(ROAM_SPEED > 0 && BOB_AMPLITUDE > 0 && BOB_SPEED > 0, 'roam/bob constants are live');
+const { stridePulse, leanTarget, approach, headingDelta } = await import('./src/feel.js');
+assert(ROAM_SPEED > 0 && STRIDE_LIFT > 0 && LEAN_MAX > 0, 'roam/feel constants are live');
+// Gait feel (A3.1), hand-computed:
+assert(stridePulse([{ swingT: -1 }, { swingT: -1 }]) === 0, 'stridePulse: all planted = 0 (an idle walker is genuinely still)');
+assert(stridePulse([{ swingT: 0.5 }, { swingT: -1 }]) === 1, 'stridePulse: mid-swing = 1 exactly (hand-computed)');
+assert(Math.abs(stridePulse([{ swingT: 0.25 }, { swingT: 0.5 }]) - 1) < 1e-12, 'stridePulse: max over swinging feet');
+assert(leanTarget(0.2, 0.35, 0.18) === 0.2 * 0.35, 'leanTarget: proportional below the clamp (hand-computed)');
+assert(leanTarget(9, 0.35, 0.18) === 0.18 && leanTarget(-9, 0.35, 0.18) === -0.18, 'leanTarget: clamped both ways (steering spikes cannot flip the body)');
+assert(approach(0.7, 1, 6, 0) === 0.7, 'approach: dt=0 is an exact identity (pause-safe)');
+assert(Math.abs(approach(0, 1, 6, Math.LN2 / 6) - 0.5) < 1e-12, 'approach: half-life = ln2/rate exactly (hand-computed)');
+assert(Math.abs(headingDelta(3.1, -3.1) - (2 * Math.PI - 6.2)) < 1e-12, 'headingDelta: shortest way across the PI wrap (hand-computed)');
+assert(Math.abs(headingDelta(0.5, 0.7) - 0.2) < 1e-12 && headingDelta(0.5, 0.7) > 0, 'headingDelta: plain small turns pass through');
 assert(GROUND_RADIUS > ROAM_HARD_RADIUS, `the ground outreaches the roamers (${GROUND_RADIUS} > ${ROAM_HARD_RADIUS}) — nobody walks off the world`);
 
 // Idle envelope, hand-computed: exactly 1 outside the window, exactly 0
