@@ -243,3 +243,24 @@
   pass" beats "tune the feature until the pass survives"; (2) build
   instruments that sample what the GPU samples before trusting a clean
   analytic result.
+
+## 2026-07-03 — carve edge blurred ONLY on the dilated creature
+- What broke / what happened: after the ink fix, pudge's mouth edge was
+  soft while hopper's was crisp — Daniel's report "hopper is perfect"
+  was the diagnostic gift: exactly ONE field difference exists between
+  those mouths (pudge's inflate 0.04).
+- Root cause: carve color coverage thresholded RAW distance-to-carve,
+  but the DILATED skin crosses the raw carve boundary at a grazing angle
+  (the rim rounds outward by the dilate) — the 0.02 fringe smeared wide.
+  Two co-dilated surfaces cross at the raw pair's dihedral.
+- Plug shipped: the coverage threshold shifts by the CONSTANT dilate
+  (smoothstep(uInflate, uInflate + edge, d)) — pudge crisp, hopper
+  unchanged (inflate 0 degrades to the old formula, suite-anchored).
+  The earlier-measured trap avoided: compensating with MEASURED local
+  inflation balloons near joins; constant offsets compensate with
+  constants. Bonus: a future animated inflate (breathing) reads the
+  same uniform, so the mouth stays compensated for free.
+- Route: skill reference candidate — every threshold taken against raw
+  geometry must shift with AUTHORED surface offsets; match the
+  compensation's nature to the offset's nature (constant <-> constant,
+  measured <-> measured).

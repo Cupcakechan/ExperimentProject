@@ -165,7 +165,14 @@ vec3 blendColor(vec3 p) {
   for (int i = 0; i < MAX_PRIMS; i++) {
     if (i < uCount && uNeg[i] > 1.5) {
       float d = sdCapsule(p, uA[i], uB[i], uR[i]);
-      float cov = 1.0 - smoothstep(0.0, uPaintEdge, d);
+      // The threshold shifts by the DILATE: the dilated skin crosses the
+      // RAW carve boundary at a grazing angle (blurred rim on inflated
+      // creatures — hopper crisp, pudge soft, the diagnostic pair), but
+      // two co-dilated surfaces cross at the raw pair's dihedral. The
+      // CONSTANT uInflate compensates exactly (unlike measured local
+      // inflation, which balloons near joins); a future animated inflate
+      // (breathing) reads this same uniform and stays compensated free.
+      float cov = 1.0 - smoothstep(uInflate, uInflate + uPaintEdge, d);
       c = mix(c, uColors[i], cov);
     }
   }

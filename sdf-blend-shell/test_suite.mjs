@@ -690,6 +690,18 @@ assert(shadowShare(0.04, 0.05) > 0.4, `OLD model: mouth held ${(shadowShare(0.04
 assert(coverage(0.05, 0) === 0, 'NEW model: composite coverage 0.05 away is EXACTLY zero (the fix)');
 assert(coverage(-0.04, 0) === 1, 'NEW model: on the bowl wall (inside the carve volume) coverage saturates');
 assert(Math.abs(coverage(PAINT_EDGE / 2, 0) - 0.5) < 1e-12, 'NEW model: coverage at the half-edge = 0.5 exactly (hand-computed smoothstep midpoint)');
+// Dilate-compensated carve edge (the pudge-blur fix, hand-computed): the
+// threshold shifts by the CONSTANT dilate, so the coverage boundary lands
+// on the DILATED carve (where the dilated skin actually crosses) with the
+// raw pair's crisp dihedral. covCarve mirrors the shader exactly.
+function covCarve(d, inflate) {
+  return 1 - smoothstep(inflate, inflate + PAINT_EDGE, d);
+}
+assert(covCarve(0.04, 0.04) === 1, 'carve edge under dilate 0.04: the dilated boundary (d = inflate) is fully covered');
+assert(covCarve(0.04 + PAINT_EDGE, 0.04) === 0, 'carve edge under dilate: exactly zero one edge-width past the dilated boundary');
+assert(Math.abs(covCarve(0.04 + PAINT_EDGE / 2, 0.04) - 0.5) < 1e-12, 'carve edge under dilate: half-edge midpoint = 0.5 exactly');
+assert(covCarve(0.03, 0) === 0 && coverage(0.03, 0) === 0, 'inflate 0 degrades to the uncompensated edge (hopper unchanged)');
+assert(dMat.vertexShader.includes('smoothstep(uInflate, uInflate + uPaintEdge'), 'GLSL carve coverage threshold shifts by the dilate');
 
 // --- the slice sampler ---
 // Grid-sample one axis-aligned plane, bisect every sign-change edge to the
