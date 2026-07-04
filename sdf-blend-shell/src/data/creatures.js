@@ -82,6 +82,16 @@
 //     (nearest-solid hosting finds it). Name irises 'iris_*', not
 //     'pupil_*' — the pupil/sclera layering probe assumes a spherical
 //     paint pair, and here the sclera IS a solid.
+//   - DECALS BELONG ON LOW-INFLATION SITES (head fronts, tips): decal
+//     coverage compensates MEASURED local inflation uncapped, which is
+//     correct at sane sites but balloons at high-inflation joins
+//     (measured on the abandoned decal-mouth design — probe-killed).
+//   - MOUTH K-VALIDITY (measured boundary): a carve reads correctly
+//     while union inflation at its site stays UNDER the carve's radius;
+//     beyond (pudge near slider k=0.6) the carve geometry is swallowed
+//     by the fattened skin and no color model can paint it — that's
+//     melt territory, the slider extreme's whole point. Author mouths
+//     with r comfortably above the site's expected inflation.
 // ============================================================
 
 export const CREATURES = [
@@ -249,13 +259,15 @@ export const CREATURES = [
       { id: 'antenna_r', type: 'capsule', a: [-0.24, 0.6, -0.07], b: [-0.38, 0.86, -0.12], r: 0.05, kCap: 0.035, color: 0x6b53b8 },
       { id: 'tip_l', type: 'sphere', a: [-0.38, 0.86, 0.12], r: 0.055, kCap: 0.04, color: 0x3bbd8e },
       { id: 'tip_r', type: 'sphere', a: [-0.38, 0.86, -0.12], r: 0.055, kCap: 0.04, color: 0x3bbd8e },
-      // The reference's PROTRUDING eyes: solid white balls rooted 0.022
-      // inside the body, poking 0.048 out; irises are decals hosted ON
+      // The reference's PROTRUDING eyes: solid white balls rooted just
+      // inside the body, poking 0.071 out (r 0.085: OUTLINE_WIDTH is a FIXED
+      // 0.035, so small balls wear a proportionally huge ink ring — bigger
+      // + pure white reads as eyes, not borders); irises are decals ON
       // the eyeballs (their nearest solid).
-      { id: 'eyeball_l', type: 'sphere', a: [-0.48, 0.54, 0.1], r: 0.07, kCap: 0.03, color: 0xf2f4f6 },
-      { id: 'eyeball_r', type: 'sphere', a: [-0.48, 0.54, -0.1], r: 0.07, kCap: 0.03, color: 0xf2f4f6 },
-      { id: 'iris_l', type: 'sphere', a: [-0.545, 0.545, 0.112], r: 0.03, color: 0x201a30, paint: true },
-      { id: 'iris_r', type: 'sphere', a: [-0.545, 0.545, -0.112], r: 0.03, color: 0x201a30, paint: true },
+      { id: 'eyeball_l', type: 'sphere', a: [-0.49, 0.54, 0.1], r: 0.085, kCap: 0.03, color: 0xffffff },
+      { id: 'eyeball_r', type: 'sphere', a: [-0.49, 0.54, -0.1], r: 0.085, kCap: 0.03, color: 0xffffff },
+      { id: 'iris_l', type: 'sphere', a: [-0.565, 0.545, 0.115], r: 0.03, color: 0x201a30, paint: true },
+      { id: 'iris_r', type: 'sphere', a: [-0.565, 0.545, -0.115], r: 0.03, color: 0x201a30, paint: true },
     ],
   },
 ];

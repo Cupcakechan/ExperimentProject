@@ -1143,5 +1143,103 @@ for (const creature of CREATURES) {
   assert(mapField(P, hopper.prims, BLEND_K) > 0.02, `the mouth removed skin (field at the old skin point = ${mapField(P, hopper.prims, BLEND_K).toFixed(4)} > 0.02)`);
 }
 
+// ---- Fold detector (A4, permanent): zero folded INK triangles at carves ----
+// The black-domes defect class, closed structurally: a folded triangle
+// shows its back face, which is exactly what BackSide ink draws. Since
+// the ink IGNORES carves (uniform-level), its field has no crease to
+// fold into — this probe re-runs the FULL ink vertex pipeline (burial
+// ramp, snap iterations, tuck) on the real INDEXED geometry around every
+// carve and asserts the invariant holds. Both instrument lessons are
+// baked in: walk geo.index (raw position triplets are NOT triangles),
+// and mirror every pipeline stage (omitting burial+tuck once counted
+// known leg-root folds as signal).
+{
+  const { SNAP_ITERS } = await import('./src/config.js');
+  const H = 0.02; // tetrahedron normal probe step, mirrors FIELD_GLSL
+  const TET = [[1, -1, -1], [-1, -1, 1], [-1, 1, -1], [1, 1, 1]];
+  for (const creature of CREATURES) {
+    const negs = creature.prims.filter((p) => p.negative);
+    if (negs.length === 0) continue;
+    const tag = `[${creature.id}]`;
+    const inflate = creature.inflate ?? 0;
+    const inkPrims = creature.prims.filter((p) => !p.negative); // the ink's field: carves hidden
+    const F = (p) => mapField(p, inkPrims, BLEND_K, inflate);
+    const N = (p) => {
+      const n = [0, 0, 0];
+      for (const s of TET) {
+        const f = F([p[0] + s[0] * H, p[1] + s[1] * H, p[2] + s[2] * H]);
+        n[0] += s[0] * f;
+        n[1] += s[1] * f;
+        n[2] += s[2] * f;
+      }
+      const l = Math.hypot(n[0], n[1], n[2]);
+      return [n[0] / l, n[1] / l, n[2] / l];
+    };
+    const geo = buildShellGeometry(creature.prims);
+    const pos = geo.getAttribute('position');
+    const aPrim = geo.getAttribute('aPrim');
+    const idx = geo.index;
+    const tuck = OUTLINE_WIDTH + TUCK_DEPTH; // the INK's tuck
+    const cache = new Map();
+    const pipeline = (vi) => {
+      if (cache.has(vi)) return cache.get(vi);
+      const p = [pos.getX(vi), pos.getY(vi), pos.getZ(vi)];
+      const own = aPrim.array[vi];
+      let dOther = 1e9;
+      creature.prims.forEach((pr, i) => {
+        if (i !== own && !pr.paint && !pr.negative) dOther = Math.min(dOther, sdPrim(p, pr));
+      });
+      const buryT = 1 - smoothstep(-BURY_EPS - BURY_BAND - inflate, -BURY_EPS - inflate, dOther - inflate);
+      let q = [p[0], p[1], p[2]];
+      for (let i = 0; i < SNAP_ITERS; i++) {
+        const d = F(q) - OUTLINE_WIDTH;
+        const n = N(q);
+        q = [q[0] - n[0] * d, q[1] - n[1] * d, q[2] - n[2] * d];
+      }
+      const n = N(q);
+      const out = { p: [q[0] - n[0] * tuck * buryT, q[1] - n[1] * tuck * buryT, q[2] - n[2] * tuck * buryT], dOther };
+      cache.set(vi, out);
+      return out;
+    };
+    let openFolds = 0; // folds in OPEN SKIN — the actual defect class
+    let creaseFolds = 0; // folds inside junction creases — measured benign
+    let scanned = 0;
+    for (const neg of negs) {
+      const nb = neg.b ?? neg.a;
+      const lo = [Math.min(neg.a[0], nb[0]) - neg.r - 0.15, Math.min(neg.a[1], nb[1]) - neg.r - 0.15, Math.min(neg.a[2], nb[2]) - neg.r - 0.15];
+      const hi = [Math.max(neg.a[0], nb[0]) + neg.r + 0.15, Math.max(neg.a[1], nb[1]) + neg.r + 0.15, Math.max(neg.a[2], nb[2]) + neg.r + 0.15];
+      for (let t = 0; t < idx.count; t += 3) {
+        const vi = [idx.getX(t), idx.getX(t + 1), idx.getX(t + 2)];
+        const inBox = vi.every((i) => {
+          const x = pos.getX(i);
+          const y = pos.getY(i);
+          const z = pos.getZ(i);
+          return x >= lo[0] && x <= hi[0] && y >= lo[1] && y <= hi[1] && z >= lo[2] && z <= hi[2];
+        });
+        if (!inBox) continue;
+        scanned++;
+        const s = vi.map(pipeline);
+        const e1 = [s[1].p[0] - s[0].p[0], s[1].p[1] - s[0].p[1], s[1].p[2] - s[0].p[2]];
+        const e2 = [s[2].p[0] - s[0].p[0], s[2].p[1] - s[0].p[1], s[2].p[2] - s[0].p[2]];
+        const gn = [e1[1] * e2[2] - e1[2] * e2[1], e1[2] * e2[0] - e1[0] * e2[2], e1[0] * e2[1] - e1[1] * e2[0]];
+        const c = [(s[0].p[0] + s[1].p[0] + s[2].p[0]) / 3, (s[0].p[1] + s[1].p[1] + s[2].p[1]) / 3, (s[0].p[2] + s[1].p[2] + s[2].p[2]) / 3];
+        const fn = N(c);
+        if (gn[0] * fn[0] + gn[1] * fn[1] + gn[2] * fn[2] < 0) {
+          // Classify by crease proximity: the offset surface pinches at
+          // ANY concave junction (pre-existing, nestled in the join's
+          // darkest crevice — visually crease shadow, MEASURED benign:
+          // hopper's body-foot junction carries 7). The DEFECT class is
+          // a fold in OPEN skin — where the original run-offs lived and
+          // where a back face is nakedly visible.
+          if (s.every((v) => v.dOther > 0.08)) openFolds++;
+          else creaseFolds++;
+        }
+      }
+    }
+    console.log(`  INFO  ${tag} fold scan: ${scanned} ink triangles at carve regions — ${openFolds} OPEN-SKIN folds, ${creaseFolds} junction-crease folds (benign class)`);
+    assert(openFolds === 0, `${tag} ZERO folded ink triangles in OPEN SKIN at carves (${openFolds} — the black-domes/run-off class stays closed)`);
+  }
+}
+
 console.log(failures === 0 ? '\nALL PASS' : `\n${failures} FAILURE(S)`);
 process.exit(failures === 0 ? 0 : 1);

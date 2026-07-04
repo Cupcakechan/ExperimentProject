@@ -172,6 +172,11 @@ vec3 blendColor(vec3 p) {
       // CONSTANT uInflate compensates exactly (unlike measured local
       // inflation, which balloons near joins); a future animated inflate
       // (breathing) reads this same uniform and stays compensated free.
+      // NOTE (A4, measured): at extreme slider k the union deficit at a
+      // mouth site can exceed the carve's radius — the carve GEOMETRY is
+      // swallowed, and no color model (constant, measured, or capped)
+      // can paint dissolved geometry. Mouth k-validity is an authoring
+      // boundary, not a shader problem.
       float cov = 1.0 - smoothstep(uInflate, uInflate + uPaintEdge, d);
       c = mix(c, uColors[i], cov);
     }

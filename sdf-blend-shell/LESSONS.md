@@ -264,3 +264,36 @@
   geometry must shift with AUTHORED surface offsets; match the
   compensation's nature to the offset's nature (constant <-> constant,
   measured <-> measured).
+
+## 2026-07-04 — A4 Stage 1: two debts resolved by measurement, not surgery
+- The plan was a shader rework (capped-measured carve compensation).
+  THREE probe measurements killed or reframed it before any browser run:
+  1. clamp(dSkin, inflate, inflate + 0.08) FLOODS pudge's lower face at
+     k=0.6 — threshold 0.12 against a 0.26 head; a distance-threshold
+     color model conflates "along the surface" with "off the surface",
+     and no scalar cap fixes that on small heads.
+  2. Even the SHIPPED constant compensation smears at k=0.6 — because
+     the union's inflation deficit at the mouth site (~0.15+) EXCEEDS
+     the carve's radius (0.068): the carve GEOMETRY is swallowed under
+     the fattened skin. No color model — constant, measured, or capped —
+     can paint a feature whose geometry has dissolved. High-k mouth
+     fade closes as a MEASURED DESIGN BOUNDARY: a mouth reads correctly
+     while union inflation at its site stays under the carve's radius;
+     beyond that is melt territory, which is what the slider's extreme
+     demonstrates anyway.
+  3. The "decal-compensation rework" debt DISSOLVED on inspection: the
+     balloon was measured on the never-shipped decal-mouth design; the
+     shipped decal system (eyes, tips) has no defect. Its constraint —
+     decals belong on low-inflation sites — became an authoring rule.
+- The fold detector, generalized into a PERMANENT suite probe,
+  discovered 7 pre-existing folds at hopper's body-foot junction — a
+  TRUE-BUT-BENIGN class (the offset surface pinches at ANY concave
+  junction; the slivers nest invisibly in the join's own dark crevice).
+  The probe now classifies: OPEN-SKIN folds (the run-off defect class,
+  asserted ZERO) vs junction-crease folds (measured, reported as INFO).
+- Route: skill reference candidates — (1) measure a feature's GEOMETRY
+  validity range, not just its color model; (2) an instrument
+  generalized beyond its original scan region will find true-but-benign
+  signal: define the defect class precisely and CLASSIFY before
+  asserting zero; (3) three more fixes died in the terminal, zero in
+  the browser.
