@@ -21,6 +21,12 @@
 //               thinnest prim radius and mind the stage bounds: the
 //               whole silhouette grows by this amount, including
 //               downward past y=0 (hidden by the ground disc).
+//   negative (per prim, optional) — CARVE prim (smooth difference):
+//               subtracted from the union of ALL solids, so its registry
+//               position never changes the result. No mesh, no burial,
+//               never a foot. Optional color = the bowl's interior tint
+//               (mouth darkness); colorless = the host's color lines
+//               the dent.
 //   anim        optional single-prim wave:
 //               { primId, axis, amplitude (rad), speed (rad/s) }
 //               The prim's endpoint b rotates about its endpoint a.
@@ -46,6 +52,13 @@
 //   - Thin parts near big masses melt unless capped: give any prim
 //     with r < ~0.18 that joins a bigger mass a kCap of roughly its
 //     own r * 0.7 — below that the cap starts to read as a hard seam.
+//   - Carves: DENT, don't pierce — keep the carve shallower than its
+//     host (a tunnel is topology the host mesh cannot express; verts
+//     would fold). Give carves a kCap ~0.7*r like thin parts, or high
+//     k erases the feature. Keep the carve's surface footprint
+//     comfortably wider than the host's inter-vertex spacing or the
+//     bowl looks starved (levers: sphere segments in buildShell,
+//     CAPSULE_RINGS_PER_UNIT for capsule hosts).
 // ============================================================
 
 export const CREATURES = [
@@ -81,6 +94,12 @@ export const CREATURES = [
       { id: 'foot_r', type: 'capsule', a: [-0.05, 0.16, -0.18], b: [-0.38, 0.12, -0.22], r: 0.15, color: 0x9b4f96 },
       { id: 'ear_l', type: 'capsule', a: [-0.05, 1.0, 0.15], b: [-0.12, 1.38, 0.22], r: 0.16, color: 0xe09ade },
       { id: 'ear_r', type: 'capsule', a: [-0.05, 1.0, -0.15], b: [-0.12, 1.38, -0.22], r: 0.16, color: 0xe09ade },
+      // The demo CARVE: a dark mouth dented into the face. Center sits
+      // 0.053 OUTSIDE the body surface with r 0.16 -> a 0.107-deep,
+      // ~0.30-wide bowl (dent, not pierce); kCap 0.11 (~0.7*r) keeps it
+      // from being erased at high slider k; the color tints the bowl and
+      // fades at the rim. Delete this one line to remove the mouth.
+      { id: 'mouth', type: 'sphere', a: [-0.54, 0.5, 0.0], r: 0.16, kCap: 0.11, negative: true, color: 0x2b1626 },
       { id: 'sclera_l', type: 'sphere', a: [-0.42, 0.78, 0.16], r: 0.12, color: 0xf2f4f6, paint: true },
       { id: 'sclera_r', type: 'sphere', a: [-0.42, 0.78, -0.16], r: 0.12, color: 0xf2f4f6, paint: true },
       { id: 'pupil_l', type: 'sphere', a: [-0.423, 0.781, 0.161], r: 0.055, color: 0x241a28, paint: true },

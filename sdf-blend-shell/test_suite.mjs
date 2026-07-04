@@ -113,7 +113,7 @@ assert(new Set(CREATURES.map((c) => c.id)).size === CREATURES.length, 'creature 
 for (const creature of CREATURES) {
   const tag = `[${creature.id}]`;
   const prims = creature.prims;
-  const solids = prims.filter((p) => !p.paint);
+  const solids = prims.filter((p) => !p.paint && !p.negative); // meshed, unioned prims (carves are neither)
 
   // registry shape
   for (const prim of prims) {
@@ -125,7 +125,9 @@ for (const creature of CREATURES) {
       (prim.color === undefined || typeof prim.color === 'number') &&
       (prim.paint === undefined || typeof prim.paint === 'boolean') &&
       (prim.kCap === undefined || (typeof prim.kCap === 'number' && prim.kCap > 0)) &&
-      (prim.k === undefined || (typeof prim.k === 'number' && prim.k > 0)); // smin divides by k
+      (prim.k === undefined || (typeof prim.k === 'number' && prim.k > 0)) && // smin divides by k
+      (prim.negative === undefined || typeof prim.negative === 'boolean') &&
+      !(prim.paint && prim.negative); // a decal has no surface to carve with
     assert(ok, `${tag} ${prim.id}: well-formed prim`);
   }
   assert(prims.length <= MAX_PRIMS, `${tag} fits shader capacity (${prims.length} <= ${MAX_PRIMS})`);
@@ -212,6 +214,8 @@ for (const creature of CREATURES) {
   assert(prims.every((p, i) => mat.uniforms.uKCap.value[i] === (p.kCap != null ? p.kCap : 1e3)), `${tag} uKCap mirrors the registry (uncapped = sentinel 1e3)`);
   assert(mat.uniforms.uKPrim.value.length === MAX_PRIMS, `${tag} uKPrim padded to MAX_PRIMS`);
   assert(prims.every((p, i) => mat.uniforms.uKPrim.value[i] === (p.k != null ? p.k : -1.0)), `${tag} uKPrim mirrors the registry (unauthored = sentinel -1, follows the slider)`);
+  assert(mat.uniforms.uNeg.value.length === MAX_PRIMS, `${tag} uNeg padded to MAX_PRIMS`);
+  assert(prims.every((p, i) => mat.uniforms.uNeg.value[i] === (p.negative ? (p.color != null ? 2.0 : 1.0) : 0.0)), `${tag} uNeg mirrors the registry (0 solid / 1 carve / 2 colored carve)`);
   assert(mat.uniforms.uSnapOffset.value === 0.0, `${tag} skin material snaps to the zero surface`);
   const IDENTITY = new THREE.Matrix4();
   assert(mat.uniforms.uPrimMat.value.length === MAX_PRIMS, `${tag} uPrimMat padded to MAX_PRIMS`);
@@ -403,7 +407,7 @@ for (const creature of CREATURES) {
   // partition the feet exactly (every foot in exactly one group).
   for (const id of feetIds) {
     const prim = creature.prims.find((p) => p.id === id);
-    assert(prim && Array.isArray(prim.b) && !prim.paint, `${tag} foot '${id}' is a solid capsule with a b end`);
+    assert(prim && Array.isArray(prim.b) && !prim.paint && !prim.negative, `${tag} foot '${id}' is a solid capsule with a b end`);
   }
   const covered = groups.flat().sort((a, b) => a - b);
   assert(covered.length === feetIds.length && covered.every((v, i) => v === i), `${tag} groups partition the feet exactly`);
@@ -479,27 +483,53 @@ const FIELD_RES = 96; // grid nodes per slice axis (~0.03 world units/cell)
 const FIELD_PAD = 0.35; // bbox padding: contour bulge never exceeds this
 const BISECT_ITERS = 30; // zero-crossing precision ~ cell / 2^30
 
-// Mirror of the shader's mapSDF: sequential smin in REGISTRY ORDER, per-prim
-// kCap clamp, paint prims skipped — semantics must match character-for-
-// character or every measurement below audits the wrong field.
+// Mirror of the shader's mapSDF: TWO PHASES (union all positive solids,
+// then subtract all negatives from the finished union — carve registry
+// position never matters), sequential folds in REGISTRY ORDER within each
+// phase, per-prim k resolution (authored k beats slider; kCap ceilings
+// either), paint skipped — semantics must match character-for-character
+// or every measurement below audits the wrong field.
+function sdiff(d1, d2, k) {
+  // fogleman dn.py verbatim: TWO sign flips vs smin — (d2 + d1) inside h,
+  // correction ADDED (carving pushes the wall outward-of-the-cut).
+  const h = Math.min(Math.max(0.5 - (0.5 * (d2 + d1)) / k, 0), 1);
+  return d1 + (-d2 - d1) * h + k * h * (1 - h);
+}
+function primKJs(prim, k) {
+  const base = prim.k != null ? prim.k : k;
+  return Math.min(base, prim.kCap != null ? prim.kCap : 1e3);
+}
 function mapField(p, prims, k, inflate = 0) {
   let d = 1e9;
   for (const prim of prims) {
-    if (prim.paint) continue;
-    // Same resolution order as the shader: authored absolute k beats the
-    // slider; kCap ceilings either.
-    const base = prim.k != null ? prim.k : k;
-    d = smin(d, sdPrim(p, prim), Math.min(base, prim.kCap != null ? prim.kCap : 1e3));
+    if (prim.paint || prim.negative) continue;
+    d = smin(d, sdPrim(p, prim), primKJs(prim, k));
+  }
+  for (const prim of prims) {
+    if (!prim.negative) continue;
+    d = sdiff(d, sdPrim(p, prim), primKJs(prim, k));
   }
   return d - inflate; // whole-creature dilate (Pass 3); 0 = the raw field
 }
 function rawMinSolid(p, prims) {
   let m = Infinity;
   for (const s of prims) {
-    if (s.paint) continue;
+    if (s.paint || s.negative) continue; // POSITIVE union only (inflation is measured above it)
     m = Math.min(m, sdPrim(p, s));
   }
   return m;
+}
+// The EXACT hard-CSG field: max(min over positives, max over -negatives).
+// With no negatives this IS rawMinSolid, so one banded invariant covers
+// carved and uncarved creatures alike: the smooth contour must stay
+// within a measured band of the hard surface.
+function hardCSG(p, prims) {
+  let d = rawMinSolid(p, prims);
+  for (const n of prims) {
+    if (!n.negative) continue;
+    d = Math.max(d, -sdPrim(p, n));
+  }
+  return d;
 }
 
 // --- mirror parity, hand-computed on a synthetic pair (exact theory) ---
@@ -551,6 +581,33 @@ assert(dMat.uniforms.uInflate.value === 0.05 && dInk.uniforms.uInflate.value ===
 assert(createBlendMaterial(PAIR).uniforms.uInflate.value === 0, 'inflate defaults to 0 (?? guard — a creature without the field is unchanged)');
 assert(dMat.vertexShader.includes('return d - uInflate'), 'GLSL mapSDF subtracts the dilate');
 assert(dMat.vertexShader.includes('dOther - uInflate'), 'GLSL burial boundary shifts with the dilated skin (the raw-band tuck gap)');
+// Smooth difference (Pass 4), hand-computed — the sign flips are exactly
+// where a silent bug would live, so every regime gets an exact anchor:
+//   double boundary (d1=d2=0): h=0.5 -> +k/4 (pushed OUT — union's mirror)
+//   deep inside the cut:  degrades to -d2 exactly (hard difference)
+//   cut far away:         degrades to d1 exactly (no-op)
+//   mid-band (d2 = -d1):  hard wall -0.3 pushed out by k/4 -> -0.2375
+assert(sdiff(0, 0, 0.25) === 0.0625, 'sdiff at the double boundary = +k/4 = 0.0625 (hand-computed)');
+assert(sdiff(0, -5, 0.25) === 5, 'sdiff deep inside the cut degrades to -d2 (hard difference)');
+assert(sdiff(0, 5, 0.25) === 0, 'sdiff with the cut far away degrades to d1 (no-op)');
+assert(Math.abs(sdiff(-0.3, 0.3, 0.25) - -0.2375) < 1e-12, 'sdiff mid-band: hard -0.3 pushed out to -0.2375 (hand-computed)');
+// A carve actually carves: solid r=0.3 at origin, cut r=0.15 centered ON
+// its surface, near-hard k=0.05. At the cut's center the raw solid says 0
+// (on the surface) but the field says +0.15 = -d2 exactly: that skin is
+// GONE and the point sits 0.15 outside the carved wall (hand-computed).
+const CUT = [{ id: 's', type: 'sphere', a: [0, 0, 0], r: 0.3 }, { id: 'c', type: 'sphere', a: [0.3, 0, 0], r: 0.15, negative: true }];
+assert(Math.abs(mapField([0.3, 0, 0], CUT, 0.05) - 0.15) < 1e-12, 'the field flips POSITIVE inside a carve (skin removed, hand-computed)');
+// Two-phase fold: a carve's registry POSITION never changes the field —
+// probe several points with the negative first vs last.
+const CUT_R = [CUT[1], CUT[0]];
+const ORDER_PTS = [[0.3, 0, 0], [0, 0.3, 0], [0.25, 0.1, 0.05], [-0.3, 0, 0], [0.4, 0.1, 0]];
+assert(ORDER_PTS.every((p) => mapField(p, CUT, 0.25) === mapField(p, CUT_R, 0.25)), 'carve registry position never changes the field (two-phase fold)');
+// GLSL carries the same structure (the mirror is only trustworthy if the
+// shader actually does this).
+assert(dMat.vertexShader.includes('float sdiff('), 'GLSL has the smooth-difference operator');
+assert(dMat.vertexShader.includes('uPaint[i] < 0.5 && uNeg[i] < 0.5'), 'GLSL phase 1 unions positives only');
+assert(dMat.vertexShader.includes('uNeg[i] > 1.5'), 'GLSL blendColor admits COLORED carves only (colorless bowls keep the host color)');
+assert(dMat.vertexShader.includes('i != own && uPaint[i] < 0.5 && uNeg[i] < 0.5'), 'GLSL burial ignores carves (the host must line its own bowl)');
 
 // --- the slice sampler ---
 // Grid-sample one axis-aligned plane, bisect every sign-change edge to the
@@ -559,7 +616,7 @@ function solidBBox(prims, pad) {
   const lo = [Infinity, Infinity, Infinity];
   const hi = [-Infinity, -Infinity, -Infinity];
   for (const s of prims) {
-    if (s.paint) continue;
+    if (s.paint || s.negative) continue; // carves never extend the surface
     for (const e of [s.a, s.b ?? s.a]) {
       for (let i = 0; i < 3; i++) {
         lo[i] = Math.min(lo[i], e[i] - s.r - pad);
@@ -604,6 +661,7 @@ function sampleSlice(prims, k, axis, value, inflate = 0) {
   let maxInfl = -Infinity;
   let minInfl = Infinity;
   let maxAt = null;
+  let minHard = Infinity;
   for (let j = 0; j < FIELD_RES; j++) {
     for (let i = 0; i < FIELD_RES; i++) {
       const idx = j * FIELD_RES + i;
@@ -620,10 +678,11 @@ function sampleSlice(prims, k, axis, value, inflate = 0) {
           maxAt = p;
         }
         minInfl = Math.min(minInfl, infl);
+        minHard = Math.min(minHard, hardCSG(p, prims));
       }
     }
   }
-  return { axis, value, f, count, maxInfl, minInfl, maxAt };
+  return { axis, value, f, count, maxInfl, minInfl, maxAt, minHard };
 }
 
 // ASCII field dump — printed ONLY when a slice's probe fails, so the field
@@ -690,11 +749,24 @@ const INFL_CEILING = {
   hopper: { 0.25: 0.117, 0.6: 0.255 },
   longneck: { 0.25: 0.114, 0.6: 0.317 },
 };
+// Carved creatures: MEASURED bounds (+0.02 margin) for the generalized
+// invariants. hardBand = how far the smooth contour may sit inside the
+// exact hard-CSG surface (MEASURED -0.0273 at k=0.25, -0.0099 at k=0.6 —
+// the band SHRINKS at high k because the plumper union pushes the smooth
+// wall outward relative to hard); carveFloor = deepest legitimate dip
+// below the POSITIVE union (MEASURED -0.1066 at both k — the mouth's
+// hand-computed penetration depth 0.1068, confirmed by the field).
+const CARVE_BOUNDS = {
+  hopper: {
+    0.25: { hardBand: 0.048, carveFloor: 0.127 },
+    0.6: { hardBand: 0.03, carveFloor: 0.127 },
+  },
+};
 
 for (const creature of CREATURES) {
   const tag = `[${creature.id}]`;
   const prims = creature.prims;
-  const solids = prims.filter((p) => !p.paint);
+  const solids = prims.filter((p) => !p.paint && !p.negative); // positives only: carve cores are NOT negative-field
   const slices = creatureSlices(prims);
 
   // Sign sanity at BLEND_K: the field is negative at every solid's core
@@ -709,10 +781,12 @@ for (const creature of CREATURES) {
   assert(mapField(corner, prims, K_MAX, creature.inflate ?? 0) > 0, `${tag} field is positive at the padded bbox corner (even at k=${K_MAX})`);
 
   const measured = {};
+  const negs = prims.filter((p) => p.negative);
   for (const k of [BLEND_K, K_MAX]) {
     let count = 0;
     let maxInfl = -Infinity;
     let minInfl = Infinity;
+    let minHard = Infinity;
     let maxSlice = null;
     let minSlice = null;
     for (const sl of slices) {
@@ -726,18 +800,31 @@ for (const creature of CREATURES) {
         minInfl = r.minInfl;
         minSlice = r;
       }
+      minHard = Math.min(minHard, r.minHard);
     }
     measured[k] = maxInfl;
     const at = maxSlice.maxAt;
-    console.log(`  INFO  ${tag} k=${k}: ${slices.length} slices, ${count} crossings, max inflation ${maxInfl.toFixed(4)} at (${at[0].toFixed(2)}, ${at[1].toFixed(2)}, ${at[2].toFixed(2)}) [pairwise k/4 = ${(k / 4).toFixed(4)}]`);
+    console.log(`  INFO  ${tag} k=${k}: ${slices.length} slices, ${count} crossings, max inflation ${maxInfl.toFixed(4)} at (${at[0].toFixed(2)}, ${at[1].toFixed(2)}, ${at[2].toFixed(2)})${negs.length ? `, min infl ${minInfl.toFixed(4)}, min hard ${minHard.toFixed(4)}` : ''} [pairwise k/4 = ${(k / 4).toFixed(4)}]`);
 
     if (!(count > 500)) dumpSlice(maxSlice ?? sampleSlice(prims, k, 2, 0));
     assert(count > 500, `${tag} k=${k}: the slices see the creature (${count} contour crossings > 500)`);
-    // smin <= min means the skin can only sit ON or ABOVE every raw
-    // surface — a contour point below one would mean the mirror and the
-    // shader disagree about what smin is.
-    if (!(minInfl > -1e-6)) dumpSlice(minSlice);
-    assert(minInfl > -1e-6, `${tag} k=${k}: contour never dips below a raw surface (min inflation ${minInfl.toExponential(2)})`);
+    if (negs.length === 0) {
+      // smin <= min means the skin can only sit ON or ABOVE every raw
+      // surface — a contour point below one would mean the mirror and the
+      // shader disagree about what smin is. EXACT, but only without carves.
+      if (!(minInfl > -1e-6)) dumpSlice(minSlice);
+      assert(minInfl > -1e-6, `${tag} k=${k}: contour never dips below a raw surface (min inflation ${minInfl.toExponential(2)})`);
+    } else {
+      // Carved: bowl walls legitimately sit BELOW the positive union (by
+      // up to the carve depth + smooth rounding), so the invariant
+      // generalizes: the contour must stay within a MEASURED band of the
+      // exact hard-CSG surface, and must never dip deeper below the
+      // positive union than the carve floor. Both from CARVE_BOUNDS.
+      const bounds = CARVE_BOUNDS[creature.id]?.[k];
+      if (!(bounds && minHard > -bounds.hardBand)) dumpSlice(minSlice);
+      assert(bounds && minHard > -bounds.hardBand, `${tag} k=${k}: contour within the hard-CSG band (min hard ${minHard.toFixed(4)} > -${bounds?.hardBand} MEASURED)`);
+      assert(minInfl > -bounds.carveFloor, `${tag} k=${k}: carve depth bounded (min inflation ${minInfl.toFixed(4)} > -${bounds.carveFloor} MEASURED)`);
+    }
     // Regression ceiling: MEASURED max + margin. If a pass legitimately
     // moves this, re-measure from the INFO line and update the table.
     const ceiling = INFL_CEILING[creature.id]?.[k] ?? k / 4 + 0.02;
@@ -749,6 +836,41 @@ for (const creature of CREATURES) {
   // measured 0 everywhere would pass every ceiling).
   assert(measured[BLEND_K] > 0.005, `${tag} inflation is live at k=${BLEND_K} (${measured[BLEND_K].toFixed(4)} > 0.005 — the sampler is not inert)`);
   assert(measured[K_MAX] > measured[BLEND_K], `${tag} inflation grows with k (${measured[K_MAX].toFixed(4)} > ${measured[BLEND_K].toFixed(4)}) — the decal-defect mechanism, measured live`);
+}
+
+// --- carve regression anchors (hopper's mouth: the demo carve) ---
+{
+  const mouth = hopper.prims.find((p) => p.id === 'mouth');
+  const bodyH = hopper.prims.find((p) => p.id === 'body');
+  assert(mouth && mouth.negative === true && typeof mouth.color === 'number', 'hopper has the demo mouth carve (negative, colored)');
+  // Dent, don't pierce: the carve must reach INTO the body (sd < r) but
+  // never through it (penetration < body diameter along the carve).
+  const sdMouth = sdPrim(mouth.a, bodyH);
+  assert(sdMouth < mouth.r, `mouth reaches into the body (sd ${sdMouth.toFixed(4)} < r ${mouth.r})`);
+  assert(mouth.r - sdMouth < bodyH.r, `mouth is a dent, not a pierce (penetration ${(mouth.r - sdMouth).toFixed(4)} < body r ${bodyH.r})`);
+  // The carve actually removes skin: the body-surface point on the ray
+  // toward the mouth center sat ON the skin pre-carve; post-carve the
+  // field there must be clearly positive (that skin is gone).
+  const dir = [mouth.a[0] - bodyH.a[0], mouth.a[1] - bodyH.a[1], mouth.a[2] - bodyH.a[2]];
+  const dl = Math.hypot(...dir);
+  const P = [bodyH.a[0] + (dir[0] / dl) * bodyH.r, bodyH.a[1] + (dir[1] / dl) * bodyH.r, bodyH.a[2] + (dir[2] / dl) * bodyH.r];
+  assert(mapField(P, hopper.prims, BLEND_K) > 0.02, `the mouth removed skin (field at the old skin point = ${mapField(P, hopper.prims, BLEND_K).toFixed(4)} > 0.02)`);
+  // Donor density: the bowl is lined by HOST vertices snapping inward —
+  // the detached-legs lesson says fillets (and bowls) need vertices.
+  const hgeo = buildShellGeometry(hopper.prims);
+  const hpos = hgeo.getAttribute('position');
+  let donors = 0;
+  for (let i = 0; i < hpos.count; i++) {
+    if (sdPrim([hpos.getX(i), hpos.getY(i), hpos.getZ(i)], mouth) < 0) donors++;
+  }
+  assert(donors >= 11, `the bowl has donor vertices to line it (${donors} host verts start inside the carve, need >= 11, MEASURED 14 at 32x24 spheres)`);
+  // The mouth must not eat the eyes: the carve's reach (r + its kCap)
+  // stays clear of both sclera decal centers.
+  for (const side of ['sclera_l', 'sclera_r']) {
+    const s = hopper.prims.find((p) => p.id === side);
+    const dEye = Math.hypot(s.a[0] - mouth.a[0], s.a[1] - mouth.a[1], s.a[2] - mouth.a[2]);
+    assert(dEye > mouth.r + (mouth.kCap ?? 0), `mouth stays clear of ${side} (${dEye.toFixed(3)} > reach ${(mouth.r + (mouth.kCap ?? 0)).toFixed(3)})`);
+  }
 }
 
 console.log(failures === 0 ? '\nALL PASS' : `\n${failures} FAILURE(S)`);

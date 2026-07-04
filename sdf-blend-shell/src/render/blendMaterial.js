@@ -44,6 +44,7 @@ uniform float uPaint[MAX_PRIMS]; // 1.0 = color-only prim: no surface, no mesh
 uniform float uKCap[MAX_PRIMS]; // per-prim blend-radius ceiling (thin-part trick)
 uniform float uKPrim[MAX_PRIMS]; // ABSOLUTE per-prim blend radius; <= 0.0 = unset (follow the slider)
 uniform float uInflate; // whole-creature dilate (plumpness): the skin sits this far OUTSIDE the raw field; 0 = none
+uniform float uNeg[MAX_PRIMS]; // 0 = solid; 1 = CARVE (host color lines the bowl); 2 = carve with authored interior color
 uniform float uPaintEdge; // decal edge softness, world units
 uniform int uCount;
 uniform float uK;
@@ -67,22 +68,44 @@ float smin(float a, float b, float k) {
   return mix(b, a, h) - k * h * (1.0 - h);
 }
 
-// The combined field of the whole creature.
+// Polynomial smooth DIFFERENCE (carving) — fogleman dn.py verbatim, see
+// REFERENCE_FOGLEMAN.md. Note the TWO sign flips vs smin: (d2 + d1)
+// inside h, and the correction term is ADDED — carving pushes the wall
+// outward-of-the-cut, the mirror of union's inward deficit.
+float sdiff(float d1, float d2, float k) {
+  float h = clamp(0.5 - 0.5 * (d2 + d1) / k, 0.0, 1.0);
+  return mix(d1, -d2, h) + k * h * (1.0 - h);
+}
+
+// Blend-radius resolution, in authoring-priority order:
+//   1. uKPrim (absolute, authored): this prim blends THIS wide, period —
+//      the slider does not move it (authored beats ambient).
+//   2. uK (the slider): the global mood for unauthored prims.
+//   3. uKCap: a CEILING over either — the thin-part trick; thin parts AND
+//      small carves keep their shape no matter what 1 or 2 say.
+float primK(int i) {
+  float base = uKPrim[i] > 0.0 ? uKPrim[i] : uK;
+  return min(base, uKCap[i]);
+}
+
+// The combined field of the whole creature — TWO PHASES:
+//   1. smooth-union every positive solid;
+//   2. smooth-subtract every negative from the FINISHED union.
+// Two phases so a carve's registry position never changes the result —
+// a mixed fold would make holes depend on authoring order in ways no
+// author could reason about (fogleman: difference(union(...), cuts)).
 // Loop bound must be the compile-time constant (GLSL ES rule);
 // the uCount check skips unused uniform slots.
 float mapSDF(vec3 p) {
   float d = 1e9;
   for (int i = 0; i < MAX_PRIMS; i++) {
-    if (i < uCount && uPaint[i] < 0.5) { // paint prims have no surface
-      // Blend-radius resolution, in authoring-priority order:
-      //   1. uKPrim (absolute, authored): this prim blends THIS wide,
-      //      period — the slider does not move it (authored beats ambient).
-      //   2. uK (the slider): the global mood for unauthored prims.
-      //   3. uKCap: a CEILING over either — the thin-part trick; a thin
-      //      neck or antenna keeps its shape no matter what 1 or 2 say.
-      float base = uKPrim[i] > 0.0 ? uKPrim[i] : uK;
-      float k = min(base, uKCap[i]);
-      d = smin(d, sdCapsule(p, uA[i], uB[i], uR[i]), k);
+    if (i < uCount && uPaint[i] < 0.5 && uNeg[i] < 0.5) {
+      d = smin(d, sdCapsule(p, uA[i], uB[i], uR[i]), primK(i));
+    }
+  }
+  for (int i = 0; i < MAX_PRIMS; i++) {
+    if (i < uCount && uNeg[i] > 0.5) {
+      d = sdiff(d, sdCapsule(p, uA[i], uB[i], uR[i]), primK(i));
     }
   }
   // Dilate (the fogleman offset trick): a constant subtraction moves the
@@ -120,11 +143,22 @@ vec3 blendColor(vec3 p) {
   for (int i = 0; i < MAX_PRIMS; i++) {
     if (i < uCount && uPaint[i] < 0.5) {
       float dRaw = sdCapsule(p, uA[i], uB[i], uR[i]);
-      dSkin = min(dSkin, dRaw);
-      float d = max(dRaw, 0.0);
-      float w = 1.0 / pow(d + uColorSoft, uColorPow);
-      c += uColors[i] * w;
-      wsum += w;
+      bool solid = uNeg[i] < 0.5;
+      // dSkin is the POSITIVE union's inflation only — the decal
+      // compensation rides the skin above its solid host; letting a
+      // nearby carve shrink dSkin would corrupt eye coverage near mouths.
+      if (solid) dSkin = min(dSkin, dRaw);
+      // Colored carves (uNeg == 2) join the same proximity blend: on the
+      // bowl wall the shaded point sits ON the carve's boundary (dRaw ~ 0)
+      // so the interior color dominates there and fades at the rim —
+      // mouth-interior darkness from math we already have. Colorless
+      // carves (uNeg == 1) contribute nothing: the host color lines them.
+      if (solid || uNeg[i] > 1.5) {
+        float d = max(dRaw, 0.0);
+        float w = 1.0 / pow(d + uColorSoft, uColorPow);
+        c += uColors[i] * w;
+        wsum += w;
+      }
     }
   }
   c /= max(wsum, 1e-6);
@@ -180,7 +214,10 @@ void main() {
   // skin, and this vertex must hide beneath it instead of z-fighting it.
   float dOther = 1e9;
   for (int i = 0; i < MAX_PRIMS; i++) {
-    if (i < uCount && i != own && uPaint[i] < 0.5) { // paint prims bury nothing
+    // Paint prims bury nothing; NEGATIVE prims bury nothing either — a
+    // carve owns no mesh, so no coincident layer exists to z-fight, and
+    // the host's own vertices must stay live to line the bowl.
+    if (i < uCount && i != own && uPaint[i] < 0.5 && uNeg[i] < 0.5) {
       dOther = min(dOther, sdCapsule(p, uA[i], uB[i], uR[i]));
     }
   }
@@ -263,6 +300,7 @@ function buildUniforms(prims, snapOffset, inflate) {
   const uPaint = [];
   const uKCap = [];
   const uKPrim = [];
+  const uNeg = [];
   for (let i = 0; i < MAX_PRIMS; i++) {
     const prim = prims[i];
     uA.push(new THREE.Vector3(...(prim ? prim.a : [0, 0, 0])));
@@ -279,6 +317,10 @@ function buildUniforms(prims, snapOffset, inflate) {
     // (a legal k is always > 0 — smin divides by it), so the shader's
     // "uKPrim > 0.0" test cleanly separates authored from unauthored.
     uKPrim.push(prim && prim.k != null ? prim.k : -1.0);
+    // negative: 0 = solid; 1 = carve without a color (the host's blended
+    // color lines the bowl — the SHELL_COLOR fallback above must NOT tint
+    // it, hence the encoding); 2 = carve WITH an authored interior color.
+    uNeg.push(prim && prim.negative ? (prim.color != null ? 2.0 : 1.0) : 0.0);
   }
   return {
     uA: { value: uA },
@@ -288,6 +330,7 @@ function buildUniforms(prims, snapOffset, inflate) {
     uPaint: { value: uPaint },
     uKCap: { value: uKCap },
     uKPrim: { value: uKPrim },
+    uNeg: { value: uNeg },
     uCount: { value: Math.min(prims.length, MAX_PRIMS) },
     uK: { value: BLEND_K },
     uColorSoft: { value: COLOR_SOFT },

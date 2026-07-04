@@ -36,8 +36,13 @@ function primGeometry(prim) {
   const b = new THREE.Vector3(...(prim.b ?? prim.a));
 
   // Sphere, or a degenerate zero-length capsule — same thing.
+  // 32x24 segments (was 24x16): carve bowls are lined by the HOST'S
+  // vertices snapping inward, and the mouth-sized carve measured only 8
+  // donor verts at the old density — the detached-legs lesson (fillets
+  // and bowls need vertices) applied to spheres. Cost: ~2x verts per
+  // sphere prim, still tiny meshes.
   if (prim.type === 'sphere' || a.distanceTo(b) < 1e-6) {
-    const geo = new THREE.SphereGeometry(prim.r, 24, 16);
+    const geo = new THREE.SphereGeometry(prim.r, 32, 24);
     geo.translate(a.x, a.y, a.z);
     return geo;
   }
@@ -59,8 +64,10 @@ export function buildShellGeometry(prims) {
   const geos = prims
     .map((prim, idx) => ({ prim, idx }))
     // Paint prims tint the skin via the color field only — they have no
-    // surface of their own, so they get no mesh.
-    .filter(({ prim }) => !prim.paint)
+    // surface of their own, so they get no mesh. NEGATIVE prims (carves)
+    // get no mesh either: a hole owns no surface patches — the HOST'S
+    // vertices snap inward to line the bowl.
+    .filter(({ prim }) => !prim.paint && !prim.negative)
     .map(({ prim, idx }) => {
       const geo = primGeometry(prim);
       // aPrim: the REGISTRY index (not the filtered index — uniform arrays
