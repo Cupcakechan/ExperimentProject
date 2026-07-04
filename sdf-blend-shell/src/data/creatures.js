@@ -86,6 +86,12 @@
 //     blinked prim submerges toward the nearest solid EXCLUDING other
 //     blinked prims, so the iris automatically retargets the body
 //     behind its departing eyeball.
+//   - BALL-EYE DILATE BOUNDARY (measured): a constant dilate adds to
+//     dark and white alike, compressing small-feature contrast toward 1
+//     — dark/white = (iris+d)/(ball+d). Ball eyes are only valid where
+//     peak dilate (inflate + breath) <= ~1/3 of the eyeball r; beyond
+//     it (pudge: 0.06 peak) use FLAT sclera+pupil DECALS, which balloon
+//     together and keep the painted read. Suite-enforced.
 //   - DECALS BELONG ON LOW-INFLATION SITES (head fronts, tips): decal
 //     coverage compensates MEASURED local inflation uncapped, which is
 //     correct at sane sites but balloons at high-inflation joins
@@ -192,7 +198,7 @@ export const CREATURES = [
     inflate: 0.04,
     // Deep, slow breath — the chubby creature breathes like one.
     breath: { amplitude: 0.02, speed: 1.6 },
-    blink: { eyes: ['eyeball_l', 'eyeball_r', 'iris_l', 'iris_r'] },
+    blink: { eyes: ['sclera_l', 'sclera_r', 'pupil_l', 'pupil_r'] },
     anim: { primId: 'tail', axis: [0, 1, 0], amplitude: 0.5, speed: 3.0 },
     step: { feet: ['leg_fl', 'leg_fr', 'leg_bl', 'leg_br'], groups: [[0, 3], [1, 2]] },
     // 12 prims (the old MAX_PRIMS ceiling; capacity is 16 since Skitter).
@@ -210,13 +216,18 @@ export const CREATURES = [
       // analytically; picked from a probe sweep). Same known high-k
       // fade limit as hopper's mouth.
       { id: 'mouth', type: 'capsule', a: [-0.73, 0.63, 0.05], b: [-0.73, 0.63, -0.05], r: 0.068, kCap: 0.048, negative: true, color: 0x2d2438 },
-      // Ball eyes: rooted 0.015 inside the head, poking 0.07 raw (the
-      // dilate lifts eye and head skins equally — protrusion survives);
-      // eyeball clears the mouth carve by 0.029 raw.
-      { id: 'eyeball_l', type: 'sphere', a: [-0.723, 0.801, 0.111], r: 0.085, kCap: 0.03, color: 0xffffff },
-      { id: 'eyeball_r', type: 'sphere', a: [-0.723, 0.801, -0.111], r: 0.085, kCap: 0.03, color: 0xffffff },
-      { id: 'iris_l', type: 'sphere', a: [-0.787, 0.827, 0.146], r: 0.036, color: 0x1e2430, paint: true },
-      { id: 'iris_r', type: 'sphere', a: [-0.787, 0.827, -0.146], r: 0.036, color: 0x1e2430, paint: true },
+      // FLAT DECAL EYES, deliberately — the BALL-EYE DILATE BOUNDARY
+      // (browser-caught scary-goggles, then a probe-killed solid-iris
+      // fix): a constant dilate compresses every small-feature contrast
+      // toward 1 (dark/white = (i+d)/(w+d)); at pudge's 0.06 peak vs
+      // this eye scale NO ball-eye proportions survive, and a solid iris
+      // small enough violates the thinnest-solid rule. Flat sclera +
+      // pupil decals balloon TOGETHER and keep the painted-cute read —
+      // the proven pre-conversion authoring, restored.
+      { id: 'sclera_l', type: 'sphere', a: [-0.72, 0.8, 0.11], r: 0.075, color: 0xf2f4f6, paint: true },
+      { id: 'sclera_r', type: 'sphere', a: [-0.72, 0.8, -0.11], r: 0.075, color: 0xf2f4f6, paint: true },
+      { id: 'pupil_l', type: 'sphere', a: [-0.73, 0.804, 0.1155], r: 0.032, color: 0x1e2430, paint: true },
+      { id: 'pupil_r', type: 'sphere', a: [-0.73, 0.804, -0.1155], r: 0.032, color: 0x1e2430, paint: true },
     ],
   },
   {

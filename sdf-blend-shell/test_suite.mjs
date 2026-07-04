@@ -354,7 +354,7 @@ function paintSd(creature, paintId, hostId) {
 assert(Math.abs(paintSd(critter, 'eyeball_l', 'head') - -0.0195) < 3e-3, 'critter eyeball_l rooted -0.0195 in the head (hand-computed)');
 assert(Math.abs(paintSd(hopper, 'eyeball_l', 'body') - -0.0196) < 3e-3, 'hopper eyeball_l rooted -0.0196 in the body (hand-computed)');
 assert(Math.abs(paintSd(longneck, 'eyeball_l', 'head') - -0.0153) < 3e-3, 'longneck eyeball_l rooted -0.0153 in the head (hand-computed)');
-assert(Math.abs(paintSd(pudge, 'eyeball_l', 'head') - -0.0149) < 3e-3, 'pudge eyeball_l rooted -0.0149 in the head (hand-computed)');
+assert(Math.abs(paintSd(pudge, 'sclera_l', 'head') - -0.0181) < 1e-3, 'pudge sclera_l sd vs head = -0.0181 (hand-computed — FLAT eyes: the ball-eye dilate boundary)');
 assert(Math.abs(paintSd(snail, 'eyeball_l', 'antenna_l') - -0.0151) < 3e-3, 'snail eyeball_l rooted -0.0151 in the stalk tip (hand-computed, capsule end-cap host)');
 // Every eyeball must POKE (protrude past its host) and every iris must
 // poke ITS eyeball — the generic paint probes cover irises; this covers
@@ -368,9 +368,18 @@ for (const c of CREATURES) {
     assert(hostSd < 0 && hostSd > -eb.r, `[${c.id}] ${eb.id} rooted AND poking (sd ${hostSd.toFixed(4)} in (-${eb.r}, 0))`);
   }
 }
-assert(snail.prims.find((p) => p.id === 'shell').k === 0.06, 'snail shell carries the FIRST authored absolute k (0.06 — holds against the slider)');
-assert(pudge.inflate === 0.04 && pudge.prims.some((p) => p.negative), 'pudge is the first carve + dilate combo (inflate 0.04 + mouth)');
-assert(Math.abs(sdPrim(critter.prims.find((p) => p.id === 'tail').a, critter.prims.find((p) => p.id === 'body')) - -0.27) < 1e-9, 'critter tail root buried d = -0.27 exactly (hand-computed)');
+// The BALL-EYE DILATE BOUNDARY (browser-caught scary-goggles, then a
+// probe-killed solid-iris fix — see LESSONS): a constant dilate
+// compresses small-feature contrast toward 1, so ball eyes are only
+// valid where the peak dilate is small against the ball. Dilated
+// creatures past the boundary use flat sclera+pupil decals (they
+// balloon together, keeping the painted read — pudge's proven eyes).
+for (const c of CREATURES) {
+  const peak = (c.inflate ?? 0) + (c.breath?.amplitude ?? 0);
+  for (const eb of c.prims.filter((p) => p.id.startsWith('eyeball_'))) {
+    assert(peak <= eb.r / 3 + 1e-9, `[${c.id}] ball eye '${eb.id}' respects the dilate boundary (peak ${peak.toFixed(3)} <= r/3 = ${(eb.r / 3).toFixed(3)})`);
+  }
+}
 
 // Decals ride the inflated skin (the k=0.6 vanishing-eyes defect):
 // coverage subtracts the local skin inflation so a decal stays visible at

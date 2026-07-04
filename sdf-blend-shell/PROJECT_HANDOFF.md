@@ -1,8 +1,7 @@
 # PROJECT_HANDOFF — SDF Blend-Shell Experiment
 
-_Last updated: 2026-07-04 (A4 stage 2 CONFIRMED + pushed; STAGE 2.1 cast
-ball-eyes + blink v2 DELIVERED — awaiting browser confirmation; next: A5
-knees, then C-track)_
+_Last updated: 2026-07-04 (stage 2.1 browser-tested; pudge goggles fix +
+BALL-EYE DILATE BOUNDARY DELIVERED — awaiting confirmation; next: A5 knees)_
 
 ## What this is
 The "SDF blend-shell" character technique (capsule/sphere prims whose mesh
@@ -148,6 +147,13 @@ DONE (Skitter).
   INFL ceilings held (kCap'd eyeballs add ~nothing; pudge 0.1219 vs
   0.122); fold scans 0 open-skin (crease counts grew — the bboxes now
   contain eyeball junctions, benign class).
+- PUDGE GOGGLES FIX — the BALL-EYE DILATE BOUNDARY (browser-caught,
+  probe-killed solid-iris attempt, see LESSONS 13): a constant dilate
+  compresses small-feature contrast toward 1, so ball eyes are valid
+  only where peak dilate <= ~r/3 (suite-enforced); pudge (0.06 peak)
+  sits past it and is REVERTED to his proven flat sclera+pupil decals
+  (both balloon together — the painted read). Skitter great, blink v2
+  cast-wide confirmed. 742 probes ALL PASS.
 - Suite: 727 probes ALL PASS. Sections: 0 imports, 1 creature invariants
   + measured sims (walk, hop w/ deformation, field w/ idle) + carve rules
   (midpoint dent/pierce, SUBMERSION, decal clearance, donors), 2 field
@@ -186,9 +192,9 @@ DONE (Skitter).
   caught by the suite run, per the GI rule).
 
 ## Open items
-1. **Daniel: browser-verify stage 2.1** (whole cast wears protruding
-   ball eyes; blinks now close the WHOLE eye — ball retracts, lid is
-   skin; snail's tiny stalk-tip balls = provisional) + checkpoint.
+1. **Daniel: browser-verify pudge's restored flat eyes** (cute again,
+   not goggles; everything else unchanged) + checkpoint. Snail's tiny
+   stalk-tip balls still awaiting a verdict.
 2. A5 two-segment knees (options round next).
 3. Reference queue: floater (hover mini-pass), propeller flyer
    (continuous-spin anim + hover).

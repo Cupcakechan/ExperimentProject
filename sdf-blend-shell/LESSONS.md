@@ -297,3 +297,39 @@
   signal: define the defect class precisely and CLASSIFY before
   asserting zero; (3) three more fixes died in the terminal, zero in
   the browser.
+
+## 2026-07-04 — pudge's scary goggles: the ball-eye dilate boundary
+- What broke: the cast ball-eye conversion made pudge's eyes read as
+  huge, dark, merged goggles (browser-caught — "very scary"); Skitter,
+  identical construction, read great. The one field difference again:
+  pudge's dilate (inflate 0.04, breath peak 0.06).
+- Mechanism, three layers deep: (1) a decal iris's painted footprint
+  grows by ~the dilate (coverage compensates measured inflation, so its
+  floor IS the dilate — no decal size can author dark smaller than it);
+  (2) the dilated eyeballs merged across the bridge at breath peak;
+  (3) the first fix (SOLID iris) was PROBE-KILLED in the terminal: at
+  r 0.04 it became the thinnest solid and pudge's 0.06 peak violates
+  the A2 ballooning rule — and the ratio arithmetic closes every door:
+  a constant dilate compresses ALL small-feature contrast toward 1
+  (dark/white = (iris+d)/(ball+d) = 0.77 even solid; an authored 0.5
+  needs a sub-visible r 0.005).
+- Resolution: the BALL-EYE DILATE BOUNDARY — ball eyes are valid only
+  where peak dilate <= ~r/3 (suite-enforced across the cast); beyond
+  it, FLAT sclera+pupil decals are the correct vocabulary (both layers
+  balloon together, keeping the painted-cute read). Pudge's original
+  eyes — which survived weeks of browsing unflagged — were correct
+  authoring all along; restored verbatim, fold scan byte-identical to
+  pre-conversion (467/0/0).
+- Verification gap: no probe models VISUAL proportion on dilated skin;
+  the browser caught what the suite could not see. The boundary probe
+  is the narrow guard.
+- Also this pass: an over-broad script slice (assumed-adjacent
+  endpoints) deleted the decal-coverage block — smoothstep, coverage,
+  the historical bug-then-fix anchors — crashing the suite; caught by
+  the immediate run. Third scripted-edit strike this project: slice
+  endpoints must be VERIFIED adjacent, never assumed.
+- Route: skill reference candidates — (1) constant surface offsets
+  compress small-feature contrast (an authoring boundary, not a bug);
+  (2) design vocabularies carry VALIDITY RANGES (ball eyes: dilate;
+  mouths: k; decals: inflation sites) — encode the range, don't force
+  uniformity; (3) verify slice-edit endpoints.
