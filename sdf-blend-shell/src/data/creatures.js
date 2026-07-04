@@ -14,6 +14,13 @@
 //               the slider (which keeps driving unauthored prims). kCap
 //               still ceilings it. Use kCap for "never wider than";
 //               use k for "exactly this, always". Must be > 0 if set.
+//   inflate (per CREATURE, optional) — whole-body dilate (world units):
+//               the skin sits this far outside the raw field everywhere
+//               ("plumpness" — same skeleton, chubbier species, one
+//               number). 0/absent = none. Keep it well under the
+//               thinnest prim radius and mind the stage bounds: the
+//               whole silhouette grows by this amount, including
+//               downward past y=0 (hidden by the ground disc).
 //   anim        optional single-prim wave:
 //               { primId, axis, amplitude (rad), speed (rad/s) }
 //               The prim's endpoint b rotates about its endpoint a.

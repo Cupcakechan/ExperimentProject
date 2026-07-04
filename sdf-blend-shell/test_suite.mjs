@@ -129,6 +129,7 @@ for (const creature of CREATURES) {
     assert(ok, `${tag} ${prim.id}: well-formed prim`);
   }
   assert(prims.length <= MAX_PRIMS, `${tag} fits shader capacity (${prims.length} <= ${MAX_PRIMS})`);
+  assert(creature.inflate === undefined || (typeof creature.inflate === 'number' && creature.inflate >= 0), `${tag} inflate is absent or a non-negative number`);
   assert(new Set(prims.map((p) => p.id)).size === prims.length, `${tag} prim ids are unique`);
 
   // geometry: solids meshed, paints not, aPrim carries registry indices
@@ -202,7 +203,8 @@ for (const creature of CREATURES) {
   }
 
   // material: padding + honest flags
-  const mat = createBlendMaterial(prims);
+  const mat = createBlendMaterial(prims, creature.inflate);
+  assert(mat.uniforms.uInflate.value === (creature.inflate ?? 0), `${tag} uInflate mirrors the registry (absent = 0)`);
   assert(mat.uniforms.uA.value.length === MAX_PRIMS && mat.uniforms.uPaint.value.length === MAX_PRIMS, `${tag} uniforms padded to MAX_PRIMS`);
   assert(mat.uniforms.uCount.value === prims.length, `${tag} uCount matches`);
   assert(prims.every((p, i) => mat.uniforms.uPaint.value[i] === (p.paint ? 1.0 : 0.0)), `${tag} uPaint flags mirror the registry`);
@@ -218,7 +220,8 @@ for (const creature of CREATURES) {
   assert(mat.uniforms.uAnimPrim === undefined, `${tag} old single-slot uAnimPrim is gone`);
 
   // outline material: same field, offset snap target, back faces only
-  const ink = createOutlineMaterial(prims);
+  const ink = createOutlineMaterial(prims, creature.inflate);
+  assert(ink.uniforms.uInflate.value === mat.uniforms.uInflate.value, `${tag} skin and ink dilate by the SAME amount (or the outline detaches)`);
   assert(ink.uniforms.uSnapOffset.value === OUTLINE_WIDTH, `${tag} outline snaps to the +${OUTLINE_WIDTH} offset surface`);
   assert(ink.side === THREE.BackSide, `${tag} outline renders BACK faces only (inverted hull on the offset surface)`);
   assert(ink.uniforms.uA.value.length === MAX_PRIMS && ink.uniforms.uKCap.value.length === MAX_PRIMS, `${tag} outline uniforms padded to MAX_PRIMS`);
@@ -479,7 +482,7 @@ const BISECT_ITERS = 30; // zero-crossing precision ~ cell / 2^30
 // Mirror of the shader's mapSDF: sequential smin in REGISTRY ORDER, per-prim
 // kCap clamp, paint prims skipped — semantics must match character-for-
 // character or every measurement below audits the wrong field.
-function mapField(p, prims, k) {
+function mapField(p, prims, k, inflate = 0) {
   let d = 1e9;
   for (const prim of prims) {
     if (prim.paint) continue;
@@ -488,7 +491,7 @@ function mapField(p, prims, k) {
     const base = prim.k != null ? prim.k : k;
     d = smin(d, sdPrim(p, prim), Math.min(base, prim.kCap != null ? prim.kCap : 1e3));
   }
-  return d;
+  return d - inflate; // whole-creature dilate (Pass 3); 0 = the raw field
 }
 function rawMinSolid(p, prims) {
   let m = Infinity;
@@ -532,6 +535,22 @@ assert(Math.abs(mapField([0, 0, 0], PAIR_ABS_CAPPED, 0.25) - -0.025) < 1e-12, 'k
 const kMat = createBlendMaterial(PAIR_ABS);
 assert(kMat.vertexShader.includes('uKPrim[i] > 0.0 ? uKPrim[i] : uK'), 'GLSL resolves authored k over the slider (uKPrim override expression present)');
 assert(kMat.uniforms.uKPrim.value[0] === -1.0 && kMat.uniforms.uKPrim.value[1] === 0.4, 'material mirrors a synthetic authored k (sentinel -1 beside 0.4)');
+// Dilate (Pass 3), hand-computed: a lone r=0.3 sphere dilated by 0.05 has
+// its skin at exactly 0.35; a dilated pair midpoint deepens to -k/4 - 0.05;
+// the equidistant ridge contour moves out to where raw d = k/4 + inflate.
+const LONE = [{ id: 's', type: 'sphere', a: [0, 0, 0], r: 0.3 }];
+assert(Math.abs(mapField([0.35, 0, 0], LONE, 0.25, 0.05)) < 1e-12, 'dilated lone sphere: skin at exactly r + inflate = 0.35 (hand-computed)');
+assert(Math.abs(mapField([0, 0, 0], PAIR, 0.25, 0.05) - -0.1125) < 1e-12, 'dilated pair midpoint = -k/4 - inflate = -0.1125 (hand-computed)');
+const RIDGE_Y_DIL = Math.sqrt(0.4125 * 0.4125 - 0.09); // raw d = 0.0625 + 0.05
+assert(Math.abs(mapField([0, RIDGE_Y_DIL, 0], PAIR, 0.25, 0.05)) < 1e-12, 'dilated ridge contour is on the zero surface (hand-computed)');
+// Materials carry it on BOTH draws (outline must ride the plumped skin),
+// and its absence is guarded — existing creatures behave exactly as before.
+const dMat = createBlendMaterial(PAIR, 0.05);
+const dInk = createOutlineMaterial(PAIR, 0.05);
+assert(dMat.uniforms.uInflate.value === 0.05 && dInk.uniforms.uInflate.value === 0.05, 'skin AND ink mirror an explicit inflate (0.05)');
+assert(createBlendMaterial(PAIR).uniforms.uInflate.value === 0, 'inflate defaults to 0 (?? guard — a creature without the field is unchanged)');
+assert(dMat.vertexShader.includes('return d - uInflate'), 'GLSL mapSDF subtracts the dilate');
+assert(dMat.vertexShader.includes('dOther - uInflate'), 'GLSL burial boundary shifts with the dilated skin (the raw-band tuck gap)');
 
 // --- the slice sampler ---
 // Grid-sample one axis-aligned plane, bisect every sign-change edge to the
@@ -551,7 +570,7 @@ function solidBBox(prims, pad) {
   return { lo, hi };
 }
 
-function sampleSlice(prims, k, axis, value) {
+function sampleSlice(prims, k, axis, value, inflate = 0) {
   const box = solidBBox(prims, FIELD_PAD);
   const [u, v] = [0, 1, 2].filter((i) => i !== axis);
   const point = (uu, vv) => {
@@ -566,7 +585,7 @@ function sampleSlice(prims, k, axis, value) {
   const f = new Float64Array(FIELD_RES * FIELD_RES);
   for (let j = 0; j < FIELD_RES; j++) {
     for (let i = 0; i < FIELD_RES; i++) {
-      f[j * FIELD_RES + i] = mapField(point(box.lo[u] + i * du, box.lo[v] + j * dv), prims, k);
+      f[j * FIELD_RES + i] = mapField(point(box.lo[u] + i * du, box.lo[v] + j * dv), prims, k, inflate);
     }
   }
   // Bisect a sign-change edge to the contour. The endpoint kept is the one
@@ -576,7 +595,7 @@ function sampleSlice(prims, k, axis, value) {
     let b = pB;
     for (let it = 0; it < BISECT_ITERS; it++) {
       const m = [(a[0] + b[0]) / 2, (a[1] + b[1]) / 2, (a[2] + b[2]) / 2];
-      if (mapField(m, prims, k) < 0 === fA < 0) a = m;
+      if (mapField(m, prims, k, inflate) < 0 === fA < 0) a = m;
       else b = m;
     }
     return a;
@@ -634,6 +653,12 @@ assert(pairSlice.minInfl > -1e-6, `sampler: pair contour never dips below a raw 
 // peak by up to ~a cell (MEASURED 0.0545 at res 96) and must never exceed
 // it. The exact ridge value itself is anchored analytically above.
 assert(pairSlice.maxInfl > 0.05 && pairSlice.maxInfl <= 0.0625 + 1e-9, `sampler lands within a cell of the pair ridge (${pairSlice.maxInfl.toFixed(4)}, true peak 0.0625, MEASURED 0.0545)`);
+// Dilated sampling: on a dilated field the contour's raw-min distance is
+// smin + inflate >= inflate everywhere — the sampler must see the whole
+// contour floating at least the dilate above every raw surface.
+const dilSlice = sampleSlice(PAIR, 0.25, 2, 0, 0.05);
+assert(dilSlice.count > 100, `sampler finds the dilated pair contour (${dilSlice.count} crossings)`);
+assert(dilSlice.minInfl > 0.05 - 1e-6, `dilated contour floats at least the dilate above raw surfaces (min ${dilSlice.minInfl.toFixed(4)} >= 0.05)`);
 
 // --- per-creature measurement: y- and z-slices through every solid prim ---
 // (creatures are elongated along x, so y/z slices are the ones that cut
@@ -678,10 +703,10 @@ for (const creature of CREATURES) {
   for (const s of solids) {
     const b = s.b ?? s.a;
     const mid = [(s.a[0] + b[0]) / 2, (s.a[1] + b[1]) / 2, (s.a[2] + b[2]) / 2];
-    assert(mapField(mid, prims, BLEND_K) < 0, `${tag} field is negative inside '${s.id}'`);
+    assert(mapField(mid, prims, BLEND_K, creature.inflate ?? 0) < 0, `${tag} field is negative inside '${s.id}'`);
   }
   const corner = solidBBox(prims, FIELD_PAD).hi;
-  assert(mapField(corner, prims, K_MAX) > 0, `${tag} field is positive at the padded bbox corner (even at k=${K_MAX})`);
+  assert(mapField(corner, prims, K_MAX, creature.inflate ?? 0) > 0, `${tag} field is positive at the padded bbox corner (even at k=${K_MAX})`);
 
   const measured = {};
   for (const k of [BLEND_K, K_MAX]) {
@@ -691,7 +716,7 @@ for (const creature of CREATURES) {
     let maxSlice = null;
     let minSlice = null;
     for (const sl of slices) {
-      const r = sampleSlice(prims, k, sl.axis, sl.value);
+      const r = sampleSlice(prims, k, sl.axis, sl.value, creature.inflate ?? 0);
       count += r.count;
       if (r.maxInfl > maxInfl) {
         maxInfl = r.maxInfl;

@@ -43,6 +43,7 @@ uniform vec3 uColors[MAX_PRIMS];
 uniform float uPaint[MAX_PRIMS]; // 1.0 = color-only prim: no surface, no mesh
 uniform float uKCap[MAX_PRIMS]; // per-prim blend-radius ceiling (thin-part trick)
 uniform float uKPrim[MAX_PRIMS]; // ABSOLUTE per-prim blend radius; <= 0.0 = unset (follow the slider)
+uniform float uInflate; // whole-creature dilate (plumpness): the skin sits this far OUTSIDE the raw field; 0 = none
 uniform float uPaintEdge; // decal edge softness, world units
 uniform int uCount;
 uniform float uK;
@@ -84,7 +85,12 @@ float mapSDF(vec3 p) {
       d = smin(d, sdCapsule(p, uA[i], uB[i], uR[i]), k);
     }
   }
-  return d;
+  // Dilate (the fogleman offset trick): a constant subtraction moves the
+  // zero surface uniformly outward — plumpness as one number. Snap,
+  // normals, and the outline all consume mapSDF, so they ride the plumped
+  // skin with no further changes; decals measure REAL local inflation
+  // (raw distances), which now naturally includes the dilate.
+  return d - uInflate;
 }
 
 // SDF gradient via the 4-sample tetrahedron trick — this IS the
@@ -182,7 +188,11 @@ void main() {
   // deeper. Binary tucking made 0.055-tall triangle cliffs across the
   // boundary whose back faces flashed as black slivers in the ink pass;
   // the ramp turns cliffs into slopes that hug the surface.
-  float buryT = 1.0 - smoothstep(-uBuryEps - uBuryBand, -uBuryEps, dOther);
+  // Dilate shift: "inside another prim's SKIN" now means dOther < uInflate
+  // (the skin sits uInflate above the raw surface) — without the shift,
+  // vertices in the raw-surface..plumped-skin band would skip the tuck
+  // and the z-fighting seam the tuck exists to kill would return.
+  float buryT = 1.0 - smoothstep(-uBuryEps - uBuryBand, -uBuryEps, dOther - uInflate);
 
   // Slide onto the target surface: step along the gradient by the signed
   // distance MINUS the snap offset — offset 0 converges on the skin,
@@ -242,7 +252,7 @@ void main() {
 // Fresh uniform set per material — the skin and outline materials each own
 // their instances (anim.js writes uB/uAnimMat per material; sharing value
 // objects would couple them invisibly).
-function buildUniforms(prims, snapOffset) {
+function buildUniforms(prims, snapOffset, inflate) {
   if (prims.length > MAX_PRIMS) {
     console.warn(`Creature has ${prims.length} primitives; only the first ${MAX_PRIMS} will blend.`);
   }
@@ -298,16 +308,19 @@ function buildUniforms(prims, snapOffset) {
     uBuryBand: { value: BURY_BAND },
     uBuryEps: { value: BURY_EPS },
     uPaintEdge: { value: PAINT_EDGE },
+    // ?? guard: a creature without an inflate field must behave exactly
+    // as before this field existed (0 = the raw field, no dilate).
+    uInflate: { value: inflate ?? 0 },
     uSnapOffset: { value: snapOffset },
     uOutlineColor: { value: new THREE.Color(OUTLINE_COLOR) },
   };
 }
 
 // The skin: snaps to the zero surface, toon-shades the blended colors.
-export function createBlendMaterial(prims) {
+export function createBlendMaterial(prims, inflate) {
   return new THREE.ShaderMaterial({
     defines: { MAX_PRIMS, SNAP_ITERS },
-    uniforms: buildUniforms(prims, 0.0),
+    uniforms: buildUniforms(prims, 0.0, inflate),
     vertexShader: VERT,
     fragmentShader: FRAG,
   });
@@ -317,10 +330,10 @@ export function createBlendMaterial(prims) {
 // OUTLINE_WIDTH outside the skin, flat-colored, BACK faces only — the
 // inflated shell shows around every silhouette (outer and interior),
 // and its front faces never occlude the creature.
-export function createOutlineMaterial(prims) {
+export function createOutlineMaterial(prims, inflate) {
   return new THREE.ShaderMaterial({
     defines: { MAX_PRIMS, SNAP_ITERS },
-    uniforms: buildUniforms(prims, OUTLINE_WIDTH),
+    uniforms: buildUniforms(prims, OUTLINE_WIDTH, inflate),
     vertexShader: VERT,
     fragmentShader: FRAG_OUTLINE,
     side: THREE.BackSide,
