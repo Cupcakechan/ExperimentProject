@@ -208,6 +208,7 @@ attribute float aPrim;
 // uAnimMat/uAnimPrim slot: four legs stepping at once is four prims moving
 // independently — the prerequisite for IK.
 uniform mat4 uPrimMat[MAX_PRIMS];
+uniform float uLimb[MAX_PRIMS]; // limb group id (0 = none): same-limb prims never bury each other
 uniform float uTuck;
 uniform float uBuryEps;
 uniform float uBuryBand;
@@ -236,7 +237,14 @@ void main() {
     // Paint prims bury nothing; NEGATIVE prims bury nothing either — a
     // carve owns no mesh, so no coincident layer exists to z-fight, and
     // the host's own vertices must stay live to line the bowl.
-    if (i < uCount && i != own && uPaint[i] < 0.5 && uNeg[i] < 0.5) {
+    // SAME-LIMB prims (thigh/shin, A5) don't bury each other: they are
+    // ONE continuous surface, and their coincident fragments shade
+    // identically from identical positions (the same reasoning that
+    // makes the skin's own folds invisible). Mutual burial painted a
+    // black tuck-rim RING around every knee on the ink (measured: 841
+    // fully-tucked verts, 600+ in the transition band, per knee).
+    bool sameLimb = uLimb[own] > 0.5 && abs(uLimb[i] - uLimb[own]) < 0.5;
+    if (i < uCount && i != own && uPaint[i] < 0.5 && uNeg[i] < 0.5 && !sameLimb) {
       dOther = min(dOther, sdCapsule(p, uA[i], uB[i], uR[i]));
     }
   }
@@ -308,7 +316,20 @@ void main() {
 // Fresh uniform set per material — the skin and outline materials each own
 // their instances (anim.js writes uB/uAnimMat per material; sharing value
 // objects would couple them invisibly).
-function buildUniforms(prims, snapOffset, inflate) {
+function buildUniforms(prims, snapOffset, inflate, knees) {
+  // Limb groups from step.knees (foot id -> thigh id): each pair shares a
+  // nonzero id; everything else is 0. Derived, never authored twice.
+  const limb = new Array(MAX_PRIMS).fill(0.0);
+  if (knees) {
+    Object.entries(knees).forEach(([shinId, thighId], gi) => {
+      const si = prims.findIndex((p) => p.id === shinId);
+      const ti = prims.findIndex((p) => p.id === thighId);
+      if (si >= 0 && ti >= 0) {
+        limb[si] = gi + 1;
+        limb[ti] = gi + 1;
+      }
+    });
+  }
   if (prims.length > MAX_PRIMS) {
     console.warn(`Creature has ${prims.length} primitives; only the first ${MAX_PRIMS} will blend.`);
   }
@@ -378,6 +399,7 @@ function buildUniforms(prims, snapOffset, inflate) {
     uBuryBand: { value: BURY_BAND },
     uBuryEps: { value: BURY_EPS },
     uPaintEdge: { value: PAINT_EDGE },
+    uLimb: { value: limb },
     // ?? guard: a creature without an inflate field must behave exactly
     // as before this field existed (0 = the raw field, no dilate).
     uInflate: { value: inflate ?? 0 },
@@ -387,10 +409,10 @@ function buildUniforms(prims, snapOffset, inflate) {
 }
 
 // The skin: snaps to the zero surface, toon-shades the blended colors.
-export function createBlendMaterial(prims, inflate) {
+export function createBlendMaterial(prims, inflate, knees) {
   return new THREE.ShaderMaterial({
     defines: { MAX_PRIMS, SNAP_ITERS },
-    uniforms: buildUniforms(prims, 0.0, inflate),
+    uniforms: buildUniforms(prims, 0.0, inflate, knees),
     vertexShader: VERT,
     fragmentShader: FRAG,
   });
@@ -400,10 +422,10 @@ export function createBlendMaterial(prims, inflate) {
 // OUTLINE_WIDTH outside the skin, flat-colored, BACK faces only — the
 // inflated shell shows around every silhouette (outer and interior),
 // and its front faces never occlude the creature.
-export function createOutlineMaterial(prims, inflate) {
+export function createOutlineMaterial(prims, inflate, knees) {
   return new THREE.ShaderMaterial({
     defines: { MAX_PRIMS, SNAP_ITERS },
-    uniforms: buildUniforms(prims, OUTLINE_WIDTH, inflate),
+    uniforms: buildUniforms(prims, OUTLINE_WIDTH, inflate, knees),
     vertexShader: VERT,
     fragmentShader: FRAG_OUTLINE,
     side: THREE.BackSide,

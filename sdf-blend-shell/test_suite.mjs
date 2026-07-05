@@ -276,6 +276,21 @@ for (const creature of CREATURES) {
   assert(prims.every((p, i) => mat.uniforms.uPaint.value[i] === (p.paint ? 1.0 : 0.0)), `${tag} uPaint flags mirror the registry`);
   assert(mat.uniforms.uKCap.value.length === MAX_PRIMS, `${tag} uKCap padded to MAX_PRIMS`);
   assert(prims.every((p, i) => mat.uniforms.uKCap.value[i] === (p.kCap != null ? p.kCap : 1e3)), `${tag} uKCap mirrors the registry (uncapped = sentinel 1e3)`);
+  // A5 limb groups: thigh and shin share a nonzero uLimb id (they never
+  // bury each other — one continuous surface); everything else is 0.
+  {
+    const limbMat = createBlendMaterial(prims, creature.inflate, creature.step?.knees);
+    assert(limbMat.uniforms.uLimb.value.length === MAX_PRIMS, `${tag} uLimb padded to MAX_PRIMS`);
+    const kneesMap = creature.step?.knees ?? {};
+    for (const [shinId, thighId] of Object.entries(kneesMap)) {
+      const si = prims.findIndex((p) => p.id === shinId);
+      const ti = prims.findIndex((p) => p.id === thighId);
+      const v = limbMat.uniforms.uLimb.value;
+      assert(v[si] > 0 && v[si] === v[ti], `${tag} ${shinId}+${thighId} share limb group ${v[si]}`);
+    }
+    const kneeIdxs = new Set(Object.entries(kneesMap).flatMap(([a, b]) => [a, b]).map((id) => prims.findIndex((p) => p.id === id)));
+    assert(limbMat.uniforms.uLimb.value.every((v, i) => kneeIdxs.has(i) ? v > 0 : v === 0), `${tag} non-limb prims carry uLimb 0 (burial unchanged for them)`);
+  }
   assert(mat.uniforms.uKPrim.value.length === MAX_PRIMS, `${tag} uKPrim padded to MAX_PRIMS`);
   assert(prims.every((p, i) => mat.uniforms.uKPrim.value[i] === (p.k != null ? p.k : -1.0)), `${tag} uKPrim mirrors the registry (unauthored = sentinel -1, follows the slider)`);
   assert(mat.uniforms.uNeg.value.length === MAX_PRIMS, `${tag} uNeg padded to MAX_PRIMS`);
@@ -1320,8 +1335,22 @@ for (const creature of CREATURES) {
   const TET = [[1, -1, -1], [-1, -1, 1], [-1, 1, -1], [1, 1, 1]];
   for (const creature of CREATURES) {
     const negs = creature.prims.filter((p) => p.negative);
-    if (negs.length === 0) continue;
+    // Scan regions: every carve bbox AND (A5) every knee — the seam-ring
+    // defect lived exactly where the fold/tuck machinery met a new
+    // junction class, so kneed creatures joined the detector's beat.
+    const kneesMap = creature.step?.knees ?? {};
+    const kneeBoxes = Object.values(kneesMap).map((thighId) => {
+      const t = creature.prims.find((p) => p.id === thighId);
+      return t ? { c: t.b, r: Math.max(t.r, 0.1) + 0.1 } : null;
+    }).filter(Boolean);
+    if (negs.length === 0 && kneeBoxes.length === 0) continue;
     const tag = `[${creature.id}]`;
+    // The limb map, mirrored (same-limb prims never bury each other).
+    const limbOf = new Array(creature.prims.length).fill(0);
+    Object.entries(kneesMap).forEach(([shinId, thighId], gi) => {
+      limbOf[creature.prims.findIndex((p) => p.id === shinId)] = gi + 1;
+      limbOf[creature.prims.findIndex((p) => p.id === thighId)] = gi + 1;
+    });
     const inflate = creature.inflate ?? 0;
     const inkPrims = creature.prims.filter((p) => !p.negative); // the ink's field: carves hidden
     const F = (p) => mapField(p, inkPrims, BLEND_K, inflate);
@@ -1348,7 +1377,9 @@ for (const creature of CREATURES) {
       const own = aPrim.array[vi];
       let dOther = 1e9;
       creature.prims.forEach((pr, i) => {
-        if (i !== own && !pr.paint && !pr.negative) dOther = Math.min(dOther, sdPrim(p, pr));
+        if (i === own || pr.paint || pr.negative) return;
+        if (limbOf[own] > 0 && limbOf[i] === limbOf[own]) return; // same limb: no mutual burial
+        dOther = Math.min(dOther, sdPrim(p, pr));
       });
       const buryT = 1 - smoothstep(-BURY_EPS - BURY_BAND - inflate, -BURY_EPS - inflate, dOther - inflate);
       let q = [p[0], p[1], p[2]];
@@ -1365,10 +1396,19 @@ for (const creature of CREATURES) {
     let openFolds = 0; // folds in OPEN SKIN — the actual defect class
     let creaseFolds = 0; // folds inside junction creases — measured benign
     let scanned = 0;
-    for (const neg of negs) {
+    const regions = negs.map((neg) => {
       const nb = neg.b ?? neg.a;
-      const lo = [Math.min(neg.a[0], nb[0]) - neg.r - 0.15, Math.min(neg.a[1], nb[1]) - neg.r - 0.15, Math.min(neg.a[2], nb[2]) - neg.r - 0.15];
-      const hi = [Math.max(neg.a[0], nb[0]) + neg.r + 0.15, Math.max(neg.a[1], nb[1]) + neg.r + 0.15, Math.max(neg.a[2], nb[2]) + neg.r + 0.15];
+      return {
+        lo: [Math.min(neg.a[0], nb[0]) - neg.r - 0.15, Math.min(neg.a[1], nb[1]) - neg.r - 0.15, Math.min(neg.a[2], nb[2]) - neg.r - 0.15],
+        hi: [Math.max(neg.a[0], nb[0]) + neg.r + 0.15, Math.max(neg.a[1], nb[1]) + neg.r + 0.15, Math.max(neg.a[2], nb[2]) + neg.r + 0.15],
+      };
+    }).concat(kneeBoxes.map((kb) => ({
+      lo: [kb.c[0] - kb.r, kb.c[1] - kb.r, kb.c[2] - kb.r],
+      hi: [kb.c[0] + kb.r, kb.c[1] + kb.r, kb.c[2] + kb.r],
+    })));
+    for (const region of regions) {
+      const lo = region.lo;
+      const hi = region.hi;
       for (let t = 0; t < idx.count; t += 3) {
         const vi = [idx.getX(t), idx.getX(t + 1), idx.getX(t + 2)];
         const inBox = vi.every((i) => {

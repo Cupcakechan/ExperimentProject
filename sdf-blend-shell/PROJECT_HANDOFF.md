@@ -1,7 +1,7 @@
 # PROJECT_HANDOFF — SDF Blend-Shell Experiment
 
-_Last updated: 2026-07-04 (pudge goggles fix CONFIRMED + pushed; A5 TWO-SEGMENT
-KNEES DELIVERED — awaiting browser confirmation; next: C-track. A5 completes
+_Last updated: 2026-07-04 (pudge goggles fix CONFIRMED + pushed; A5 knees CONFIRMED
+working; KNEE-SEAM FIX (limb groups) DELIVERED — awaiting confirmation; next: C-track. A5 completes
 the A-track: the flagged SKILL-HARVEST checkpoint — Daniel's timing)_
 
 ## What this is
@@ -175,6 +175,19 @@ DONE (Skitter).
   0.14/0.38. Longneck now 16/16 prims — zero headroom. 809 probes ALL
   PASS. Taste lever if knees read melty at high slider: kCap ~0.1 on
   the shins.
+- KNEE-SEAM FIX (**awaiting browser confirm**): browser-caught black
+  seam ring at every knee; MEASURED root cause = thigh/shin MUTUAL
+  BURIAL (841 tucked verts + 600-vert transition rim per knee) atop a
+  near-pinch concave crease (radius 0.0399 vs OUTLINE_WIDTH 0.035).
+  Fix: LIMB GROUPS — uLimb[MAX_PRIMS] derived automatically from
+  step.knees; same-limb prims skip each other in the burial loop (one
+  continuous surface: coincident fragments shade identically — the
+  skin-fold-invisibility reasoning). Body-limb roots unchanged. Fold
+  detector now scans KNEE regions permanently (0 open-skin at every
+  knee; crease baselines recorded). Possible residual: a THIN crease
+  accent at deep bends (pinch margin 14%) — reads as toon knee
+  language; levers if not: OUTLINE_WIDTH down or shallower bend.
+  831 probes ALL PASS. See LESSONS 14.
 - Suite: 727 probes ALL PASS. Sections: 0 imports, 1 creature invariants
   + measured sims (walk, hop w/ deformation, field w/ idle) + carve rules
   (midpoint dent/pierce, SUBMERSION, decal clearance, donors), 2 field
@@ -213,9 +226,9 @@ DONE (Skitter).
   caught by the suite run, per the GI rule).
 
 ## Open items
-1. **Daniel: browser-verify A5** (critter + longneck legs FOLD during
-   swings instead of rubber-banding — watch a swing arc from the side;
-   knees bend toward the face) + checkpoint.
+1. **Daniel: browser-verify the knee-seam fix** (the black ring at
+   each knee is gone; a thin crease accent at deep bends may remain —
+   verdict wanted) + checkpoint.
 2. A-TRACK COMPLETE at A5 confirm — the flagged SKILL-HARVEST
    checkpoint (Daniel's timing, no pressure): dev-method session over
    LESSONS.md (13 entries) + this handoff -> the creature-generation

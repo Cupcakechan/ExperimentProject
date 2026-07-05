@@ -333,3 +333,33 @@
   (2) design vocabularies carry VALIDITY RANGES (ball eyes: dilate;
   mouths: k; decals: inflation sites) — encode the range, don't force
   uniformity; (3) verify slice-edit endpoints.
+
+## 2026-07-04 — the knee seam: same-limb burial was foreign-body treatment
+- What broke: A5 knees browser-confirmed working, but each knee wore a
+  black seam ring on the ink.
+- Measured (before hypothesizing): per knee region — 841 fully-tucked
+  verts + 600+ in the burial transition band (the ring), 152
+  crease-class folded ink triangles, and the concave crease radius
+  0.0399 vs OUTLINE_WIDTH 0.035 (near-pinch). The dominant component:
+  the thigh and shin bury each other's overlapping ends, and the
+  tuck's transition rim wraps the joint at eye level.
+- Root cause: the burial machinery treats EVERY other-prim overlap as a
+  foreign-body junction — but thigh+shin are ONE continuous limb whose
+  coincident fragments shade identically from identical positions (the
+  code's own documented reasoning for why the skin's folds are
+  invisible). Mutual burial inside a limb is pure harm.
+- Fix: LIMB GROUPS — uLimb[MAX_PRIMS], derived automatically from
+  step.knees (never authored twice); same-limb prims skip each other in
+  the burial loop. Body-limb roots keep the proven treatment.
+  Mirror-measured first: transition band halved, freed verts +450,
+  0 open-skin folds with the exemption on.
+- Extra finding: the fold detector's "benign — nests in the join's dark
+  crevice" class was a LOCATION assumption (true at body roots, false
+  at an eye-level knee). The detector now scans knee regions
+  permanently; residual thin crease-accent ink at deep bends is
+  possible (pinch margin 14%) — levers if it bothers: OUTLINE_WIDTH
+  down, or shallower authored bend.
+- Route: skill reference candidates — (1) machinery that keys on
+  "other prim" needs a SAME-BODY-PART concept the moment multi-prim
+  limbs exist; (2) "benign" classifications carry location assumptions:
+  re-verify them when the geometry class that produced them grows.

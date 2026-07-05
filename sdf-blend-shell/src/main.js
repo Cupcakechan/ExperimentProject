@@ -62,8 +62,8 @@ const actors = CREATURES.map((creature, i) => {
   const geometry = buildShellGeometry(creature.prims); // shared by both draws
   // inflate (plumpness) is creature data; skin and ink must dilate by the
   // SAME amount or the outline detaches from the plumped skin.
-  const material = createBlendMaterial(creature.prims, creature.inflate);
-  const ink = createOutlineMaterial(creature.prims, creature.inflate);
+  const material = createBlendMaterial(creature.prims, creature.inflate, creature.step?.knees);
+  const ink = createOutlineMaterial(creature.prims, creature.inflate, creature.step?.knees);
   const shell = new THREE.Mesh(geometry, material);
   const outline = new THREE.Mesh(geometry, ink);
   // Vertices move in the shader, so CPU-side bounds are wrong — never cull.
