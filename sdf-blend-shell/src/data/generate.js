@@ -133,24 +133,28 @@ function makeEyes(rng, host, peak, pal, out) {
   }
 }
 
-// Mouth: a PAINT capsule slit on the host's face front (R3 model).
-// Endpoint band held by construction: half-span capped so both slit
+// Mouth: a PAINT capsule slit on the host's face front (R3 model),
+// sized PROPORTIONAL to its host: the cast's judged read is a mouth
+// at ~18-26% of the host radius. The first litters sized in ABSOLUTE
+// units — on a slug-scale head that was up to 57% of the face, a
+// void, not a mouth (the generator's first browser lesson). Endpoint
+// band still held by construction: half-span capped so both slit
 // ends stay inside the host (-r < sd < 0).
 function makeMouth(rng, host, pal, out) {
-  const root = 0.03;
-  const rM = rng.range(0.055, 0.085);
+  const rM = round3v(host.r * rng.range(0.17, 0.26));
+  const root = Math.min(0.03, host.r * 0.12, rM * 0.6);
   const dirRaw = [-1, rng.range(-0.15, 0.05), 0];
   const dl = Math.hypot(...dirRaw);
   const u = dirRaw.map((v) => v / dl);
   const c = [host.a[0] + u[0] * (host.r - root), host.a[1] + u[1] * (host.r - root), host.a[2] + u[2] * (host.r - root)];
   const sMax = 0.8 * Math.sqrt(Math.max(2 * host.r * root - root * root, 1e-6));
-  const half = Math.min(rng.range(0.04, 0.08), sMax);
+  const half = Math.min(host.r * rng.range(0.16, 0.3), sMax);
   out.prims.push({
     id: 'mouth',
     type: 'capsule',
     a: [round3(c[0]), round3(c[1]), round3(half)],
     b: [round3(c[0]), round3(c[1]), round3(-half)],
-    r: round3v(rM),
+    r: rM,
     paint: true,
     color: pal.mouth,
   });
@@ -290,7 +294,8 @@ const ARCHETYPES = {
       out.prims.push({ id: `tip_${s}`, type: 'sphere', a: [bx, by, round3(sign * 0.12)], r: 0.055, kCap: 0.04, color: pal.tip });
     }
     makeEyes(rng, { id: 'body', a: [round3(-half), round3(yBody), 0], r: rBody }, 0, pal, out);
-    makeMouth(rng, { id: 'body', a: [round3(-half), round3(yBody), 0], r: rBody }, pal, out);
+    // NO mouth: cast parity (Skitter, the judged reference, is mouthless
+    // — Daniel's call after the first litters; do not re-add in a range pass).
     out.prims.push(...out.irisQueue);
     return { step: { feet: ['leg_fl', 'leg_fr', 'leg_ml', 'leg_mr', 'leg_bl', 'leg_br'], groups: [[0, 3, 4], [1, 2, 5]] }, blink: out.blink, prims: out.prims };
   },
@@ -322,7 +327,8 @@ const ARCHETYPES = {
       out.prims.push({ id: `eyeball_${s}`, type: 'sphere', a: c.map(round3), r: rEye, kCap: 0.03, color: 0xffffff });
       out.irisQueue.push({ id: `iris_${s}`, type: 'sphere', a: ic.map(round3), r: 0.022, color: pal.iris, paint: true });
     }
-    makeMouth(rng, head, pal, out);
+    // NO mouth: cast parity (Shelby, the judged reference, is mouthless
+    // — Daniel's call after the first litters; do not re-add in a range pass).
     out.prims.push(...out.irisQueue);
     return {
       breath: { amplitude: 0.012, speed: round3v(rng.range(0.8, 1.1)) },

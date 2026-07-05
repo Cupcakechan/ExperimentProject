@@ -1618,6 +1618,20 @@ for (const creature of CREATURES) {
   const shin = kneed.prims.find((p) => p.id === 'leg_fl');
   const thigh = kneed.prims.find((p) => p.id === kneed.step.knees.leg_fl);
   assert(thigh.b[0] === shin.a[0] && thigh.b[1] === shin.a[1] && thigh.b[2] === shin.a[2], 'a generated knee authors thigh.b === shin.a EXACTLY (one shared point, by construction)');
+  // The mouth decisions, encoded: slug + six-legger are MOUTHLESS (cast
+  // parity with Shelby/Skitter, Daniel's call after the first litters),
+  // and every generated mouth is PROPORTIONAL to its host (the absolute
+  // sizing turned small heads into voids — browser-caught, 2026-07-05).
+  assert(sweep.filter((r) => r.archetype === 'slug' || r.archetype === 'sixLegger').every((r) => !r.creature.prims.some((p) => p.id === 'mouth')), 'slug and six-legger generate MOUTHLESS (cast parity with the judged originals)');
+  assert(sweep.filter((r) => ['pudgyQuad', 'hopper', 'kneedQuad'].includes(r.archetype)).every((r) => r.creature.prims.some((p) => p.id === 'mouth')), 'the mouthed archetypes still carry their mouths');
+  assert(sweep.every((r) => {
+    const m = r.creature.prims.find((p) => p.id === 'mouth');
+    if (!m) return true;
+    const solids = r.creature.prims.filter((p) => !p.paint && !p.negative);
+    let host = solids[0];
+    for (const s of solids) if (Math.hypot(m.a[0] - s.a[0], m.a[1] - s.a[1], m.a[2] - s.a[2]) - s.r < Math.hypot(m.a[0] - host.a[0], m.a[1] - host.a[1], m.a[2] - host.a[2]) - host.r) host = s;
+    return m.r <= 0.3 * host.r;
+  }), 'every generated mouth is PROPORTIONAL (r <= 30% of its host — voids stay dead)');
   const rt = parseG(exportG(generateCreature(42).creature));
   assert(rt.ok && JSON.stringify(rt.creature) === JSON.stringify(generateCreature(42).creature), 'a generated creature is ordinary data: it round-trips through the C1 pipeline bit-faithfully');
 }
