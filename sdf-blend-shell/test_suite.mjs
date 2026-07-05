@@ -1499,6 +1499,30 @@ for (const creature of CREATURES) {
   }
   assert(INK_PX > 0, 'INK_PX is a positive pixel weight');
   assert(INK_DEPTH_THRESHOLD > 0 && INK_DEPTH_THRESHOLD < 1, 'INK_DEPTH_THRESHOLD is a sane relative fraction (0..1)');
+
+  // R1.1 detector (the joint-cut fix): JS mirror of the 5-tap second
+  // difference on synthetic view-ray depth profiles, hand-computed. A
+  // GRAZING RAMP (slope 3.6 = a surface 15.5 deg from edge-on, 4.5 deep)
+  // inked the old FIRST-difference detector (rel 0.0202 >= T 0.02) — the
+  // cut class on crease shoulders and limb exits; the SECOND difference
+  // reads zero on it (ramps have slope, not curvature). A true occlusion
+  // STEP (0.15 world) reads at FULL size in both schemes — wanted lines
+  // keep the same threshold response. Design probe by the earned rule:
+  // it proves the detector change MATTERS, and a simplification back to
+  // first-difference fails here before it reaches the browser.
+  {
+    const o = 0.0126; // 3 px at the default camera, world units
+    const T = 0.02;
+    const ramp = (x) => 4.5 + 3.6 * x;
+    const stepP = (x) => (x < 0.005 ? 4.5 : 4.65);
+    const first = (f) => Math.abs(f(o) - f(-o));
+    const second = (f) => Math.abs(f(-o) + f(o) - 2 * f(0));
+    assert(first(ramp) / 4.5 >= T, 'grazing ramp inked the first-difference detector (rel 0.0202 — the joint-cut class, hand-computed)');
+    assert(second(ramp) / 4.5 < 1e-9, 'grazing ramp reads ZERO in the second difference (slope is not curvature)');
+    assert(Math.abs(second(stepP) - 0.15) < 1e-12, 'occlusion step 0.15 reads at FULL size in the second difference (hand-computed)');
+    assert(second(stepP) / 4.5 > T, 'occlusion step still inks (rel 0.033 > T — wanted lines keep their response)');
+    assert(INK_FRAG.includes('2.0 * dC'), 'ink fragment uses the SECOND-difference detector (the joint-cut regression guard)');
+  }
 }
 
 console.log(failures === 0 ? '\nALL PASS' : `\n${failures} FAILURE(S)`);
