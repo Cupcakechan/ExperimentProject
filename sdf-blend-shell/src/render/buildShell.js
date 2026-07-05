@@ -19,19 +19,30 @@ const RADIAL_SEGS = 16;
 // joining a long capsule mid-cylinder looked detached. Build capsules
 // ourselves: an open cylinder with explicit rings + two hemisphere caps,
 // authored along +Y and centered at the origin like CapsuleGeometry was.
-function capsuleGeometry(r, len) {
+// capTop/capBottom (A5.2): a KNEE end gets NO cap — the interior
+// hemisphere fans at a buried joint serve nothing and park ~40 verts per
+// leg in the body's burial transition band, painting a black ink ring
+// where the leg exits the belly (MEASURED: ring verts 13 -> 51 when the
+// caps appeared; 80% were cap provenance).
+function capsuleGeometry(r, len, capTop = true, capBottom = true) {
   const rings = Math.max(1, Math.round(len * CAPSULE_RINGS_PER_UNIT));
-  const tube = new THREE.CylinderGeometry(r, r, len, RADIAL_SEGS, rings, true);
-  const top = new THREE.SphereGeometry(r, RADIAL_SEGS, 8, 0, Math.PI * 2, 0, Math.PI / 2);
-  top.translate(0, len / 2, 0);
-  const bottom = new THREE.SphereGeometry(r, RADIAL_SEGS, 8, 0, Math.PI * 2, Math.PI / 2, Math.PI / 2);
-  bottom.translate(0, -len / 2, 0);
-  const merged = mergeGeometries([tube, top, bottom], false);
-  [tube, top, bottom].forEach((g) => g.dispose());
+  const parts = [new THREE.CylinderGeometry(r, r, len, RADIAL_SEGS, rings, true)];
+  if (capTop) {
+    const top = new THREE.SphereGeometry(r, RADIAL_SEGS, 8, 0, Math.PI * 2, 0, Math.PI / 2);
+    top.translate(0, len / 2, 0);
+    parts.push(top);
+  }
+  if (capBottom) {
+    const bottom = new THREE.SphereGeometry(r, RADIAL_SEGS, 8, 0, Math.PI * 2, Math.PI / 2, Math.PI / 2);
+    bottom.translate(0, -len / 2, 0);
+    parts.push(bottom);
+  }
+  const merged = mergeGeometries(parts, false);
+  parts.forEach((g) => g.dispose());
   return merged;
 }
 
-function primGeometry(prim) {
+function primGeometry(prim, skipACap = false, skipBCap = false) {
   const a = new THREE.Vector3(...prim.a);
   const b = new THREE.Vector3(...(prim.b ?? prim.a));
 
@@ -49,10 +60,11 @@ function primGeometry(prim) {
 
   // Capsules are authored along +Y and centered at the origin, so:
   // build at the right length, rotate Y onto the a→b direction,
-  // then move to the segment midpoint.
+  // then move to the segment midpoint. The +Y TOP cap maps onto the
+  // b end (the quat rotates UP onto b - a).
   const dir = new THREE.Vector3().subVectors(b, a);
   const len = dir.length();
-  const geo = capsuleGeometry(prim.r, len);
+  const geo = capsuleGeometry(prim.r, len, !skipBCap, !skipACap);
   const quat = new THREE.Quaternion().setFromUnitVectors(UP, dir.normalize());
   const mid = new THREE.Vector3().addVectors(a, b).multiplyScalar(0.5);
   const bake = new THREE.Matrix4().compose(mid, quat, new THREE.Vector3(1, 1, 1));
@@ -60,7 +72,19 @@ function primGeometry(prim) {
   return geo;
 }
 
-export function buildShellGeometry(prims) {
+export function buildShellGeometry(prims, knees) {
+  // A5.2: knee ends are CAPLESS — thighs (map values) lose their b cap,
+  // shins (map keys) lose their a cap. VALIDITY BOUNDARY (suite-walked):
+  // this assumes the knee stays INSIDE the body through the whole gait;
+  // a creature whose knee exits the skin needs its caps back.
+  const skipA = new Set();
+  const skipB = new Set();
+  if (knees) {
+    for (const [shinId, thighId] of Object.entries(knees)) {
+      skipA.add(shinId);
+      skipB.add(thighId);
+    }
+  }
   const geos = prims
     .map((prim, idx) => ({ prim, idx }))
     // Paint prims tint the skin via the color field only — they have no
@@ -69,7 +93,7 @@ export function buildShellGeometry(prims) {
     // vertices snap inward to line the bowl.
     .filter(({ prim }) => !prim.paint && !prim.negative)
     .map(({ prim, idx }) => {
-      const geo = primGeometry(prim);
+      const geo = primGeometry(prim, skipA.has(prim.id), skipB.has(prim.id));
       // aPrim: the REGISTRY index (not the filtered index — uniform arrays
       // are indexed by registry position) so animated vertices can follow
       // their primitive when it moves.

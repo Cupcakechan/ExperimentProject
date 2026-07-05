@@ -59,7 +59,7 @@ scene.add(ground);
 
 // --- the actors: every creature, alive at once ---
 const actors = CREATURES.map((creature, i) => {
-  const geometry = buildShellGeometry(creature.prims); // shared by both draws
+  const geometry = buildShellGeometry(creature.prims, creature.step?.knees); // shared by both draws
   // inflate (plumpness) is creature data; skin and ink must dilate by the
   // SAME amount or the outline detaches from the plumped skin.
   const material = createBlendMaterial(creature.prims, creature.inflate, creature.step?.knees);

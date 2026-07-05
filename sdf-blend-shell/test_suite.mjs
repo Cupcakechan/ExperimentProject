@@ -157,11 +157,35 @@ for (const creature of CREATURES) {
   assert(new Set(prims.map((p) => p.id)).size === prims.length, `${tag} prim ids are unique`);
 
   // geometry: solids meshed, paints not, aPrim carries registry indices
-  const geo = buildShellGeometry(prims);
+  const geo = buildShellGeometry(prims, creature.step?.knees); // mirror the render path
   const aPrim = geo.getAttribute('aPrim');
   assert(geo.getAttribute('position').count > 0 && aPrim !== undefined, `${tag} merged geometry + aPrim exist`);
   const seen = new Set(aPrim.array);
   assert(seen.size === solids.length, `${tag} aPrim covers all ${solids.length} solid prims (saw ${seen.size})`);
+
+  // A5.2 capless knees: the interior hemisphere fans at buried joints
+  // painted a black ink ring at the body-exit line (MEASURED: ring verts
+  // 13 -> 51 when the caps appeared; 80% cap provenance). Assert the
+  // caps are actually GONE: no vertex of a kneed prim lies beyond its
+  // knee end along the axis.
+  for (const [shinId, thighId] of Object.entries(creature.step?.knees ?? {})) {
+    for (const [id, end] of [[shinId, 'a'], [thighId, 'b']]) {
+      const pi = prims.findIndex((p) => p.id === id);
+      const pr = prims[pi];
+      const A = pr.a;
+      const B = pr.b;
+      const ba = [B[0] - A[0], B[1] - A[1], B[2] - A[2]];
+      const bb = ba[0] * ba[0] + ba[1] * ba[1] + ba[2] * ba[2];
+      let beyond = 0;
+      const pos2 = geo.getAttribute('position');
+      for (let i = 0; i < pos2.count; i++) {
+        if (aPrim.array[i] !== pi) continue;
+        const t = ((pos2.getX(i) - A[0]) * ba[0] + (pos2.getY(i) - A[1]) * ba[1] + (pos2.getZ(i) - A[2]) * ba[2]) / bb;
+        if (end === 'a' ? t < -1e-4 : t > 1 + 1e-4) beyond++;
+      }
+      assert(beyond === 0, `${tag} ${id} has NO cap verts beyond its knee end (${beyond} — the ring's source is gone)`);
+    }
+  }
   assert([...seen].every((i) => !prims[i].paint), `${tag} no paint prim got a mesh`);
 
   // ring density: the LONGEST capsule must have interior rings, or joins
@@ -675,6 +699,8 @@ for (const creature of CREATURES) {
   let segLenDevMax = 0;
   let kneeCosMin = 2;
   let kneeCosMax = -2;
+  let kneeCoverMax = -9; // max sd of the knee vs non-limb solids (must stay < 0: covered)
+  const limbIds = new Set(Object.entries(creature.step.knees ?? {}).flat());
   for (let i = 0; i < 1200; i++) {
     const tt = i / 60;
     gait.update(1 / 60, { x: -tt * 0.35, y: 0.03 * Math.sin(tt * 4), z: 0, heading: 0 }, [gMat]);
@@ -699,6 +725,13 @@ for (const creature of CREATURES) {
         const cos = tA.clone().sub(tB).normalize().dot(sB.clone().sub(sA).normalize());
         kneeCosMin = Math.min(kneeCosMin, cos);
         kneeCosMax = Math.max(kneeCosMax, cos);
+        const kneeP = [tB.x, tB.y, tB.z];
+        let kneeMinSd = 1e9; // nearest non-limb solid THIS frame
+        for (const pr of creature.prims) {
+          if (pr.paint || pr.negative || limbIds.has(pr.id)) continue;
+          kneeMinSd = Math.min(kneeMinSd, sdPrim(kneeP, pr));
+        }
+        kneeCoverMax = Math.max(kneeCoverMax, kneeMinSd); // worst (shallowest) frame
       }
     });
   }
@@ -712,6 +745,7 @@ for (const creature of CREATURES) {
     assert(segLenDevMax < 1e-6, `${tag} neither segment stretches through the whole walk (max deviation ${segLenDevMax.toExponential(1)} — bend replaced stretch)`);
     assert(kneeCosMax - kneeCosMin > 0.05, `${tag} the knee ARTICULATES (bend-cos range ${(kneeCosMax - kneeCosMin).toFixed(3)} > 0.05 — not a rigid L)`);
     assert(kneeCosMax < 0.0, `${tag} the walk never folds a knee past 90 deg (max cos ${kneeCosMax.toFixed(3)} < 0 — MEASURED 96/100 deg at lift 0.05; deep folds cusp the ink: the knee-seam mechanism)`);
+    assert(kneeCoverMax < -0.01, `${tag} the knee stays INSIDE the body through the whole walk (max sd ${kneeCoverMax.toFixed(3)} < -0.01 — the capless-knee validity boundary, executable)`);
   }
 }
 assert(createGait({ prims: [] }) === null, 'creatures without step data get no gait (graceful null)');
@@ -1366,7 +1400,7 @@ for (const creature of CREATURES) {
       const l = Math.hypot(n[0], n[1], n[2]);
       return [n[0] / l, n[1] / l, n[2] / l];
     };
-    const geo = buildShellGeometry(creature.prims);
+    const geo = buildShellGeometry(creature.prims, kneesMap); // mirror the render path: capless knees
     const pos = geo.getAttribute('position');
     const aPrim = geo.getAttribute('aPrim');
     const idx = geo.index;

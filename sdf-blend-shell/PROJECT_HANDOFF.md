@@ -1,7 +1,8 @@
 # PROJECT_HANDOFF — SDF Blend-Shell Experiment
 
 _Last updated: 2026-07-04 (pudge goggles fix CONFIRMED + pushed; A5 + limb groups in;
-KNEE-SEAM ACT TWO (lift 0.05 + reference legs) DELIVERED — awaiting confirm; next: C-track. A5 completes
+act two in; ACT THREE
+(capless knee ends) DELIVERED — awaiting confirm; next: C-track. A5 completes
 the A-track: the flagged SKILL-HARVEST checkpoint — Daniel's timing)_
 
 ## What this is
@@ -204,6 +205,18 @@ DONE (Skitter).
   Limb groups KEPT (measured: halves partial-tuck shells). 833 probes
   ALL PASS. Escalation if a faint line survives the browser: ink-only
   k floor (Option 2, designed, kCap-respecting).
+- KNEE-SEAM ACT THREE (**awaiting browser confirm**, LESSONS 16): the
+  ring was never the knee crease — it wraps each leg at the BODY-EXIT
+  line: the burial transition rim, QUADRUPLED by the interior knee
+  caps (provenance-measured: 13 ring verts pre-A5 -> 51 post, 80% cap
+  fans at a joint buried in the belly). Fix: CAPLESS KNEE ENDS —
+  buildShellGeometry(prims, knees): thigh loses its b cap, shin its a
+  cap (auto-derived, no shader change, less geometry). MEASURED: ring
+  16 (floor ~13). Suite: no-cap-verts-beyond-knee assert per kneed
+  prim + the validity boundary EXECUTABLE (knee stays inside the body
+  every walk frame; measured -0.019/-0.018 worst) + the fold detector
+  and generic geometry probes mirror the capless render path. 851
+  probes ALL PASS.
 - Suite: 727 probes ALL PASS. Sections: 0 imports, 1 creature invariants
   + measured sims (walk, hop w/ deformation, field w/ idle) + carve rules
   (midpoint dent/pierce, SUBMERSION, decal clearance, donors), 2 field

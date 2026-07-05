@@ -393,3 +393,32 @@
   by swing compression, not segment split — tune the compressor;
   (3) reference looks often decompose into free levers (color, authored
   bend) before they cost prims.
+
+## 2026-07-04 — the knee seam, act three: the ring was interior cap geometry
+- The actual issue (after two mechanism-adjacent fixes): the black rings
+  wrap each leg AT THE BODY-EXIT LINE — the burial transition rim,
+  QUADRUPLED by A5. Provenance measurement per leg: pre-A5 single
+  capsule = 13 ring verts (the thin rim never noticed); post-A5 = 51,
+  of which 41 (80%) were the INTERIOR KNEE CAPS — two hemisphere fans
+  per leg at a joint that lives inside the belly, serving no rendering
+  purpose, parked exactly in the partial-tuck band.
+- It explained every browser report the knee-crease theory could not:
+  A5 made the ring appear (13->51); the limb exemption SHALLOWED the
+  shin cap's burial (its dOther lost the thigh) pushing more cap verts
+  into the visible band ("more visible"); lift/bends never touched the
+  band ("still the same").
+- Fix: CAPLESS KNEE ENDS — buildShellGeometry(prims, knees) skips the
+  thigh's b cap and the shin's a cap (same auto-derived map as limb
+  groups; no shader change; less geometry). MEASURED after: 16 ring
+  verts (floor ~13). The validity boundary is EXECUTABLE: a suite walk
+  guard asserts the knee stays inside the body every frame (measured
+  -0.019/-0.018 at worst) — a future exposed-knee creature fails it and
+  is told to restore caps.
+- Route: skill reference candidates — (1) when several fixes each help
+  a mechanism but the symptom persists, measure the artifact's
+  POPULATION BY PROVENANCE (which geometry, from which source, sits in
+  the offending state) before the next hypothesis; (2) builders that
+  always generate closed geometry create pure-interior surfaces at
+  multi-prim joints — interior geometry is not neutral, it parks in
+  transition bands; (3) turn authoring boundaries into executable
+  probes at the moment they're discovered.
