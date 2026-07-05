@@ -27,6 +27,7 @@ import { createGait } from './gait.js';
 import { createHop } from './hop.js';
 import { createBlink } from './blink.js';
 import { exportCreature, parseCreatureJSON } from './data/creatureIO.js';
+import { generateCreature, GENERATE_MAX_ATTEMPTS } from './data/generate.js';
 import {
   BLEND_K,
   BACKGROUND_COLOR,
@@ -155,6 +156,14 @@ const ui = createControls({
     if (!r.ok) return r;
     const actor = spawnActor(r.creature); // validated: safe past the gate
     return { ok: true, name: actor.creature.name ?? actor.creature.id, warnings: r.warnings };
+  },
+  onGenerate: (seed) => {
+    // Deterministic and pre-graded: the generator already ran the same
+    // validator that gates imports, so this spawn is safe by contract.
+    const r = generateCreature(seed);
+    if (!r.creature) return { ok: false, errors: [`seed ${seed} exhausted ${GENERATE_MAX_ATTEMPTS} attempts (deterministically unlucky — try the next one)`] };
+    spawnActor(r.creature);
+    return { ok: true, name: `${r.creature.name} (${r.archetype}, seed ${seed})` };
   },
 });
 void ui; // { refreshRoster } — controls refreshes itself on import

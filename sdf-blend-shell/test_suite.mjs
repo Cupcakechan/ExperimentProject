@@ -1558,6 +1558,8 @@ for (const creature of CREATURES) {
   rejects((c) => { c.step.groups = [[0, 1], [1, 2, 3]]; }, 'partition', 'groups that do not partition the feet');
   rejects((c) => { c.prims.find((p) => p.id === 'thigh_fl').b = [-0.52, 0.265, 0.25]; }, 'EXACTLY', 'a knee joint gap');
   rejects((c) => { for (const p of c.prims) if (!p.paint) p.paint = true; }, 'SOLID prim required', 'a creature of only decals');
+  rejects((c) => { const th = c.prims.find((p) => p.id === 'thigh_bl'); const sh = c.prims.find((p) => p.id === 'leg_bl'); th.b = [0.42, 0.265, 0.7]; sh.a = [0.42, 0.265, 0.7]; }, 'exits the skin', 'a knee outside the body (the capless validity boundary)');
+  rejects((c) => { c.breath = { amplitude: 0.2, speed: 2.0 }; }, 'thinnest solid', 'a breath peak that balloons past the thinnest solid');
 
   // Round trip: envelope in, RAW object out — bit-faithful for the cast,
   // and a field the tool does not manage survives export -> import.
@@ -1573,6 +1575,51 @@ for (const creature of CREATURES) {
   assert(!parseCreatureJSON('{ not json').ok, 'garbage text is rejected as not-JSON, never thrown');
   const future = JSON.stringify({ format: CREATURE_FORMAT, version: 99, creature: CREATURES[0] });
   assert(!parseCreatureJSON(future).ok && parseCreatureJSON(future).errors[0].includes('version'), 'a future format version is refused politely (never half-read)');
+}
+
+// ---- C2 seeded generator: suite-graded creatures from a number ----
+// generateCreature builds from the archetype table and grades with the
+// SAME validateCreature that gates imports — so a generated creature is
+// valid by the same law as a hand-authored one. Probed here: exact
+// determinism (seeds are shareable), the full seed sweep lands valid in
+// few attempts with ZERO warnings, every archetype actually occurs, the
+// measured boundaries act as CONSTRUCTION rules (a pudgy archetype gets
+// FLAT eyes; a kneed one authors the shared knee point EXACTLY), and a
+// generated creature is ordinary data (round-trips through creatureIO).
+{
+  const { generateCreature, GENERATE_MAX_ATTEMPTS, ARCHETYPE_NAMES } = await import('./src/data/generate.js');
+  const { exportCreature: exportG, parseCreatureJSON: parseG } = await import('./src/data/creatureIO.js');
+  const { validateCreature: vc } = await import('./src/data/validate.js');
+
+  assert(JSON.stringify(generateCreature(7).creature) === JSON.stringify(generateCreature(7).creature), 'same seed, same creature — bit-exact (seeds are shareable)');
+  assert(JSON.stringify(generateCreature(7).creature) !== JSON.stringify(generateCreature(8).creature), 'different seeds differ');
+
+  const sweep = [];
+  let attemptsTotal = 0;
+  let attemptsMax = 0;
+  const byArch = {};
+  for (let seed = 1; seed <= 120; seed++) {
+    const r = generateCreature(seed);
+    sweep.push(r);
+    if (r.creature) {
+      attemptsTotal += r.attempts;
+      attemptsMax = Math.max(attemptsMax, r.attempts);
+      byArch[r.archetype] = (byArch[r.archetype] ?? 0) + 1;
+    }
+  }
+  console.log(`  INFO  generator sweep: 120 seeds, attempts avg ${(attemptsTotal / 120).toFixed(2)} / max ${attemptsMax} (cap ${GENERATE_MAX_ATTEMPTS}), archetypes ${JSON.stringify(byArch)}`);
+  assert(sweep.every((r) => r.creature !== null), 'every seed 1..120 lands a valid creature within the attempt cap');
+  assert(sweep.every((r) => { const v = vc(r.creature); return v.ok && v.warnings.length === 0; }), 'every generated creature passes the executable authoring rules with ZERO warnings (graded by the import gate itself)');
+  assert(ARCHETYPE_NAMES.every((a) => byArch[a] > 0), `all ${ARCHETYPE_NAMES.length} archetypes occur across the sweep (the table is fully live)`);
+
+  const pudgy = sweep.find((r) => r.archetype === 'pudgyQuad').creature;
+  assert(pudgy.prims.some((p) => p.id === 'sclera_l') && !pudgy.prims.some((p) => p.id === 'eyeball_l'), 'the inflate archetype generates FLAT eyes (the dilate boundary as a CONSTRUCTION rule, not a rejection)');
+  const kneed = sweep.find((r) => r.archetype === 'kneedQuad' || r.archetype === 'longneck').creature;
+  const shin = kneed.prims.find((p) => p.id === 'leg_fl');
+  const thigh = kneed.prims.find((p) => p.id === kneed.step.knees.leg_fl);
+  assert(thigh.b[0] === shin.a[0] && thigh.b[1] === shin.a[1] && thigh.b[2] === shin.a[2], 'a generated knee authors thigh.b === shin.a EXACTLY (one shared point, by construction)');
+  const rt = parseG(exportG(generateCreature(42).creature));
+  assert(rt.ok && JSON.stringify(rt.creature) === JSON.stringify(generateCreature(42).creature), 'a generated creature is ordinary data: it round-trips through the C1 pipeline bit-faithfully');
 }
 
 // ---- R1 ink pass (screen-space, depth-only): the module contract ----

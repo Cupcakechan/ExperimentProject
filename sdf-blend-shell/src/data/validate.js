@@ -26,7 +26,9 @@ const dot = (a, b) => a[0] * b[0] + a[1] * b[1] + a[2] * b[2];
 
 // Point-to-prim signed distance — the suite's sdPrim, mirrored (a sphere
 // is the degenerate b === a case; the max() guards divide-by-zero).
-function sdPrim(p, prim) {
+// EXPORTED (C2): the generator verifies its own construction (knee
+// placement, eye rooting) with the SAME math that will grade it.
+export function sdPrim(p, prim) {
   const a = prim.a;
   const b = prim.b ?? prim.a;
   const pa = sub(p, a);
@@ -173,6 +175,14 @@ export function validateCreature(c) {
           if (perp < 0.02) err(`knee '${shinId}': rest bend ${perp.toFixed(3)} < 0.02 off the hip-foot line (the authored pole — a straight rest leg has no declared fold direction)`);
           const reach = hfLen / Math.max(L1 + L2, 1e-8);
           if (!(reach < KNEE_STRAIGHT_FRAC - 0.015)) err(`knee '${shinId}': rest reach ${reach.toFixed(3)} starts at the straight lock (keep under ${(KNEE_STRAIGHT_FRAC - 0.015).toFixed(3)})`);
+          // The CAPLESS VALIDITY BOUNDARY (A5.2, executable at rest):
+          // knee ends carry no caps, so a knee that exits the skin shows
+          // a hole. The knee point must sit inside some OTHER solid
+          // (the body) by >= 0.01; the through-the-walk version stays a
+          // suite sim probe for the authored cast.
+          const others = solids.filter((p) => p !== thigh && p !== shin);
+          const cover = others.length ? Math.min(...others.map((p) => sdPrim(Kn, p))) : 1;
+          if (!(cover < -0.01)) err(`knee '${shinId}' exits the skin at rest (sd ${cover.toFixed(3)} — capless knee ends need the body to cover them)`);
         }
       }
     }
@@ -204,10 +214,18 @@ export function validateCreature(c) {
     }
   }
 
+  // --- breath peak vs the thinnest solid (the ballooning boundary): the
+  // skin rides inflate + amplitude above EVERY solid at peak — past the
+  // thinnest radius, thin parts drown (Shelby's bob lesson, generalized) ---
+  const peak = (c.inflate ?? 0) + (c.breath?.amplitude ?? 0);
+  if (solids.length && peak > 0) {
+    const minR = Math.min(...solids.map((p) => p.r));
+    if (!(peak < minR)) err(`breath peak ${peak.toFixed(3)} reaches the thinnest solid r ${minR} (the skin would balloon past it)`);
+  }
+
   // --- ball-eye dilate boundary (MEASURED, suite-established): a constant
   // dilate compresses small-feature contrast; solid eyeballs are only
   // valid where peak dilate <= r/3 — past it, author flat decals ---
-  const peak = (c.inflate ?? 0) + (c.breath?.amplitude ?? 0);
   for (const eb of solids.filter((p) => p.id.startsWith('eyeball_'))) {
     if (!(peak <= eb.r / 3 + 1e-9)) err(`ball eye '${eb.id}' violates the dilate boundary (peak ${peak.toFixed(3)} > r/3 = ${(eb.r / 3).toFixed(3)} — use flat sclera+pupil decals instead)`);
   }

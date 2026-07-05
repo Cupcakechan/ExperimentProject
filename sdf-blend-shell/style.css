@@ -68,3 +68,14 @@ canvas {
 #io-status.err {
   color: #d98a8a;
 }
+
+#io-row input[type='number'] {
+  width: 56px;
+  font: 12px/1.2 system-ui, sans-serif;
+  color: #cdd5de;
+  background: #23262c;
+  border: 1px solid #3a3f47;
+  border-radius: 3px;
+  padding: 3px 6px;
+  margin: 0 6px 0 10px;
+}

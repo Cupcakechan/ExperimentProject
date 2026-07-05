@@ -9,7 +9,7 @@
 
 import { K_MIN, K_MAX, K_STEP } from '../config.js';
 
-export function createControls({ initialK, onK, roster, onExport, onImport }) {
+export function createControls({ initialK, onK, roster, onExport, onImport, onGenerate }) {
   const wrap = document.getElementById('controls');
   if (!wrap) return null; // graceful: missing container (or headless test)
 
@@ -102,9 +102,34 @@ export function createControls({ initialK, onK, roster, onExport, onImport }) {
     reader.readAsText(f);
   });
 
+  // --- seeded generation (C2): same seed, same creature — seeds are
+  // shareable. Success auto-increments the field, so mashing generate
+  // is a natural reroll that never silently repeats a seed.
+  const seedInput = document.createElement('input');
+  seedInput.type = 'number';
+  seedInput.min = '1';
+  seedInput.step = '1';
+  seedInput.value = '1';
+  seedInput.title = 'seed';
+  const genBtn = document.createElement('button');
+  genBtn.textContent = 'generate';
+  genBtn.addEventListener('click', () => {
+    const seed = Math.max(1, Math.floor(Number(seedInput.value) || 1));
+    const r = onGenerate(seed);
+    if (r.ok) {
+      refreshRoster();
+      seedInput.value = String(seed + 1);
+      say(`spawned ${r.name}`, false);
+    } else {
+      say(`rejected: ${r.errors[0]}`, true);
+    }
+  });
+
   io.appendChild(select);
   io.appendChild(exportBtn);
   io.appendChild(importBtn);
+  io.appendChild(seedInput);
+  io.appendChild(genBtn);
   io.appendChild(status);
   wrap.appendChild(io);
 
