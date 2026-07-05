@@ -1,9 +1,11 @@
 # PROJECT_HANDOFF — SDF Blend-Shell Experiment
 
-_Last updated: 2026-07-04 (pudge goggles fix CONFIRMED + pushed; A5 + limb groups in;
-act two in; ACT THREE
-(capless knee ends) DELIVERED — awaiting confirm; next: C-track. A5 completes
-the A-track: the flagged SKILL-HARVEST checkpoint — Daniel's timing)_
+_Last updated: 2026-07-05 (SESSION CLOSE. Knee-seam acts 1-3 delivered but
+browser shows REGRESSION: seams persist + longneck's eyes MISSING — treat
+acts 2-3 as UNCONFIRMED. Deep-research dive DONE -> RESEARCH_TECHNIQUE.md
+in repo root: the seam family is STRUCTURAL to inverted-hull outlining;
+the forward plan is the R-TRACK below, starting with R0 state-sync/eye
+diagnosis. Do NOT keep patching the ink system.)_
 
 ## What this is
 The "SDF blend-shell" character technique (capsule/sphere prims whose mesh
@@ -217,6 +219,21 @@ DONE (Skitter).
   every walk frame; measured -0.019/-0.018 worst) + the fold detector
   and generic geometry probes mirror the capless render path. 851
   probes ALL PASS.
+- BROWSER RESULT (2026-07-05): REGRESSION — seams still clearly
+  visible AND longneck's eyes are MISSING entirely. Acts 2-3 are
+  therefore UNCONFIRMED; the missing eyes are new-defect territory
+  (prime suspect: mixed file versions across the many per-act
+  deliveries — R0 diagnoses from Daniel's actual files).
+- DEEP-RESEARCH DIVE (2026-07-05, Daniel-initiated): full report
+  distilled into RESEARCH_TECHNIQUE.md (repo root). Headlines: the
+  Reddit technique is a STACK we already built (primitives + smin +
+  SDF-gradient normals + toon), not a trick; the seam family is
+  STRUCTURAL to inverted-hull outlining at concave creases (industry
+  answer: screen-space depth+normal outlines); feature swallowing is
+  structural to non-local polynomial smin (answers: cubic C2 smin +
+  Spore's features-as-attached-parts model); creature-anatomy rules
+  captured for the harvest. The three knee-seam acts were each locally
+  correct but were patching an unwinnable system — hence the R-track.
 - Suite: 727 probes ALL PASS. Sections: 0 imports, 1 creature invariants
   + measured sims (walk, hop w/ deformation, field w/ idle) + carve rules
   (midpoint dent/pierce, SUBMERSION, decal clearance, donors), 2 field
@@ -254,19 +271,35 @@ DONE (Skitter).
   state in-file (a silent no-op shipped a ReferenceError this arc —
   caught by the suite run, per the GI rule).
 
-## Open items
-1. **Daniel: browser-verify the knee-seam fix** (the black ring at
-   each knee is gone; a thin crease accent at deep bends may remain —
-   verdict wanted) + checkpoint.
-2. A-TRACK COMPLETE at A5 confirm — the flagged SKILL-HARVEST
-   checkpoint (Daniel's timing, no pressure): dev-method session over
-   LESSONS.md (13 entries) + this handoff -> the creature-generation
-   skill.
-3. Next build track: C-track (JSON import/export, seeded creature
-   generator, terrarium) or B-track breathers (slice viewer, Pass-5
-   morphing) — options round on request.
-4. Reference queue: floater (hover mini-pass), propeller flyer
-   (continuous-spin anim + hover).
-5. Walker stride squash: one-value experiment IF the hop version earns
-   it (deferred by design).
+## Open items — THE R-TRACK (post-research forward plan; see
+## RESEARCH_TECHNIQUE.md for the full reasoning)
+0. **R0 — STATE SYNC + EYE REGRESSION (FIRST, blocks everything):**
+   browser shows longneck with NO eyes and persistent black leg
+   bands after the act-3 files. Suspect mixed file versions across
+   deliveries (files arrive across two machines). Need from Daniel's
+   machine: src/blink.js, src/data/creatures.js, and the final line of
+   `node test_suite.mjs` (container state: 851 ALL PASS). Diagnose from
+   evidence (debugging protocol); do not build on the broken base.
+1. **R1 — SCREEN-SPACE OUTLINE** (the big unlock, own pass): replace
+   the inverted-hull ink with a post-process depth+normal edge detect
+   (EffectComposer via three/addons, CDN-importable). Deletes the seam
+   artifact FAMILY structurally; afterwards the tuck / limb-group /
+   capless machinery becomes candidate for REMOVAL (simplification
+   pass). Options round on ink-line weight/threshold values.
+2. **R2 — CUBIC C2 SMIN** (one FIELD_GLSL function swap; formula in
+   RESEARCH_TECHNIQUE.md §2b): smoother toon bands at blends, bounded
+   inflation; re-measure ALL INFL ceilings after.
+3. **R3 — MOUTHS OFF THE FIELD** (Spore rigblock model): features are
+   attached parts, never carved into the field — ends the k-validity
+   swallowing class. Ball eyes already follow this model (validated).
+4. **R4 (banked):** Surface Nets meshing, only if residuals survive
+   R1-R3.
+5. THEN the old queues resume on the stabilized base: A-track completion
+   confirm -> the flagged SKILL-HARVEST checkpoint (Daniel's timing;
+   LESSONS.md now 16 entries + RESEARCH_TECHNIQUE.md are the source
+   material) -> C-track (JSON import/export, seeded generator,
+   terrarium — worldgen repo notes banked in RESEARCH_TECHNIQUE.md §6)
+   or B-track breathers (slice viewer, Pass-5 morphing). Reference
+   queue: floater (hover mini-pass), propeller flyer (continuous-spin
+   anim + hover). Walker stride squash: deferred by design.
 
