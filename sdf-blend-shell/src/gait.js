@@ -19,7 +19,7 @@
 
 import * as THREE from 'three';
 import { setPrimTransform } from './anim.js';
-import { STEP_TRIGGER, STEP_TIME, STEP_LIFT, STEP_LEAD_TIME, STRETCH_MIN, STRETCH_MAX } from './config.js';
+import { STEP_TRIGGER, STEP_TIME, STEP_LIFT, STEP_LEAD_TIME, STRETCH_MIN, STRETCH_MAX, KNEE_STRAIGHT_FRAC, KNEE_MIN_GAP } from './config.js';
 
 // Pure (suite-probed): the affine that maps the rest segment a0->b0 onto
 // a0->b1 — rotate the rest direction onto the new one and scale along the
@@ -53,6 +53,45 @@ export function aimStretchMatrix(a0, b0, b1, out = new THREE.Matrix4()) {
   return out.copy(back).multiply(R).multiply(S).multiply(toOrigin);
 }
 
+// Pure (suite-probed): map segment a0->b0 onto a1->b1 — aimStretch about
+// a0 toward a translated target, then carry a0 onto a1. Used for SHINS,
+// whose hip end (the knee) moves every frame; by IK construction the
+// length ratio is 1, so in practice this is rotation + translation.
+const _segTmp = new THREE.Vector3();
+const _segT = new THREE.Matrix4();
+export function segmentMatrix(a0, b0, a1, b1, out = new THREE.Matrix4()) {
+  _segTmp.copy(b1).sub(a1).add(a0); // b1 as seen from a0
+  aimStretchMatrix(a0, b0, _segTmp, out);
+  _segT.makeTranslation(a1.x - a0.x, a1.y - a0.y, a1.z - a0.z);
+  return out.premultiply(_segT);
+}
+
+// Pure (suite-probed): two-bone IK. Places the knee at distance L1 from
+// the hip H and L2 from the foot F (law of cosines along the hip-foot
+// line, height off it), bending toward the POLE direction — which comes
+// from the REST pose's knee offset, so the leg always folds the way it
+// was authored. The caller guarantees |F - H| is inside the reachable
+// annulus (the reach clamp).
+const _u = new THREE.Vector3();
+const _perp = new THREE.Vector3();
+export function solveKnee(H, F, L1, L2, pole, out = new THREE.Vector3()) {
+  _u.copy(F).sub(H);
+  const d = _u.length();
+  if (d < 1e-8) return out.copy(H); // degenerate: foot at the hip
+  _u.divideScalar(d);
+  const a1 = (d * d + L1 * L1 - L2 * L2) / (2 * d);
+  const h = Math.sqrt(Math.max(L1 * L1 - a1 * a1, 0));
+  _perp.copy(pole).addScaledVector(_u, -pole.dot(_u));
+  if (_perp.lengthSq() < 1e-12) {
+    // Pole parallel to the leg (should not happen with an authored rest
+    // bend) — any perpendicular beats a NaN.
+    _perp.set(_u.y, -_u.x, 0);
+    if (_perp.lengthSq() < 1e-12) _perp.set(0, -_u.z, _u.y);
+  }
+  _perp.normalize();
+  return out.copy(H).addScaledVector(_u, a1).addScaledVector(_perp, h);
+}
+
 // Scratch — reused every frame, zero per-frame allocation.
 const _rig = new THREE.Matrix4();
 const _rigInv = new THREE.Matrix4();
@@ -61,6 +100,7 @@ const _foot = new THREE.Vector3();
 const _local = new THREE.Vector3();
 const _dir = new THREE.Vector3();
 const _mat = new THREE.Matrix4();
+const _knee = new THREE.Vector3();
 
 export function createGait(creature) {
   if (!creature.step) return null; // creatures without feet just slide (by design)
@@ -68,7 +108,7 @@ export function createGait(creature) {
   const feet = creature.step.feet.map((id, i) => {
     const idx = creature.prims.findIndex((p) => p.id === id);
     const prim = creature.prims[idx];
-    return {
+    const f = {
       idx,
       prim,
       group: creature.step.groups.findIndex((g) => g.includes(i)),
@@ -79,7 +119,30 @@ export function createGait(creature) {
       anchor: new THREE.Vector3(), // WORLD
       from: new THREE.Vector3(), // swing start (world)
       swingT: -1, // -1 = planted; 0..1 = swinging
+      knee: null, // two-segment chain, resolved below when declared
     };
+    // A5: an entry in step.knees (foot id -> thigh id) upgrades this leg
+    // to two segments: the foot prim becomes the SHIN (knee->foot), the
+    // thigh runs hip->knee. The bend direction is the REST knee's offset
+    // off the hip-foot line — authored intent, no pole field. Missing or
+    // bad thigh id -> single-segment fallback (graceful).
+    const thighId = creature.step.knees?.[id];
+    if (thighId) {
+      const tIdx = creature.prims.findIndex((p) => p.id === thighId && !p.paint && !p.negative && p.b);
+      if (tIdx >= 0) {
+        const tPrim = creature.prims[tIdx];
+        const H0 = new THREE.Vector3(...tPrim.a);
+        const knee0 = new THREE.Vector3(...tPrim.b);
+        const L1 = knee0.distanceTo(H0);
+        const restU = f.b0.clone().sub(H0).normalize();
+        const pole = knee0.clone().sub(H0);
+        pole.addScaledVector(restU, -pole.dot(restU)); // perpendicular part only
+        if (L1 > 1e-8 && pole.lengthSq() > 1e-12) {
+          f.knee = { idx: tIdx, prim: tPrim, H0, knee0, L1, pole: pole.normalize() };
+        }
+      }
+    }
+    return f;
   });
 
   let initialized = false;
@@ -147,22 +210,45 @@ export function createGait(creature) {
           }
         }
 
-        // Pin: world anchor -> creature space -> aim-and-stretch the leg,
-        // through the SDF-lockstep write path, on BOTH draws.
+        // Pin: world anchor -> creature space, then leg-kind dispatch.
         _local.copy(f.anchor).applyMatrix4(_rigInv);
 
-        // Stretch clamp: beyond the band, the pin SLIPS along the leg axis
-        // rather than crumpling the leg (measured: 0.18x on horizontal
-        // feet when the hip walks over a planted toe).
-        _dir.subVectors(_local, f.a0);
-        const L = _dir.length();
-        if (L > 1e-8) {
-          const Lc = Math.min(Math.max(L, f.len0 * STRETCH_MIN), f.len0 * STRETCH_MAX);
-          if (Lc !== L) _local.copy(f.a0).addScaledVector(_dir.divideScalar(L), Lc);
-        }
-        aimStretchMatrix(f.a0, f.b0, _local, _mat);
-        for (const m of materials) {
-          setPrimTransform(m, f.idx, f.prim, _mat);
+        if (f.knee) {
+          // TWO SEGMENTS: clamp the pin to the reachable annulus (a knee
+          // never locks straight — STRAIGHT_FRAC — and never folds past
+          // MIN_GAP of |L1 - L2|; beyond either, the pin SLIPS along the
+          // hip-foot ray, the same pattern as the stretch clamp), then
+          // solve the knee and write BOTH prims through the lockstep path.
+          const k = f.knee;
+          _dir.subVectors(_local, k.H0);
+          const L = _dir.length();
+          if (L > 1e-8) {
+            const dMax = (k.L1 + f.len0) * KNEE_STRAIGHT_FRAC;
+            const dMin = Math.max(Math.abs(k.L1 - f.len0) * KNEE_MIN_GAP, 0.02);
+            const Lc = Math.min(Math.max(L, dMin), dMax);
+            if (Lc !== L) _local.copy(k.H0).addScaledVector(_dir.divideScalar(L), Lc);
+          }
+          solveKnee(k.H0, _local, k.L1, f.len0, k.pole, _knee);
+          aimStretchMatrix(k.H0, k.knee0, _knee, _mat); // thigh: pure rotation (|K-H| = L1)
+          for (const m of materials) {
+            setPrimTransform(m, k.idx, k.prim, _mat);
+          }
+          segmentMatrix(k.knee0, f.b0, _knee, _local, _mat); // shin: knee->foot, both ends placed
+          for (const m of materials) {
+            setPrimTransform(m, f.idx, f.prim, _mat);
+          }
+        } else {
+          // SINGLE SEGMENT (the proven path): stretch clamp + aim-stretch.
+          _dir.subVectors(_local, f.a0);
+          const L = _dir.length();
+          if (L > 1e-8) {
+            const Lc = Math.min(Math.max(L, f.len0 * STRETCH_MIN), f.len0 * STRETCH_MAX);
+            if (Lc !== L) _local.copy(f.a0).addScaledVector(_dir.divideScalar(L), Lc);
+          }
+          aimStretchMatrix(f.a0, f.b0, _local, _mat);
+          for (const m of materials) {
+            setPrimTransform(m, f.idx, f.prim, _mat);
+          }
         }
       }
     },

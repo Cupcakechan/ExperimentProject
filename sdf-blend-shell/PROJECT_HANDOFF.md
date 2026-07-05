@@ -1,7 +1,8 @@
 # PROJECT_HANDOFF — SDF Blend-Shell Experiment
 
-_Last updated: 2026-07-04 (stage 2.1 browser-tested; pudge goggles fix +
-BALL-EYE DILATE BOUNDARY DELIVERED — awaiting confirmation; next: A5 knees)_
+_Last updated: 2026-07-04 (pudge goggles fix CONFIRMED + pushed; A5 TWO-SEGMENT
+KNEES DELIVERED — awaiting browser confirmation; next: C-track. A5 completes
+the A-track: the flagged SKILL-HARVEST checkpoint — Daniel's timing)_
 
 ## What this is
 The "SDF blend-shell" character technique (capsule/sphere prims whose mesh
@@ -154,6 +155,26 @@ DONE (Skitter).
   sits past it and is REVERTED to his proven flat sclera+pupil decals
   (both balloon together — the painted read). Skitter great, blink v2
   cast-wide confirmed. 742 probes ALL PASS.
+- A5 TWO-SEGMENT KNEES (**awaiting browser confirm**), Option 2 — the
+  true walkers: critter + longneck legs split thigh+shin (shin keeps
+  the old leg id: feet/groups/anim/blink all id-stable), knee solved
+  by two-bone IK per frame. DESIGN: no pole field — the bend direction
+  is the REST pose's knee offset off the hip-foot line (authored
+  intent; suite requires >= 0.02 and rest reach < ~97% of L1+L2).
+  gait.js: solveKnee + segmentMatrix (pure, hand-anchored: the shin
+  needs both ends placed, so segmentMatrix = aimStretch + carry);
+  DUAL-MODE dispatch — feet with a step.knees entry get the reach
+  clamp (KNEE_STRAIGHT_FRAC 0.995 / KNEE_MIN_GAP 1.05, pin slips
+  beyond) + IK; feet without keep the proven aim-stretch (hopper by
+  design; SKITTER by CAPACITY: 6 knees = 21 > MAX_PRIMS 16, documented
+  boundary). Walk-sim invariants at float epsilon: knee joint never
+  separates (2.3e-16), NEITHER segment stretches (2.8e-16 — bend
+  replaced stretch, the feature's claim), knee articulates (cos range
+  1.09). INFL ceilings re-MEASURED (the knee crotch is a new uncapped
+  pair): critter 0.083/0.26 -> 0.115/0.33, longneck 0.114/0.317 ->
+  0.14/0.38. Longneck now 16/16 prims — zero headroom. 809 probes ALL
+  PASS. Taste lever if knees read melty at high slider: kCap ~0.1 on
+  the shins.
 - Suite: 727 probes ALL PASS. Sections: 0 imports, 1 creature invariants
   + measured sims (walk, hop w/ deformation, field w/ idle) + carve rules
   (midpoint dent/pierce, SUBMERSION, decal clearance, donors), 2 field
@@ -192,13 +213,18 @@ DONE (Skitter).
   caught by the suite run, per the GI rule).
 
 ## Open items
-1. **Daniel: browser-verify pudge's restored flat eyes** (cute again,
-   not goggles; everything else unchanged) + checkpoint. Snail's tiny
-   stalk-tip balls still awaiting a verdict.
-2. A5 two-segment knees (options round next).
-3. Reference queue: floater (hover mini-pass), propeller flyer
+1. **Daniel: browser-verify A5** (critter + longneck legs FOLD during
+   swings instead of rubber-banding — watch a swing arc from the side;
+   knees bend toward the face) + checkpoint.
+2. A-TRACK COMPLETE at A5 confirm — the flagged SKILL-HARVEST
+   checkpoint (Daniel's timing, no pressure): dev-method session over
+   LESSONS.md (13 entries) + this handoff -> the creature-generation
+   skill.
+3. Next build track: C-track (JSON import/export, seeded creature
+   generator, terrarium) or B-track breathers (slice viewer, Pass-5
+   morphing) — options round on request.
+4. Reference queue: floater (hover mini-pass), propeller flyer
    (continuous-spin anim + hover).
-4. Walker stride squash: one-value experiment IF the hop version earns
+5. Walker stride squash: one-value experiment IF the hop version earns
    it (deferred by design).
-5. SKILL HARVEST — Daniel's timing; A-track completion (after A5) is the
-   flagged natural checkpoint.
+

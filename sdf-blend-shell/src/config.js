@@ -198,3 +198,12 @@ export const BLINK_TIME = 0.18;
 // (rest depth 0.024; at full open 0.012 — hand-computed, suite-anchored).
 export const MOUTH_OPEN_ANGLE = 0.22; // rad, at the apex
 export const MOUTH_OPEN_PUSH = 0.012; // world units outward, at the apex
+
+// Two-segment knees (A5). A kneed leg = thigh + shin; the knee is solved
+// by two-bone IK (law of cosines) with the bend direction taken from the
+// REST POSE (the authored knee offset off the hip-foot line — no pole
+// field: intent lives in the data). The pin clamps to the reachable
+// annulus: never straighter than STRAIGHT_FRAC of full extension (a
+// locked knee pops), never more folded than MIN_GAP of |L1 - L2|.
+export const KNEE_STRAIGHT_FRAC = 0.995;
+export const KNEE_MIN_GAP = 1.05;

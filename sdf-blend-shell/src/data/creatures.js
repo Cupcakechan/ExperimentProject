@@ -86,6 +86,16 @@
 //     blinked prim submerges toward the nearest solid EXCLUDING other
 //     blinked prims, so the iris automatically retargets the body
 //     behind its departing eyeball.
+//   - KNEES (A5): step.knees maps foot id -> thigh id; the foot prim is
+//     the SHIN (keeps its id: feet/groups stay stable), thigh runs
+//     hip->knee with thigh.b EXACTLY equal to shin.a. Author the rest
+//     pose with a VISIBLE bend (knee >= 0.02 off the hip-foot line) —
+//     that offset IS the IK pole; a straight rest leg has no declared
+//     fold direction. Keep rest reach under ~97% of L1+L2 so the knee
+//     never starts locked. Shins slightly thinner than thighs read
+//     leggy. Legs without a knees entry keep single-segment
+//     aim-stretch (hopper by design; Skitter by CAPACITY — 6 knees =
+//     21 prims > 16, a documented boundary).
 //   - BALL-EYE DILATE BOUNDARY (measured): a constant dilate adds to
 //     dark and white alike, compressing small-feature contrast toward 1
 //     — dark/white = (iris+d)/(ball+d). Ball eyes are only valid where
@@ -109,15 +119,29 @@ export const CREATURES = [
     id: 'critter',
     name: 'Critter',
     anim: { primId: 'tail', axis: [1, 0, 0], amplitude: 0.6, speed: 2.5 },
-    step: { feet: ['leg_fl', 'leg_fr', 'leg_bl', 'leg_br'], groups: [[0, 3], [1, 2]] },
+    step: {
+      feet: ['leg_fl', 'leg_fr', 'leg_bl', 'leg_br'],
+      groups: [[0, 3], [1, 2]],
+      // A5: two-segment legs — foot id -> thigh id. The foot prim is the
+      // SHIN; the rest pose's knee offset authors the bend direction.
+      knees: { leg_fl: 'thigh_fl', leg_fr: 'thigh_fr', leg_bl: 'thigh_bl', leg_br: 'thigh_br' },
+    },
     blink: { eyes: ['eyeball_l', 'eyeball_r', 'iris_l', 'iris_r'] },
     prims: [
       { id: 'body', type: 'capsule', a: [-0.5, 0.55, 0.0], b: [0.5, 0.55, 0.0], r: 0.42, color: 0x4fd1a5 },
       { id: 'head', type: 'sphere', a: [-0.85, 0.95, 0.0], r: 0.32, color: 0xf2b05a },
-      { id: 'leg_fl', type: 'capsule', a: [-0.42, 0.45, 0.22], b: [-0.46, 0.08, 0.26], r: 0.13, color: 0x3bbd8e },
-      { id: 'leg_fr', type: 'capsule', a: [-0.42, 0.45, -0.22], b: [-0.46, 0.08, -0.26], r: 0.13, color: 0x3bbd8e },
-      { id: 'leg_bl', type: 'capsule', a: [0.42, 0.45, 0.22], b: [0.46, 0.08, 0.26], r: 0.13, color: 0x3bbd8e },
-      { id: 'leg_br', type: 'capsule', a: [0.42, 0.45, -0.22], b: [0.46, 0.08, -0.26], r: 0.13, color: 0x3bbd8e },
+      // A5 knees: each leg = thigh (hip->knee) + shin (knee->foot; keeps
+      // the original leg id so feet/groups stay id-stable). Knees bend
+      // 0.05 toward the face (-X) at rest — the authored offset IS the
+      // IK pole. Thigh.b MUST equal shin.a exactly (suite-enforced).
+      { id: 'thigh_fl', type: 'capsule', a: [-0.42, 0.45, 0.22], b: [-0.49, 0.265, 0.24], r: 0.13, color: 0x3bbd8e },
+      { id: 'leg_fl', type: 'capsule', a: [-0.49, 0.265, 0.24], b: [-0.46, 0.08, 0.26], r: 0.115, color: 0x3bbd8e },
+      { id: 'thigh_fr', type: 'capsule', a: [-0.42, 0.45, -0.22], b: [-0.49, 0.265, -0.24], r: 0.13, color: 0x3bbd8e },
+      { id: 'leg_fr', type: 'capsule', a: [-0.49, 0.265, -0.24], b: [-0.46, 0.08, -0.26], r: 0.115, color: 0x3bbd8e },
+      { id: 'thigh_bl', type: 'capsule', a: [0.42, 0.45, 0.22], b: [0.39, 0.265, 0.24], r: 0.13, color: 0x3bbd8e },
+      { id: 'leg_bl', type: 'capsule', a: [0.39, 0.265, 0.24], b: [0.46, 0.08, 0.26], r: 0.115, color: 0x3bbd8e },
+      { id: 'thigh_br', type: 'capsule', a: [0.42, 0.45, -0.22], b: [0.39, 0.265, -0.24], r: 0.13, color: 0x3bbd8e },
+      { id: 'leg_br', type: 'capsule', a: [0.39, 0.265, -0.24], b: [0.46, 0.08, -0.26], r: 0.115, color: 0x3bbd8e },
       { id: 'tail', type: 'capsule', a: [0.5, 0.7, 0.0], b: [1.05, 1.05, 0.0], r: 0.14, color: 0x6f8cff },
       // Ball eyes (the cast standard since the reference screenshots):
       // solid whites rooted 0.02 inside the head, poking 0.08; irises
@@ -172,16 +196,28 @@ export const CREATURES = [
     name: 'Longneck',
     // Tail wags — NOT the neck: the head would not follow it (see rules).
     anim: { primId: 'tail', axis: [1, 0, 0], amplitude: 0.7, speed: 2.8 },
-    step: { feet: ['leg_fl', 'leg_fr', 'leg_bl', 'leg_br'], groups: [[0, 3], [1, 2]] },
+    step: {
+      feet: ['leg_fl', 'leg_fr', 'leg_bl', 'leg_br'],
+      groups: [[0, 3], [1, 2]],
+      // A5: two-segment legs — foot id -> thigh id. The foot prim is the
+      // SHIN; the rest pose's knee offset authors the bend direction.
+      knees: { leg_fl: 'thigh_fl', leg_fr: 'thigh_fr', leg_bl: 'thigh_bl', leg_br: 'thigh_br' },
+    },
     blink: { eyes: ['eyeball_l', 'eyeball_r', 'iris_l', 'iris_r'] },
     prims: [
       { id: 'body', type: 'capsule', a: [-0.35, 0.55, 0.0], b: [0.45, 0.55, 0.0], r: 0.38, color: 0xe8b04b },
       { id: 'neck', type: 'capsule', a: [-0.35, 0.6, 0.0], b: [-0.75, 1.35, 0.0], r: 0.17, kCap: 0.12, color: 0xe8b04b },
       { id: 'head', type: 'sphere', a: [-0.85, 1.45, 0.0], r: 0.22, color: 0xdf9b3f },
-      { id: 'leg_fl', type: 'capsule', a: [-0.28, 0.45, 0.18], b: [-0.3, 0.08, 0.21], r: 0.11, color: 0xcf8f39 },
-      { id: 'leg_fr', type: 'capsule', a: [-0.28, 0.45, -0.18], b: [-0.3, 0.08, -0.21], r: 0.11, color: 0xcf8f39 },
-      { id: 'leg_bl', type: 'capsule', a: [0.38, 0.45, 0.18], b: [0.4, 0.08, 0.21], r: 0.11, color: 0xcf8f39 },
-      { id: 'leg_br', type: 'capsule', a: [0.38, 0.45, -0.18], b: [0.4, 0.08, -0.21], r: 0.11, color: 0xcf8f39 },
+      // A5 knees (sauropod columns: slight 0.045 forward bend). 16 prims
+      // — EXACTLY at MAX_PRIMS: zero headroom left on this creature.
+      { id: 'thigh_fl', type: 'capsule', a: [-0.28, 0.45, 0.18], b: [-0.335, 0.265, 0.195], r: 0.11, color: 0xcf8f39 },
+      { id: 'leg_fl', type: 'capsule', a: [-0.335, 0.265, 0.195], b: [-0.3, 0.08, 0.21], r: 0.095, color: 0xcf8f39 },
+      { id: 'thigh_fr', type: 'capsule', a: [-0.28, 0.45, -0.18], b: [-0.335, 0.265, -0.195], r: 0.11, color: 0xcf8f39 },
+      { id: 'leg_fr', type: 'capsule', a: [-0.335, 0.265, -0.195], b: [-0.3, 0.08, -0.21], r: 0.095, color: 0xcf8f39 },
+      { id: 'thigh_bl', type: 'capsule', a: [0.38, 0.45, 0.18], b: [0.345, 0.265, 0.195], r: 0.11, color: 0xcf8f39 },
+      { id: 'leg_bl', type: 'capsule', a: [0.345, 0.265, 0.195], b: [0.4, 0.08, 0.21], r: 0.095, color: 0xcf8f39 },
+      { id: 'thigh_br', type: 'capsule', a: [0.38, 0.45, -0.18], b: [0.345, 0.265, -0.195], r: 0.11, color: 0xcf8f39 },
+      { id: 'leg_br', type: 'capsule', a: [0.345, 0.265, -0.195], b: [0.4, 0.08, -0.21], r: 0.095, color: 0xcf8f39 },
       { id: 'tail', type: 'capsule', a: [0.45, 0.62, 0.0], b: [0.85, 0.85, 0.0], r: 0.1, kCap: 0.07, color: 0xdf9b3f },
       // Ball eyes: rooted 0.015 inside the head, poking 0.06.
       { id: 'eyeball_l', type: 'sphere', a: [-1.019, 1.506, 0.101], r: 0.075, kCap: 0.03, color: 0xffffff },

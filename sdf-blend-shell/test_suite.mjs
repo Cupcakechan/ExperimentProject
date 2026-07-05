@@ -565,7 +565,8 @@ assert(fieldMaxR <= ROAM_HARD_RADIUS + 1e-9, `hard clamp holds (max radius ${fie
 assert(ROAM_SEP_RADIUS > 1.0, 'personal space exceeds the touch threshold');
 
 // ---- Gait (stage 3): aim-and-stretch math, step data, and a measured walk ----
-const { createGait, aimStretchMatrix } = await import('./src/gait.js');
+const { createGait, aimStretchMatrix, solveKnee, segmentMatrix } = await import('./src/gait.js');
+const { KNEE_STRAIGHT_FRAC } = await import('./src/config.js');
 const { STEP_TRIGGER, STRETCH_MIN, STRETCH_MAX } = await import('./src/config.js');
 
 // aimStretchMatrix, hand-computed: rest leg straight down from hip (0,1,0)
@@ -581,6 +582,24 @@ const M2 = aimStretchMatrix(A0, B0, new THREE.Vector3(0, -0.5, 0));
 assert(B0.clone().applyMatrix4(M2).distanceTo(new THREE.Vector3(0, -0.5, 0)) < 1e-9, 'aimStretch stretches to the pin (s=1.5, hand-computed)');
 assert(new THREE.Vector3(0.13, 1, 0).applyMatrix4(M2).distanceTo(new THREE.Vector3(0.13, 1, 0)) < 1e-9, 'aimStretch preserves the cross-section (perpendicular point fixed)');
 
+// solveKnee, hand-computed: hip (0,1,0), foot (0,0,0), L1 = L2 = 0.6,
+// pole +X. d = 1, along = 0.5, height = sqrt(0.36 - 0.25) = 0.33166 ->
+// knee at (0.33166, 0.5, 0).
+const K1 = solveKnee(new THREE.Vector3(0, 1, 0), new THREE.Vector3(0, 0, 0), 0.6, 0.6, new THREE.Vector3(1, 0, 0));
+assert(K1.distanceTo(new THREE.Vector3(Math.sqrt(0.11), 0.5, 0)) < 1e-9, 'solveKnee symmetric case = (0.33166, 0.5, 0) (hand-computed)');
+assert(Math.abs(K1.distanceTo(new THREE.Vector3(0, 1, 0)) - 0.6) < 1e-9 && Math.abs(K1.distanceTo(new THREE.Vector3(0, 0, 0)) - 0.6) < 1e-9, 'solveKnee preserves BOTH segment lengths exactly');
+// Pole flipped -> the knee mirrors (the bend direction is the pole's).
+const K2 = solveKnee(new THREE.Vector3(0, 1, 0), new THREE.Vector3(0, 0, 0), 0.6, 0.6, new THREE.Vector3(-1, 0, 0));
+assert(K2.x < 0 && Math.abs(K2.x + K1.x) < 1e-9, 'solveKnee bends toward the pole (mirrored pole = mirrored knee)');
+// segmentMatrix: maps a0->a1 AND b0->b1 (the shin: both ends placed).
+const segA0 = new THREE.Vector3(0, 0.5, 0);
+const segB0 = new THREE.Vector3(0, 0, 0);
+const segA1 = new THREE.Vector3(0.3, 0.6, 0.1);
+const segB1 = new THREE.Vector3(0.5, 0.2, 0.1);
+const MS = segmentMatrix(segA0, segB0, segA1, segB1);
+assert(segA0.clone().applyMatrix4(MS).distanceTo(segA1) < 1e-9, 'segmentMatrix maps a0 exactly onto a1');
+assert(segB0.clone().applyMatrix4(MS).distanceTo(segB1) < 1e-9, 'segmentMatrix maps b0 exactly onto b1');
+
 for (const creature of CREATURES) {
   if (!creature.step) continue;
   const tag = `[${creature.id}]`;
@@ -595,6 +614,31 @@ for (const creature of CREATURES) {
   const covered = groups.flat().sort((a, b) => a - b);
   assert(covered.length === feetIds.length && covered.every((v, i) => v === i), `${tag} groups partition the feet exactly`);
 
+  // A5 knees registry rules: thigh resolves, JOINT CONTINUITY is exact
+  // (thigh.b === shin.a — the knee is one point), the rest pose declares
+  // a visible bend (>= 0.02 off the hip-foot line: that offset IS the
+  // IK pole), and the rest knee is never near-locked.
+  for (const [footId, thighId] of Object.entries(creature.step.knees ?? {})) {
+    assert(feetIds.includes(footId), `${tag} knees key '${footId}' is a declared foot`);
+    const shin = creature.prims.find((p) => p.id === footId);
+    const thigh = creature.prims.find((p) => p.id === thighId);
+    assert(thigh && Array.isArray(thigh.b) && !thigh.paint && !thigh.negative, `${tag} thigh '${thighId}' is a solid capsule`);
+    if (!thigh || !shin) continue;
+    const joint = Math.hypot(thigh.b[0] - shin.a[0], thigh.b[1] - shin.a[1], thigh.b[2] - shin.a[2]);
+    assert(joint < 1e-9, `${tag} ${footId}: thigh.b === shin.a exactly (joint gap ${joint.toExponential(1)})`);
+    const H = new THREE.Vector3(...thigh.a);
+    const Kn = new THREE.Vector3(...thigh.b);
+    const F = new THREE.Vector3(...shin.b);
+    const L1 = Kn.distanceTo(H);
+    const L2 = F.distanceTo(Kn);
+    const u = F.clone().sub(H).normalize();
+    const off = Kn.clone().sub(H);
+    off.addScaledVector(u, -off.dot(u));
+    assert(off.length() >= 0.02, `${tag} ${footId}: rest knee bends >= 0.02 off the line (${off.length().toFixed(3)}) — the authored pole`);
+    const reach = F.distanceTo(H) / (L1 + L2);
+    assert(reach < KNEE_STRAIGHT_FRAC - 0.015, `${tag} ${footId}: rest reach ${reach.toFixed(3)} keeps the knee off the straight lock`);
+  }
+
   // The walk, simulated (20s straight line at roam speed, with bob) —
   // thresholds encode the MEASURED values: drift 0.298, stretch 0.55-1.33,
   // never more than one group airborne, planted feet world-fixed.
@@ -608,6 +652,14 @@ for (const creature of CREATURES) {
   let plantedMoved = false;
   const prevSwing = feetIds.map(() => false);
   const prevAnchor = feetIds.map(() => null);
+  // A5 knee invariants, tracked live through the walk: the knee joint
+  // never separates (thigh.b written === shin.a written), NEITHER
+  // segment stretches (the feature's whole claim: bend replaces
+  // stretch), and the knee actually articulates (bend angle varies).
+  let kneeGapMax = 0;
+  let segLenDevMax = 0;
+  let kneeCosMin = 2;
+  let kneeCosMax = -2;
   for (let i = 0; i < 1200; i++) {
     const tt = i / 60;
     gait.update(1 / 60, { x: -tt * 0.35, y: 0.03 * Math.sin(tt * 4), z: 0, heading: 0 }, [gMat]);
@@ -622,6 +674,17 @@ for (const creature of CREATURES) {
       const s = gMat.uniforms.uA.value[f.idx].distanceTo(gMat.uniforms.uB.value[f.idx]) / f.len0;
       maxS = Math.max(maxS, s);
       minS = Math.min(minS, s);
+      if (f.knee) {
+        const tA = gMat.uniforms.uA.value[f.knee.idx];
+        const tB = gMat.uniforms.uB.value[f.knee.idx];
+        const sA = gMat.uniforms.uA.value[f.idx];
+        const sB = gMat.uniforms.uB.value[f.idx];
+        kneeGapMax = Math.max(kneeGapMax, tB.distanceTo(sA));
+        segLenDevMax = Math.max(segLenDevMax, Math.abs(tA.distanceTo(tB) - f.knee.L1), Math.abs(sA.distanceTo(sB) - f.len0));
+        const cos = tA.clone().sub(tB).normalize().dot(sB.clone().sub(sA).normalize());
+        kneeCosMin = Math.min(kneeCosMin, cos);
+        kneeCosMax = Math.max(kneeCosMax, cos);
+      }
     });
   }
   assert(steps >= feetIds.length * 15, `${tag} the gait is not inert (${steps} steps >= ${feetIds.length * 15} over 20s)`);
@@ -629,6 +692,11 @@ for (const creature of CREATURES) {
   assert(!plantedMoved, `${tag} planted feet are world-fixed between steps`);
   assert(maxDrift < STEP_TRIGGER + 0.13, `${tag} feet keep up (max planted drift ${maxDrift.toFixed(3)} < ${(STEP_TRIGGER + 0.13).toFixed(2)}, MEASURED 0.298)`);
   assert(minS >= STRETCH_MIN - 1e-6 && maxS <= STRETCH_MAX + 1e-6, `${tag} leg stretch stays in the clamp band (${minS.toFixed(2)}-${maxS.toFixed(2)} within ${STRETCH_MIN}-${STRETCH_MAX})`);
+  if (creature.step.knees) {
+    assert(kneeGapMax < 1e-6, `${tag} the knee joint NEVER separates (max gap ${kneeGapMax.toExponential(1)} — thigh and shin write one shared point)`);
+    assert(segLenDevMax < 1e-6, `${tag} neither segment stretches through the whole walk (max deviation ${segLenDevMax.toExponential(1)} — bend replaced stretch)`);
+    assert(kneeCosMax - kneeCosMin > 0.05, `${tag} the knee ARTICULATES (bend-cos range ${(kneeCosMax - kneeCosMin).toFixed(3)} > 0.05 — not a rigid L)`);
+  }
 }
 assert(createGait({ prims: [] }) === null, 'creatures without step data get no gait (graceful null)');
 
@@ -1099,9 +1167,9 @@ function creatureSlices(prims) {
 // an assumed k/4. Re-measure (the INFO lines print live values) whenever
 // a pass changes the field, and update this table.
 const INFL_CEILING = {
-  critter: { 0.25: 0.083, 0.6: 0.26 },
+  critter: { 0.25: 0.115, 0.6: 0.33 }, // re-MEASURED after A5 knees (0.0952/0.3094): the knee crotch is a new uncapped pair
   hopper: { 0.25: 0.13, 0.6: 0.265 }, // at breath peak (+0.012)
-  longneck: { 0.25: 0.114, 0.6: 0.317 },
+  longneck: { 0.25: 0.14, 0.6: 0.38 }, // re-MEASURED after A5 knees (0.1176/0.3593): same knee-crotch mechanism
   pudge: { 0.25: 0.142, 0.6: 0.229 }, // at breath peak (dilate 0.04 + amplitude 0.02)
   snail: { 0.25: 0.094, 0.6: 0.182 }, // at breath peak (+0.012); the shell's absolute k still caps compounding
   skitter: { 0.25: 0.03, 0.6: 0.03 }, // fully authored blends: MEASURED 0.0097 at BOTH k (every close pair capped)
