@@ -213,7 +213,10 @@ for (const creature of CREATURES) {
   }
 
   // paint prims: anchored inside a solid host AND poking through its skin:
-  // -r < dist(center, host surface) < 0. Host = nearest solid.
+  // -r < dist(point, host surface) < 0. Host = nearest solid. R3: paints
+  // can be CAPSULES now (the mouth slits) — EVERY authored endpoint must
+  // sit in the band, or one end of the slit grazes/sinks while the other
+  // reads fine (the capsule cousin of the corner-sag lesson).
   const hostOf = {};
   for (const paint of prims.filter((p) => p.paint)) {
     let host = null;
@@ -223,8 +226,12 @@ for (const creature of CREATURES) {
       if (sd < hostSd) { hostSd = sd; host = s; }
     }
     hostOf[paint.id] = { host, hostSd };
-    assert(hostSd < 0, `${tag} ${paint.id} anchored inside a solid ('${host?.id}', sd ${hostSd.toFixed(4)} < 0)`);
-    assert(hostSd > -paint.r, `${tag} ${paint.id} pokes through the skin (sd ${hostSd.toFixed(4)} > -r ${-paint.r})`);
+    const ends = paint.b ? [['a', paint.a], ['b', paint.b]] : [['a', paint.a]];
+    for (const [endLabel, pt] of ends) {
+      const sdEnd = sdPrim(pt, host);
+      assert(sdEnd < 0, `${tag} ${paint.id} endpoint ${endLabel} anchored inside a solid ('${host?.id}', sd ${sdEnd.toFixed(4)} < 0)`);
+      assert(sdEnd > -paint.r, `${tag} ${paint.id} endpoint ${endLabel} pokes through the skin (sd ${sdEnd.toFixed(4)} > -r ${-paint.r})`);
+    }
   }
 
   // layered decals: every pupil_X pairs with an EARLIER sclera_X on the
@@ -790,7 +797,8 @@ assert(hopper.hop && hopper.step && hopper.step.feet.length === 2, 'hopper hops 
     .add(new THREE.Vector3(...hopper.prims[mouthIdx].b))
     .multiplyScalar(0.5);
   let mouthMinY = 9; // lowest midpoint y — the drop, hand-computed 0.3806 at the apex
-  let mouthMaxDist = 0; // farthest endpoint from the body center — the submersion invariant
+  let mouthMaxDist = 0; // farthest endpoint from the body center — the decal band's INNER wall (sd < 0)
+  let mouthMinDist = 99; // nearest endpoint to the body center — the band's OUTER wall (sd > -r: it must keep painting)
   let mouthRested = false; // PAUSE after >= 1 hop: exact registry pose back
   let prevD = null;
   const prevAnchor = hop.feet.map(() => null);
@@ -809,6 +817,7 @@ assert(hopper.hop && hopper.step && hopper.step.feet.length === 2, 'hopper hops 
     const mB = hMat.uniforms.uB.value[mouthIdx];
     mouthMinY = Math.min(mouthMinY, (mA.y + mB.y) / 2);
     mouthMaxDist = Math.max(mouthMaxDist, mA.distanceTo(bodyRestA), mB.distanceTo(bodyRestA));
+    mouthMinDist = Math.min(mouthMinDist, mA.distanceTo(bodyRestA), mB.distanceTo(bodyRestA));
     if (st === 'PAUSE' && hops >= 1 && (mA.x + mB.x) / 2 === mouthRestMid.x && (mA.y + mB.y) / 2 === mouthRestMid.y) mouthRested = true;
     maxY = Math.max(maxY, disp.y);
     minY = Math.min(minY, disp.y);
@@ -839,14 +848,17 @@ assert(hopper.hop && hopper.step && hopper.step.feet.length === 2, 'hopper hops 
   assert(sawSquash, 'CROUCH squashes the body (endpoints split along X — anticipation, measured live)');
   assert(sawStretch, 'AIR stretches the body (endpoints split along Y — measured live)');
   assert(restRestored, 'PAUSE restores the EXACT rest sphere (absolute-from-rest writes cannot drift, bit-exact)');
-  // Jaw-drop (A4 stage 2), hand-computed at full open (angle 0.22 about
-  // the body center + push 0.012 outward): mouth midpoint y drops from
-  // 0.48 to 0.62 - 0.4550*sin(.22) - 0.14*cos(.22)... = 0.3806, and the
-  // farthest endpoint reaches |rel| 0.4827 + 0.012 = at most 0.4947 from
-  // the body center — always >= 0.005 INSIDE the r=0.5 body: the carve
-  // stays SUBMERGED at any openness (the corner-run-off guard, live).
+  // Jaw-drop (A4 stage 2; R3 decal mouth), hand-computed at full open
+  // (angle 0.22 about the body center + push 0.012 outward): midpoint y
+  // drops 0.48 -> 0.3806, and the farthest endpoint reaches at most
+  // 0.4947 from the body center. THE DECAL BAND, walked live over every
+  // simulated frame: each endpoint stays ANCHORED inside the body
+  // (dist < 0.5: sd < 0 — an escaped decal detaches from its host) AND
+  // keeps POKING (dist > 0.5 - r = 0.41: sd > -r — a sunken decal fades
+  // like a blink, and an open mouth that stops painting is inert).
   assert(mouthMinY < 0.40 && mouthMinY > 0.36, `the mouth jaw-drops through the arc (lowest midpoint y ${mouthMinY.toFixed(4)}, hand-computed 0.3806 at the apex)`);
-  assert(mouthMaxDist < 0.5 - 0.004, `the open mouth stays SUBMERGED every frame (max endpoint dist ${mouthMaxDist.toFixed(4)} < 0.496 — never grazes)`);
+  assert(mouthMaxDist < 0.5 - 0.004, `the open mouth stays ANCHORED every frame (max endpoint dist ${mouthMaxDist.toFixed(4)} < 0.496 — the decal band's inner wall)`);
+  assert(mouthMinDist > 0.5 - 0.09, `the open mouth keeps PAINTING every frame (min endpoint dist ${mouthMinDist.toFixed(4)} > 0.41 — the decal band's outer wall)`);
   assert(mouthRested, 'PAUSE restores the EXACT registry mouth (jaw writes are absolute from rest, bit-exact)');
   assert(HOP_AIR_TIME > 0 && HOP_TRIGGER > 0, 'hop constants are live');
 
@@ -1236,22 +1248,10 @@ const INFL_CEILING = {
 // below the POSITIVE union (MEASURED -0.1066 at both k — the mouth's
 // hand-computed penetration depth 0.1068, confirmed by the field).
 const CARVE_BOUNDS = {
-  hopper: {
-    // MEASURED at breath peak (+0.012), re-MEASURED after R2: min infl
-    // -0.1019 (unchanged — the carve depth is sdiff's, and sdiff kept its
-    // quadratic math in the union-only swap); min hard -0.0027 at k=0.25
-    // / +0.0047 at k=0.6.
-    0.25: { hardBand: 0.021, carveFloor: 0.122 },
-    0.6: { hardBand: 0.02, carveFloor: 0.122 },
-  },
-  pudge: {
-    // MEASURED at breath peak (dilate 0.04 + amplitude 0.02), re-MEASURED
-    // after R2 (identical — every close pair on this face is capped): min infl
-    // -0.0387, min hard POSITIVE (+0.0600 — the peak dilate lifts the
-    // contour even further outside hard CSG).
-    0.25: { hardBand: 0.02, carveFloor: 0.059 },
-    0.6: { hardBand: 0.02, carveFloor: 0.059 },
-  },
+  // R3: the cast carries no field carves (mouths are paint decals now).
+  // The carved inspector branch below stays live vocabulary — a future
+  // carved creature gets a MEASURED entry here (the hopper/pudge era's
+  // values live in git history at the R2 commit).
 };
 
 for (const creature of CREATURES) {
@@ -1341,24 +1341,60 @@ for (const creature of CREATURES) {
   }
 }
 
-// --- carve regression anchors (hopper's mouth: the first carve) ---
-// The generalizable checks (dent/pierce, decal clearance, donor density)
-// moved into the per-creature Section 1 loop; what stays here is the
-// hand-computed skin-removal anchor for the first-ever carve, and the
-// design probe that the demo mouth exists at all.
+// --- mouth anchors (R3: mouths are PAINT DECALS — features off the field) ---
+// The carve era's generalizable checks retired with the carves (the
+// per-creature negative loop is vacuous on this cast; the carve MATH
+// keeps its synthetic anchors above as live vocabulary). What lives here:
+// design probes that the conversion happened and MATTERS — zero negatives
+// cast-wide, the skin restored at the old carve point, and the decal
+// mouth still PAINTING in the exact regime that swallowed the carves
+// (slider k=0.6 at breath peak: the k-validity class, closed).
 {
-  const mouth = hopper.prims.find((p) => p.id === 'mouth');
+  assert(CREATURES.every((c) => c.prims.every((p) => !p.negative)), 'the cast carries ZERO field carves (R3: features off the field — nothing left to swallow)');
+  const mouthH = hopper.prims.find((p) => p.id === 'mouth');
   const bodyH = hopper.prims.find((p) => p.id === 'body');
-  assert(mouth && mouth.negative === true && typeof mouth.color === 'number', 'hopper has the demo mouth carve (negative, colored)');
-  // The carve actually removes skin: the body-surface point on the ray
-  // toward the mouth's MIDPOINT (it is a capsule slit now) sat ON the
-  // skin pre-carve; post-carve the field there must be clearly positive.
-  const mb = mouth.b ?? mouth.a;
-  const mMid = [(mouth.a[0] + mb[0]) / 2, (mouth.a[1] + mb[1]) / 2, (mouth.a[2] + mb[2]) / 2];
+  assert(mouthH && mouthH.paint === true && typeof mouthH.color === 'number', "hopper's mouth is a PAINT decal (colored, surface-riding)");
+  const mb = mouthH.b ?? mouthH.a;
+  const mMid = [(mouthH.a[0] + mb[0]) / 2, (mouthH.a[1] + mb[1]) / 2, (mouthH.a[2] + mb[2]) / 2];
   const dir = [mMid[0] - bodyH.a[0], mMid[1] - bodyH.a[1], mMid[2] - bodyH.a[2]];
   const dl = Math.hypot(...dir);
   const P = [bodyH.a[0] + (dir[0] / dl) * bodyH.r, bodyH.a[1] + (dir[1] / dl) * bodyH.r, bodyH.a[2] + (dir[2] / dl) * bodyH.r];
-  assert(mapField(P, hopper.prims, BLEND_K) > 0.02, `the mouth removed skin (field at the old skin point = ${mapField(P, hopper.prims, BLEND_K).toFixed(4)} > 0.02)`);
+  assert(Math.abs(mapField(P, hopper.prims, BLEND_K)) < 0.01, `the skin is BACK at the old carve point (field ${mapField(P, hopper.prims, BLEND_K).toFixed(4)} ~ 0 — the mouth no longer removes geometry)`);
+
+  // The swallowing regime, survived: at slider k=0.6 AND breath peak,
+  // bisect the outward ray to the LIVE skin, measure the site's actual
+  // inflation, and run the shader's coverage mirror there. Bounds are
+  // MEASURED (+0.02 margin) — the decal-rule probe: mouths sit on
+  // low-inflation sites, with numbers instead of hope.
+  const SITE_INFL_BOUND = { hopper: 0.08, pudge: 0.085 }; // MEASURED 0.0572 / 0.0632 at k=0.6 breath peak (+0.02 margin); pudge rides near its mouth r 0.068 — the footprint balloons WITH his flat eyes at the extreme, the proven decal read
+  function skinPointOnRay(creature, mouth, k, inflate) {
+    const solidsC = creature.prims.filter((p) => !p.paint && !p.negative);
+    let host = null, hostSd = Infinity;
+    for (const s of solidsC) { const sd = sdPrim(mouth.a, s); if (sd < hostSd) { hostSd = sd; host = s; } }
+    const b2 = mouth.b ?? mouth.a;
+    const mid = [(mouth.a[0] + b2[0]) / 2, (mouth.a[1] + b2[1]) / 2, (mouth.a[2] + b2[2]) / 2];
+    const hc = host.a; // both mouth hosts are spheres on this cast
+    const d0 = [mid[0] - hc[0], mid[1] - hc[1], mid[2] - hc[2]];
+    const l0 = Math.hypot(...d0);
+    const u = [d0[0] / l0, d0[1] / l0, d0[2] / l0];
+    let lo = host.r - 0.05, hi = host.r + 0.6;
+    for (let i = 0; i < 60; i++) {
+      const t = (lo + hi) / 2;
+      const q = [hc[0] + u[0] * t, hc[1] + u[1] * t, hc[2] + u[2] * t];
+      if (mapField(q, creature.prims, k, inflate) < 0) lo = t; else hi = t;
+    }
+    const t = (lo + hi) / 2;
+    return [hc[0] + u[0] * t, hc[1] + u[1] * t, hc[2] + u[2] * t];
+  }
+  for (const [cid, peak] of [['hopper', 0.012], ['pudge', 0.06]]) {
+    const c = CREATURES.find((x) => x.id === cid);
+    const mouth = c.prims.find((p) => p.id === 'mouth');
+    const skin = skinPointOnRay(c, mouth, 0.6, peak);
+    const siteInfl = rawMinSolid(skin, c.prims);
+    const cov = coverage(sdPrim(skin, mouth), siteInfl);
+    assert(siteInfl < SITE_INFL_BOUND[cid], `[${cid}] mouth sits on a LOW-INFLATION site (skin rides ${siteInfl.toFixed(4)} above the raw host at k=0.6 breath peak, < ${SITE_INFL_BOUND[cid]} MEASURED bound)`);
+    assert(cov > 0.99, `[${cid}] mouth still PAINTS at k=0.6 breath peak (coverage ${cov.toFixed(4)} > 0.99 — the regime that swallowed the carve mouths)`);
+  }
 }
 
 // ---- Fold detector (A4, permanent): zero folded INK triangles at carves ----

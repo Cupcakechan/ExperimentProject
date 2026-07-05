@@ -74,9 +74,12 @@
 //     comfortably wider than the host's inter-vertex spacing or the
 //     bowl looks starved (levers: sphere segments in buildShell,
 //     CAPSULE_RINGS_PER_UNIT for capsule hosts).
-//   - MOUTHS are CAPSULE carves spanning z (a wide slit) — a sphere
-//     carve intersects the host in a circle, which reads as a shocked
-//     hole, not a mouth (browser-confirmed on the first two carves).
+//   - MOUTHS are CAPSULE PAINT DECALS spanning z (a wide slit) — R3:
+//     features live ON the surface, never carved INTO the field (the
+//     Spore rigblock model; the ball-eye conversion, finished). The
+//     slit shape survives from the carve era: a sphere reads as a
+//     shocked hole, not a mouth (browser-confirmed). Anchor EVERY
+//     endpoint in the decal band: -r < sd(host) < 0 (suite-enforced).
 //   - BALL EYES (the CAST STANDARD): a small SOLID white sphere rooted
 //     0.015-0.02 inside the head (kCap ~0.03 so it stays a ball), the
 //     dark iris a PAINT decal hosted ON the eyeball (nearest-solid
@@ -106,12 +109,12 @@
 //     coverage compensates MEASURED local inflation uncapped, which is
 //     correct at sane sites but balloons at high-inflation joins
 //     (measured on the abandoned decal-mouth design — probe-killed).
-//   - MOUTH K-VALIDITY (measured boundary): a carve reads correctly
-//     while union inflation at its site stays UNDER the carve's radius;
-//     beyond (pudge near slider k=0.6) the carve geometry is swallowed
-//     by the fattened skin and no color model can paint it — that's
-//     melt territory, the slider extreme's whole point. Author mouths
-//     with r comfortably above the site's expected inflation.
+//   - MOUTH K-VALIDITY: CLOSED by R3. A carve read correctly only while
+//     union inflation stayed under its radius (the swallowing boundary,
+//     measured through the carve era); a PAINT mouth rides the inflated
+//     skin like every decal, at any k (suite-probed at k=0.6 + breath
+//     peak). The residual rule is just the decal rule: mouths belong on
+//     LOW-INFLATION sites (face fronts), like all decals.
 // ============================================================
 
 export const CREATURES = [
@@ -179,14 +182,13 @@ export const CREATURES = [
       { id: 'foot_r', type: 'capsule', a: [-0.05, 0.16, -0.18], b: [-0.38, 0.12, -0.22], r: 0.15, color: 0x9b4f96 },
       { id: 'ear_l', type: 'capsule', a: [-0.05, 1.0, 0.15], b: [-0.12, 1.38, 0.22], r: 0.16, color: 0xe09ade },
       { id: 'ear_r', type: 'capsule', a: [-0.05, 1.0, -0.15], b: [-0.12, 1.38, -0.22], r: 0.16, color: 0xe09ade },
-      // The demo CARVE, a WIDE slit — SUBMERGED: both endpoints sit well
-      // inside the face (old geometry grazed with the midpoint 0.019
-      // OUTSIDE the surface — grazing coverage smears into corner
-      // run-offs; measured analytically, suite-enforced below).
-      // K-VALIDITY (A4, measured): at extreme slider k the union deficit
-      // exceeds the carve's radius and the mouth GEOMETRY is swallowed —
-      // a design boundary (see the authoring rules), not a color bug.
-      { id: 'mouth', type: 'capsule', a: [-0.455, 0.48, 0.08], b: [-0.455, 0.48, -0.08], r: 0.09, kCap: 0.06, negative: true, color: 0x2b1626 },
+      // The mouth, R3: a PAINT DECAL slit (was the demo carve). Same
+      // authored geometry — the carve-era endpoints (sd -0.0173) already
+      // sit in the decal band (-r < sd < 0: anchored inside, poking).
+      // Paint rides the inflated skin, so the k-validity swallowing
+      // boundary no longer applies here (suite-probed at k=0.6 breath
+      // peak). kCap dropped: a paint prim has no field to cap.
+      { id: 'mouth', type: 'capsule', a: [-0.455, 0.48, 0.08], b: [-0.455, 0.48, -0.08], r: 0.09, paint: true, color: 0x2b1626 },
       // Ball eyes: rooted 0.02 inside the body, poking 0.11 (clear of
       // the mouth carve by 0.09 raw).
       { id: 'eyeball_l', type: 'sphere', a: [-0.423, 0.781, 0.161], r: 0.13, kCap: 0.03, color: 0xffffff },
@@ -252,12 +254,13 @@ export const CREATURES = [
       { id: 'leg_bl', type: 'capsule', a: [0.34, 0.38, 0.2], b: [0.36, 0.08, 0.23], r: 0.12, kCap: 0.08, color: 0x6f9bd1 },
       { id: 'leg_br', type: 'capsule', a: [0.34, 0.38, -0.2], b: [0.36, 0.08, -0.23], r: 0.12, kCap: 0.08, color: 0x6f9bd1 },
       { id: 'tail', type: 'capsule', a: [0.42, 0.55, 0.0], b: [0.62, 0.68, 0.0], r: 0.11, kCap: 0.08, color: 0x7fa8dd },
-      // Wide mouth slit — SUBMERGED with a SHORT span: on this curvier
-      // head the chord-sag left the old slit's corners near-grazing, and
-      // grazing coverage smears into corner run-offs (measured
-      // analytically; picked from a probe sweep). Same known high-k
-      // fade limit as hopper's mouth.
-      { id: 'mouth', type: 'capsule', a: [-0.73, 0.63, 0.05], b: [-0.73, 0.63, -0.05], r: 0.068, kCap: 0.048, negative: true, color: 0x2d2438 },
+      // The mouth, R3: a PAINT DECAL slit (was a carve). Same authored
+      // geometry — endpoints (sd -0.0261) already in the decal band. The
+      // SHORT span survives from the carve era (the corner-sag lesson:
+      // a capsule end near the surface behaves like the old grazing
+      // corner). It paints on the face front — this cast's proven decal
+      // territory (the flat eyes live here). kCap dropped.
+      { id: 'mouth', type: 'capsule', a: [-0.73, 0.63, 0.05], b: [-0.73, 0.63, -0.05], r: 0.068, paint: true, color: 0x2d2438 },
       // FLAT DECAL EYES, deliberately — the BALL-EYE DILATE BOUNDARY
       // (browser-caught scary-goggles, then a probe-killed solid-iris
       // fix): a constant dilate compresses every small-feature contrast

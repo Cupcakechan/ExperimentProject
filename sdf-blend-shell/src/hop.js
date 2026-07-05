@@ -91,16 +91,19 @@ export function createHop(creature) {
   );
   const sPrim = sIdx >= 0 ? creature.prims[sIdx] : null;
 
-  // Jaw-drop target (A4 stage 2): the mouth CARVE, opening through the
-  // AIR arc. A carve's radius is not matrix-transformable, so "open" is
-  // a ROTATION about the body center (constant depth — a translated
-  // carve that crossed the surface would graze: the corner-run-off
-  // lesson) plus a small outward PUSH that deepens the cut while
-  // provably staying submerged (rest 0.024 deep, full open 0.012 —
-  // suite-anchored). Needs the squash prim as the rotation center;
-  // missing either -> -1, hop works without the mouth (graceful).
+  // Jaw-drop target (A4 stage 2; R3: the mouth is a PAINT DECAL now).
+  // "Open" is a ROTATION about the body center — sd-NEUTRAL on the
+  // spherical body, so rotating cannot graze or sink the decal — plus a
+  // small outward PUSH that makes the open mouth POKE harder (rest sd
+  // -0.024, full open -0.012: the whole arc stays inside the decal band
+  // -r < sd < 0, suite-walked live over every simulated frame). The
+  // mechanism is prim-agnostic (setPrimTransform moves uA/uB; the paint
+  // phase reads them) — only this lookup knew the mouth was a carve.
+  // negative kept as an alternative: a future carved mouth still drops.
+  // Needs the squash prim as the rotation center; missing either -> -1,
+  // hop works without the mouth (graceful).
   const mIdx = sPrim
-    ? creature.prims.findIndex((p) => p.id === (h.mouthPrim ?? 'mouth') && p.negative)
+    ? creature.prims.findIndex((p) => p.id === (h.mouthPrim ?? 'mouth') && (p.paint || p.negative))
     : -1;
   const mPrim = mIdx >= 0 ? creature.prims[mIdx] : null;
   const _mCenter = sPrim ? new THREE.Vector3(...sPrim.a) : null;

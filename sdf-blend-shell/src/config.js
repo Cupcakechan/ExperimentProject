@@ -191,11 +191,11 @@ export const IDLE_TURN_FACTOR = 0.35; // wander turning kept while idle (looking
 export const BLINK_PERIOD = 4.2;
 export const BLINK_TIME = 0.18;
 
-// Hop-mouth (A4 stage 2): hopper's carve JAW-DROPS through the AIR arc —
-// a rotation about the body center (constant depth: a translated carve
-// that crossed the surface would graze, the corner-run-off lesson) plus
-// a small outward PUSH that deepens the cut while staying submerged
-// (rest depth 0.024; at full open 0.012 — hand-computed, suite-anchored).
+// Hop-mouth (A4 stage 2; R3: the mouth is a PAINT DECAL): hopper's mouth
+// JAW-DROPS through the AIR arc — a rotation about the body center
+// (sd-neutral on the spherical body) plus a small outward PUSH that makes
+// the open mouth poke HARDER (rest sd -0.024; full open -0.012 — the arc
+// stays inside the decal band, hand-computed, suite-walked live).
 export const MOUTH_OPEN_ANGLE = 0.22; // rad, at the apex
 export const MOUTH_OPEN_PUSH = 0.012; // world units outward, at the apex
 
