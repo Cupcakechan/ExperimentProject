@@ -1,16 +1,25 @@
 // ============================================================
 // main.js — entry point. Scene, camera, THE FIELD: all creatures
 // roam one shared stage simultaneously. Each actor = one creature
-// with its own rig (skin + ink), roam instance (seeded), and anim
+// with its own rig (skin draw), roam instance (seeded), and anim
 // index. Nothing switches anymore, so nothing is disposed — the
 // actors are built once and live forever.
+//
+// R1: the ink line is a SCREEN-SPACE pass (inkPass.js) — the
+// inverted-hull ink DRAW is gone, and with it every per-actor ink
+// material and its per-frame uniform writes. The scene renders
+// once into the pass's target; a fullscreen pass inks depth
+// discontinuities. Smooth blends are depth-continuous, so the
+// concave-crease seam family (knee rings, body-exit slashes)
+// cannot ink — deleted by construction.
 // ============================================================
 
 import * as THREE from 'three';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 import { CREATURES } from './data/creatures.js';
 import { buildShellGeometry } from './render/buildShell.js';
-import { createBlendMaterial, createOutlineMaterial } from './render/blendMaterial.js';
+import { createBlendMaterial } from './render/blendMaterial.js';
+import { createInkPass } from './render/inkPass.js';
 import { updateAnim, animPrimIndex, breathInflate } from './anim.js';
 import { createControls } from './ui/controls.js';
 import { createRoam } from './roam.js';
@@ -33,13 +42,26 @@ import {
 } from './config.js';
 import { stridePulse, leanTarget, approach, headingDelta } from './feel.js';
 
-const renderer = new THREE.WebGLRenderer({ antialias: true });
+// antialias OFF on the canvas, deliberately: the canvas now only ever
+// shows the ink pass's fullscreen quad (no geometric edges to smooth).
+// Content antialiasing lives in the pass's multisampled target instead.
+const renderer = new THREE.WebGLRenderer({ antialias: false });
 renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2)); // cap DPR: retina 3x is wasted work here
 renderer.setSize(window.innerWidth, window.innerHeight);
 document.body.appendChild(renderer.domElement);
 
 const scene = new THREE.Scene();
-scene.background = new THREE.Color(BACKGROUND_COLOR);
+
+// COLOR-SPACE PARITY (R1): rendering into the ink pass's target skips
+// three's sRGB output transform (with a target bound, the renderer's
+// output space is LinearSRGB — r170 WebGLPrograms line 202), so the two
+// managed-pipeline colors here (background clear + MeshBasicMaterial
+// ground) would come out DARKER than the old direct-to-canvas path
+// (convert-in/convert-out was a net identity). Authoring them RAW
+// (setHex in LinearSRGB = store the hex verbatim) makes no-conversion a
+// net identity too — same pixels as before R1. The creature shaders
+// never used the transform, so they need nothing.
+scene.background = new THREE.Color().setHex(BACKGROUND_COLOR, THREE.LinearSRGBColorSpace);
 
 const camera = new THREE.PerspectiveCamera(CAMERA_FOV, window.innerWidth / window.innerHeight, 0.1, 100);
 camera.position.set(...CAMERA_START);
@@ -50,33 +72,28 @@ controls.enableDamping = true;
 
 // The field floor: flat and unlit (the toon look wants flat), a plain mesh
 // outside the blend-shell system. Feet dipping a hair below y=0 get hidden
-// by it — which reads as planted, for free.
+// by it — which reads as planted, for free. (It KEEPS writing depth for
+// exactly that reason; the ink pass sees it as a real surface, so the
+// stage rim inks against the background — a deliberate stage line.)
 const ground = new THREE.Mesh(
   new THREE.CircleGeometry(GROUND_RADIUS, 48).rotateX(-Math.PI / 2),
-  new THREE.MeshBasicMaterial({ color: GROUND_COLOR })
+  new THREE.MeshBasicMaterial({ color: new THREE.Color().setHex(GROUND_COLOR, THREE.LinearSRGBColorSpace) })
 );
 scene.add(ground);
 
 // --- the actors: every creature, alive at once ---
 const actors = CREATURES.map((creature, i) => {
-  const geometry = buildShellGeometry(creature.prims, creature.step?.knees); // shared by both draws
-  // inflate (plumpness) is creature data; skin and ink must dilate by the
-  // SAME amount or the outline detaches from the plumped skin.
+  const geometry = buildShellGeometry(creature.prims, creature.step?.knees);
   const material = createBlendMaterial(creature.prims, creature.inflate, creature.step?.knees);
-  const ink = createOutlineMaterial(creature.prims, creature.inflate, creature.step?.knees);
   const shell = new THREE.Mesh(geometry, material);
-  const outline = new THREE.Mesh(geometry, ink);
   // Vertices move in the shader, so CPU-side bounds are wrong — never cull.
   shell.frustumCulled = false;
-  outline.frustumCulled = false;
   const rig = new THREE.Group();
   rig.add(shell);
-  rig.add(outline);
   scene.add(rig);
   return {
     creature,
     material,
-    ink,
     rig,
     roam: createRoam(i, CREATURES.length, creature.idle), // seed = index; count-spaced spawn ring; per-creature idle
     // A hopping creature's feet belong to the HOP state machine — running
@@ -98,12 +115,14 @@ const actors = CREATURES.map((creature, i) => {
 // happens in the already-yawed frame.
 for (const a of actors) a.rig.rotation.order = 'YXZ';
 
+// The ink pass owns the offscreen target + the fullscreen edge pass.
+const inkPass = createInkPass(renderer, camera);
+
 const ui = createControls({
   initialK: BLEND_K,
   onK: (v) => {
     for (const a of actors) {
-      a.material.uniforms.uK.value = v;
-      a.ink.uniforms.uK.value = v; // skin and ink follow the same field
+      a.material.uniforms.uK.value = v; // one draw now — the ink has no field to follow
     }
   },
 });
@@ -113,6 +132,7 @@ window.addEventListener('resize', () => {
   camera.aspect = window.innerWidth / window.innerHeight;
   camera.updateProjectionMatrix();
   renderer.setSize(window.innerWidth, window.innerHeight);
+  inkPass.setSize(window.innerWidth, window.innerHeight); // target + resolution + px weight follow
 });
 
 const clock = new THREE.Clock();
@@ -140,23 +160,20 @@ renderer.setAnimationLoop(() => {
   tAnim += dt;
 
   for (const actor of actors) {
-    // Skin and ink own separate uniforms — both must move, in lockstep.
+    // One draw per actor now — every lockstep write targets the skin
+    // material alone (the write paths all take a materials LIST, so the
+    // single-element array is the whole change).
     updateAnim(actor.material, tAnim, actor.creature, actor.animIdx);
-    updateAnim(actor.ink, tAnim, actor.creature, actor.animIdx);
 
     // Blink (A4): eye decals submerge into their host on a deterministic,
     // phase-staggered schedule — absolute from rest, so a non-blinking
     // frame writes the exact registry pose.
-    if (actor.blink) actor.blink.update(tAnim, [actor.material, actor.ink]);
+    if (actor.blink) actor.blink.update(tAnim, [actor.material]);
 
-    // Breathing (A2): the field itself inhales. Both draws get the SAME
-    // value or the outline detaches from the swelling skin; bobPhase
-    // decorrelates the rhythms (synchronized breathing is uncanny).
-    // Non-breathers keep their build-time uInflate — no write, no cost.
+    // Breathing (A2): the field itself inhales. Non-breathers keep their
+    // build-time uInflate — no write, no cost.
     if (actor.creature.breath) {
-      const infl = breathInflate(tAnim, actor.creature, actor.bobPhase);
-      actor.material.uniforms.uInflate.value = infl;
-      actor.ink.uniforms.uInflate.value = infl;
+      actor.material.uniforms.uInflate.value = breathInflate(tAnim, actor.creature, actor.bobPhase);
     }
 
     // Separation reads the OTHERS' last-frame positions (1 frame of lag is
@@ -177,7 +194,7 @@ renderer.setAnimationLoop(() => {
       // The hop returns the DISPLAYED pose (bursting between points on
       // the logical path) and owns the feet; no stride lift — the arc IS
       // the vertical life for this creature.
-      const disp = actor.hop.update(dt, pose, [actor.material, actor.ink]);
+      const disp = actor.hop.update(dt, pose, [actor.material]);
       actor.rig.position.set(disp.x, disp.y, disp.z);
       actor.rig.rotation.y = disp.heading;
     } else {
@@ -188,7 +205,7 @@ renderer.setAnimationLoop(() => {
       // produces — so BOTH use last frame's lift: a fully consistent
       // pair, one invisible frame of lag (the separation-lag pattern).
       if (actor.gait) {
-        actor.gait.update(dt, { x: pose.x, y: actor.lift, z: pose.z, heading: pose.heading }, [actor.material, actor.ink]);
+        actor.gait.update(dt, { x: pose.x, y: actor.lift, z: pose.z, heading: pose.heading }, [actor.material]);
       }
       actor.rig.position.set(pose.x, actor.lift, pose.z);
       actor.rig.rotation.y = pose.heading;
@@ -205,5 +222,5 @@ renderer.setAnimationLoop(() => {
   }
 
   controls.update(); // required every frame when damping is on
-  renderer.render(scene, camera);
+  inkPass.render(scene, camera); // scene -> target, then the fullscreen ink pass -> canvas
 });

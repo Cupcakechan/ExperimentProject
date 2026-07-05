@@ -207,3 +207,12 @@ export const MOUTH_OPEN_PUSH = 0.012; // world units outward, at the apex
 // locked knee pops), never more folded than MIN_GAP of |L1 - L2|.
 export const KNEE_STRAIGHT_FRAC = 0.995;
 export const KNEE_MIN_GAP = 1.05;
+
+// R1 screen-space ink (depth-only). The inverted-hull ink DRAW is replaced
+// by a post-process edge detect on the depth buffer: smooth blends are
+// depth-continuous, so the concave-crease seam family (knee rings,
+// body-exit slashes) cannot ink — deleted by construction, not by tuning.
+// OUTLINE_COLOR still supplies the line color; OUTLINE_WIDTH now serves
+// only the legacy hull material (kept for the suite's instrumentation).
+export const INK_PX = 6.0; // line weight in CSS pixels (the old 0.035-world hull reads ~7 px at the default camera — near parity; screen-constant, so it no longer thickens on zoom)
+export const INK_DEPTH_THRESHOLD = 0.02; // relative depth step that inks: step/nearest > this (lower = more interior lines + ground-noise risk; higher = silhouettes only)

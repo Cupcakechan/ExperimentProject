@@ -1477,5 +1477,29 @@ for (const creature of CREATURES) {
   }
 }
 
+// ---- R1 ink pass (screen-space, depth-only): the module contract ----
+// The pass itself needs a GPU; what Node anchors instead: the depth
+// linearization math (the GLSL mirrors linearizeDepth — same formula by
+// contract), shader-string cleanliness (a backtick inside a GLSL comment
+// terminates the JS template literal — the lesson section 0 catches only
+// as a blunt import failure), the uniform contract between the quad
+// material and the shader source, and the config levers' sanity.
+{
+  const { linearizeDepth, INK_FRAG, INK_VERT } = await import('./src/render/inkPass.js');
+  const { INK_PX, INK_DEPTH_THRESHOLD } = await import('./src/config.js');
+  // Hand-computed anchors at the app's real planes (near 0.1, far 100):
+  assert(Math.abs(linearizeDepth(0, 0.1, 100) - 0.1) < 1e-12, 'ink linearizeDepth(0) = near (hand-computed)');
+  assert(Math.abs(linearizeDepth(1, 0.1, 100) - 100) < 1e-9, 'ink linearizeDepth(1) = far (hand-computed)');
+  assert(Math.abs(linearizeDepth(0.5, 0.1, 100) - 10 / 50.05) < 1e-12, 'ink linearizeDepth(0.5) = 10/50.05 = 0.1998 (hand-computed: nf / (f - 0.5(f-n)))');
+  assert(linearizeDepth(0.2, 0.1, 100) < linearizeDepth(0.8, 0.1, 100), 'ink linearizeDepth is monotonic (deeper buffer value = farther surface)');
+  const BACKTICK = '\u0060';
+  assert(!INK_FRAG.includes(BACKTICK) && !INK_VERT.includes(BACKTICK), 'ink GLSL contains no backticks (the template-literal termination lesson)');
+  for (const u of ['tColor', 'tDepth', 'uResolution', 'uInkPx', 'uNear', 'uFar', 'uThreshold', 'uInkColor']) {
+    assert(INK_FRAG.includes(u), `ink fragment shader declares ${u} (the quad material's uniform contract)`);
+  }
+  assert(INK_PX > 0, 'INK_PX is a positive pixel weight');
+  assert(INK_DEPTH_THRESHOLD > 0 && INK_DEPTH_THRESHOLD < 1, 'INK_DEPTH_THRESHOLD is a sane relative fraction (0..1)');
+}
+
 console.log(failures === 0 ? '\nALL PASS' : `\n${failures} FAILURE(S)`);
 process.exit(failures === 0 ? 0 : 1);
