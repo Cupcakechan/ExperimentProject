@@ -1,7 +1,7 @@
 # PROJECT_HANDOFF — SDF Blend-Shell Experiment
 
-_Last updated: 2026-07-04 (pudge goggles fix CONFIRMED + pushed; A5 knees CONFIRMED
-working; KNEE-SEAM FIX (limb groups) DELIVERED — awaiting confirmation; next: C-track. A5 completes
+_Last updated: 2026-07-04 (pudge goggles fix CONFIRMED + pushed; A5 + limb groups in;
+KNEE-SEAM ACT TWO (lift 0.05 + reference legs) DELIVERED — awaiting confirm; next: C-track. A5 completes
 the A-track: the flagged SKILL-HARVEST checkpoint — Daniel's timing)_
 
 ## What this is
@@ -188,6 +188,22 @@ DONE (Skitter).
   accent at deep bends (pinch margin 14%) — reads as toon knee
   language; levers if not: OUTLINE_WIDTH down or shallower bend.
   831 probes ALL PASS. See LESSONS 14.
+- KNEE-SEAM ACT TWO (**awaiting browser confirm**, LESSONS 15): the
+  limb-group fix made the seam MORE visible — hypothesis wrong. POSED
+  measurement (the rest-only fold detector's blind spot): visible-zone
+  folds identical exemption on/off; the slash = the INK CUSPING at deep
+  folds (84 deg mid-swing), driven by STEP_LIFT 0.09 compressing the
+  hip-foot distance to 69% of rest — no two-bone split survives that.
+  Fix (Option 1, Daniel's pick): step.lift 0.05 data override for the
+  kneed walkers (one gait line) + the reference look for free — deeper
+  authored bends (0.07/0.06, reach 0.92-0.95, the knee reads in the
+  silhouette) and HOOF-DARK shins (critter 0x2a8a67, longneck 0x9c6b2a
+  — 'feet' at zero prim cost; capacity forbids foot prims). MEASURED:
+  deepest fold 96/100 deg, ZERO frames under 90 (was 84 deg / 43
+  frames). New guard: max knee cos < 0 through every simulated walk.
+  Limb groups KEPT (measured: halves partial-tuck shells). 833 probes
+  ALL PASS. Escalation if a faint line survives the browser: ink-only
+  k floor (Option 2, designed, kCap-respecting).
 - Suite: 727 probes ALL PASS. Sections: 0 imports, 1 creature invariants
   + measured sims (walk, hop w/ deformation, field w/ idle) + carve rules
   (midpoint dent/pierce, SUBMERSION, decal clearance, donors), 2 field

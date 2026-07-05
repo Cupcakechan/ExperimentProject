@@ -145,6 +145,12 @@ export function createGait(creature) {
     return f;
   });
 
+  // A5.1: per-creature step lift. STEP_LIFT 0.09 compresses the hip-foot
+  // distance to 69% of rest mid-swing, folding knees to 84 deg — where
+  // the ink cusps (the measured knee-seam mechanism). Kneed walkers
+  // override it in data; creatures without knees keep the springy default.
+  const stepLift = creature.step.lift ?? STEP_LIFT;
+
   let initialized = false;
   let prevX = 0;
   let prevZ = 0;
@@ -203,7 +209,7 @@ export function createGait(creature) {
           const tz = _home.z + vz * STEP_LEAD_TIME;
           f.anchor.x = f.from.x + (tx - f.from.x) * t;
           f.anchor.z = f.from.z + (tz - f.from.z) * t;
-          f.anchor.y = f.restY + STEP_LIFT * Math.sin(Math.PI * t);
+          f.anchor.y = f.restY + stepLift * Math.sin(Math.PI * t);
           if (t >= 1) {
             f.anchor.y = f.restY;
             f.swingT = -1;

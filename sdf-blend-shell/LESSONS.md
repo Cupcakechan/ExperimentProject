@@ -363,3 +363,33 @@
   "other prim" needs a SAME-BODY-PART concept the moment multi-prim
   limbs exist; (2) "benign" classifications carry location assumptions:
   re-verify them when the geometry class that produced them grows.
+
+## 2026-07-04 — the knee seam, act two: the compressor was the step lift
+- What broke: the limb-group fix shipped and the seams got MORE visible.
+  The hypothesis was wrong — posed measurement (which the rest-only fold
+  detector could never see) showed visible-zone folds IDENTICAL with the
+  exemption on or off: the slash was never the tuck ring.
+- Measured chain: (1) the suite's own articulation range said knees fold
+  to 84 deg interior mid-swing; (2) the swing compresses hip-foot
+  distance to 0.259 = 69% of rest — and NO two-bone split that reaches
+  the rest foot avoids sub-90 folds at that compression (symmetric is
+  the optimum; a 'visible knee' asymmetric candidate measured WORSE,
+  71 deg); (3) the compressor is STEP_LIFT 0.09 — a high-step prance on
+  0.37 legs; (4) the ink cusps at deep folds (crease radius under
+  OUTLINE_WIDTH) — THAT is the slash.
+- Fix (Option 1, Daniel's pick): per-creature step.lift (0.05 for the
+  kneed walkers; data override, one gait line) + reference-look levers
+  for free: deeper authored bend (0.07/0.06 — knee reads in silhouette,
+  stronger pole, reach 0.92-0.95) and HOOF-DARK shins (the reference's
+  'feet' at zero prim cost — capacity forbids foot prims at 16/16).
+  Measured after: deepest fold 96/100 deg, ZERO frames under 90 (was
+  43). Suite guard: max knee cos < 0 every walk.
+- Verification gap named: the fold detector scans the REST pose only;
+  this defect existed only posed. Posed-pipeline scans are the eventual
+  upgrade (route: instrument at the pose where the defect lives).
+- Route: skill candidates — (1) when a fix ships and the symptom
+  worsens, the hypothesis (not the application) is wrong: measure at
+  the state where the defect APPEARS; (2) two-bone folding depth is set
+  by swing compression, not segment split — tune the compressor;
+  (3) reference looks often decompose into free levers (color, authored
+  bend) before they cost prims.
