@@ -84,8 +84,9 @@ function sdPrim(p, prim) {
   return sdCapsule(p, prim.a, prim.b ?? prim.a, prim.r);
 }
 function smin(a, b, k) {
-  const h = Math.min(Math.max(0.5 + (0.5 * (b - a)) / k, 0), 1);
-  return b * (1 - h) + a * h - k * h * (1 - h);
+  // CUBIC C2 mirror (R2) — must stay formula-identical to FIELD_GLSL.
+  const h = Math.max(k - Math.abs(a - b), 0) / k;
+  return Math.min(a, b) - h * h * h * k * (1 / 6);
 }
 function colorWeight(d) {
   return 1 / Math.pow(Math.max(d, 0) + COLOR_SOFT, COLOR_POW);
@@ -99,7 +100,8 @@ function discAngle(off, r, R) {
 assert(BLEND_K > 0, 'BLEND_K > 0 (smin divides by k)');
 assert(TUCK_DEPTH > 0 && BURY_EPS > 0 && TUCK_DEPTH > BURY_EPS, 'tuck constants sane (depth > dead-zone > 0)');
 assert(PAINT_EDGE > 0, 'PAINT_EDGE > 0 (smoothstep needs a nonzero edge)');
-assert(Math.abs(smin(1.0, 1.0, 0.25) - 0.9375) < 1e-9, 'smin(1,1,0.25) = 0.9375 (hand-computed)');
+assert(Math.abs(smin(1.0, 1.0, 0.25) - (1 - 0.25 / 6)) < 1e-9, 'cubic smin(1,1,0.25) = 1 - k/6 = 0.9583 (hand-computed)');
+assert(smin(1.0, 1.25, 0.25) === 1.0, 'cubic influence ends EXACTLY at |a-b| = k (bounded — the quadratic never truly ended)');
 assert(smin(5.0, 1.0, 0.25) === 1.0, 'smin far apart degrades to plain min');
 assert(colorWeight(0) > 50 * colorWeight(0.1), 'contact color dominates at the surface (w0 > 50*w0.1)');
 const bRot = rotateAboutPivot([0.45, 0.25, 0], [1.25, 0.9, 0.15], [0, 0, 1], Math.PI / 2);
@@ -900,16 +902,16 @@ const litMat = createBlendMaterial(critter.prims);
 assert(litMat.fragmentShader.includes('mat3(modelMatrix)'), 'fragment lighting rotates normals into world space (mat3(modelMatrix))');
 
 // Per-prim blend caps (the thin-part trick). Effective k = min(slider, cap).
-// Hand-computed with the shipped smin: smin(1,1,k) = 1 - k/4.
-//   Longneck neck (kCap 0.12): slider 0.25 -> k 0.12 -> smin(1,1) = 0.97
-//   Slider cranked to 0.60    -> k STILL 0.12 -> 0.97 (the cap holds)
-//   An uncapped prim (sentinel 1e3): slider 0.60 -> k 0.60 -> 0.85
+// Hand-computed with the shipped CUBIC smin: smin(1,1,k) = 1 - k/6.
+//   Longneck neck (kCap 0.12): slider 0.25 -> k 0.12 -> smin(1,1) = 0.98
+//   Slider cranked to 0.60    -> k STILL 0.12 -> 0.98 (the cap holds)
+//   An uncapped prim (sentinel 1e3): slider 0.60 -> k 0.60 -> 0.90
 function effK(slider, cap) { return Math.min(slider, cap); }
 const neck = longneck.prims.find((p) => p.id === 'neck');
 assert(neck.kCap === 0.12, 'longneck neck kCap = 0.12 (design probe: the melty-neck fix is live)');
-assert(Math.abs(smin(1, 1, effK(0.25, neck.kCap)) - 0.97) < 1e-9, 'capped smin at slider 0.25 = 0.97 (hand-computed)');
-assert(Math.abs(smin(1, 1, effK(0.6, neck.kCap)) - 0.97) < 1e-9, 'capped smin at slider 0.60 = 0.97 — the cap HOLDS against the slider');
-assert(Math.abs(smin(1, 1, effK(0.6, 1e3)) - 0.85) < 1e-9, 'uncapped smin at slider 0.60 = 0.85 (sentinel does not clamp)');
+assert(Math.abs(smin(1, 1, effK(0.25, neck.kCap)) - 0.98) < 1e-9, 'capped smin at slider 0.25 = 0.98 (hand-computed, cubic 1 - k/6)');
+assert(Math.abs(smin(1, 1, effK(0.6, neck.kCap)) - 0.98) < 1e-9, 'capped smin at slider 0.60 = 0.98 — the cap HOLDS against the slider');
+assert(Math.abs(smin(1, 1, effK(0.6, 1e3)) - 0.9) < 1e-9, 'uncapped smin at slider 0.60 = 0.90 (sentinel does not clamp)');
 assert(longneck.prims.find((p) => p.id === 'tail').kCap === 0.07, 'longneck tail kCap = 0.07');
 
 // ---------- Section 2: field inspector ----------
@@ -979,44 +981,44 @@ function hardCSG(p, prims) {
 
 // --- mirror parity, hand-computed on a synthetic pair (exact theory) ---
 // Two spheres r=0.3 at x=+-0.3, k=0.25. At the origin both raw distances
-// are 0, so the pair fold hits smin's h=0.5 midpoint: field = -k/4.
+// are 0, so the pair fold hits the cubic's h=1 midpoint: field = -k/6.
 const PAIR = [
   { id: 's1', type: 'sphere', a: [-0.3, 0, 0], r: 0.3 },
   { id: 's2', type: 'sphere', a: [0.3, 0, 0], r: 0.3 },
 ];
-assert(Math.abs(mapField([0, 0, 0], PAIR, 0.25) - -0.0625) < 1e-12, 'mapField mirror: pair midpoint = -k/4 = -0.0625 (hand-computed)');
-// On the equidistant ridge the contour sits where raw d = k/4: at
-// y = sqrt((r + k/4)^2 - 0.09) the field is exactly zero and the local
-// inflation (min raw distance) is exactly k/4 = 0.0625.
-const RIDGE_Y = Math.sqrt(0.3625 * 0.3625 - 0.09);
+assert(Math.abs(mapField([0, 0, 0], PAIR, 0.25) - -(0.25 / 6)) < 1e-12, 'mapField mirror: pair midpoint = -k/6 = -0.0417 (hand-computed)');
+// On the equidistant ridge the contour sits where raw d = k/6: at
+// y = sqrt((r + k/6)^2 - 0.09) the field is exactly zero and the local
+// inflation (min raw distance) is exactly k/6 = 0.0417.
+const RIDGE_Y = Math.sqrt((0.3 + 0.25 / 6) ** 2 - 0.09);
 assert(Math.abs(mapField([0, RIDGE_Y, 0], PAIR, 0.25)) < 1e-12, 'mapField mirror: ridge contour point is on the zero surface (hand-computed)');
-assert(Math.abs(rawMinSolid([0, RIDGE_Y, 0], PAIR) - 0.0625) < 1e-12, 'ridge inflation = k/4 exactly (hand-computed)');
-// kCap parity: capping the SECOND prim caps the pair fold: field = -kCap/4.
+assert(Math.abs(rawMinSolid([0, RIDGE_Y, 0], PAIR) - 0.25 / 6) < 1e-12, 'ridge inflation = k/6 exactly (hand-computed)');
+// kCap parity: capping the SECOND prim caps the pair fold: field = -kCap/6.
 const PAIR_CAPPED = [PAIR[0], { ...PAIR[1], kCap: 0.1 }];
-assert(Math.abs(mapField([0, 0, 0], PAIR_CAPPED, 0.25) - -0.025) < 1e-12, 'mapField mirror honors kCap: capped pair midpoint = -0.025 (hand-computed)');
+assert(Math.abs(mapField([0, 0, 0], PAIR_CAPPED, 0.25) - -(0.1 / 6)) < 1e-12, 'mapField mirror honors kCap: capped pair midpoint = -0.0167 (hand-computed)');
 // Absolute per-prim k (Pass 2): authored k governs that prim's fold —
 // wider OR narrower than the slider — and HOLDS when the slider moves
 // (authored beats ambient). kCap still ceilings it. All hand-computed
-// from field(midpoint) = -kEff/4.
+// from field(midpoint) = -kEff/6.
 const PAIR_ABS = [PAIR[0], { ...PAIR[1], k: 0.4 }];
-assert(Math.abs(mapField([0, 0, 0], PAIR_ABS, 0.25) - -0.1) < 1e-12, 'absolute k=0.4 overrides slider 0.25: pair midpoint = -0.1 (hand-computed)');
-assert(Math.abs(mapField([0, 0, 0], PAIR_ABS, 0.6) - -0.1) < 1e-12, 'absolute k HOLDS against slider 0.6: pair midpoint still -0.1');
+assert(Math.abs(mapField([0, 0, 0], PAIR_ABS, 0.25) - -(0.4 / 6)) < 1e-12, 'absolute k=0.4 overrides slider 0.25: pair midpoint = -0.0667 (hand-computed)');
+assert(Math.abs(mapField([0, 0, 0], PAIR_ABS, 0.6) - -(0.4 / 6)) < 1e-12, 'absolute k HOLDS against slider 0.6: pair midpoint still -0.0667');
 const PAIR_ABS_NARROW = [PAIR[0], { ...PAIR[1], k: 0.08 }];
-assert(Math.abs(mapField([0, 0, 0], PAIR_ABS_NARROW, 0.25) - -0.02) < 1e-12, 'absolute k=0.08 narrows below slider 0.25: pair midpoint = -0.02 (hand-computed)');
+assert(Math.abs(mapField([0, 0, 0], PAIR_ABS_NARROW, 0.25) - -(0.08 / 6)) < 1e-12, 'absolute k=0.08 narrows below slider 0.25: pair midpoint = -0.0133 (hand-computed)');
 const PAIR_ABS_CAPPED = [PAIR[0], { ...PAIR[1], k: 0.4, kCap: 0.1 }];
-assert(Math.abs(mapField([0, 0, 0], PAIR_ABS_CAPPED, 0.25) - -0.025) < 1e-12, 'kCap ceilings an authored k: min(0.4, 0.1) -> midpoint = -0.025 (hand-computed)');
+assert(Math.abs(mapField([0, 0, 0], PAIR_ABS_CAPPED, 0.25) - -(0.1 / 6)) < 1e-12, 'kCap ceilings an authored k: min(0.4, 0.1) -> midpoint = -0.0167 (hand-computed)');
 // The shader carries the same resolution order (the mirror above is only
 // trustworthy if the GLSL it mirrors actually does this).
 const kMat = createBlendMaterial(PAIR_ABS);
 assert(kMat.vertexShader.includes('uKPrim[i] > 0.0 ? uKPrim[i] : uK'), 'GLSL resolves authored k over the slider (uKPrim override expression present)');
 assert(kMat.uniforms.uKPrim.value[0] === -1.0 && kMat.uniforms.uKPrim.value[1] === 0.4, 'material mirrors a synthetic authored k (sentinel -1 beside 0.4)');
 // Dilate (Pass 3), hand-computed: a lone r=0.3 sphere dilated by 0.05 has
-// its skin at exactly 0.35; a dilated pair midpoint deepens to -k/4 - 0.05;
-// the equidistant ridge contour moves out to where raw d = k/4 + inflate.
+// its skin at exactly 0.35; a dilated pair midpoint deepens to -k/6 - 0.05;
+// the equidistant ridge contour moves out to where raw d = k/6 + inflate.
 const LONE = [{ id: 's', type: 'sphere', a: [0, 0, 0], r: 0.3 }];
 assert(Math.abs(mapField([0.35, 0, 0], LONE, 0.25, 0.05)) < 1e-12, 'dilated lone sphere: skin at exactly r + inflate = 0.35 (hand-computed)');
-assert(Math.abs(mapField([0, 0, 0], PAIR, 0.25, 0.05) - -0.1125) < 1e-12, 'dilated pair midpoint = -k/4 - inflate = -0.1125 (hand-computed)');
-const RIDGE_Y_DIL = Math.sqrt(0.4125 * 0.4125 - 0.09); // raw d = 0.0625 + 0.05
+assert(Math.abs(mapField([0, 0, 0], PAIR, 0.25, 0.05) - -(0.25 / 6 + 0.05)) < 1e-12, 'dilated pair midpoint = -k/6 - inflate = -0.0917 (hand-computed)');
+const RIDGE_Y_DIL = Math.sqrt((0.3 + 0.25 / 6 + 0.05) ** 2 - 0.09); // raw d = k/6 + 0.05
 assert(Math.abs(mapField([0, RIDGE_Y_DIL, 0], PAIR, 0.25, 0.05)) < 1e-12, 'dilated ridge contour is on the zero surface (hand-computed)');
 // Materials carry it on BOTH draws (outline must ride the plumped skin),
 // and its absence is guarded — existing creatures behave exactly as before.
@@ -1175,7 +1177,7 @@ function dumpSlice(slice) {
 
 // Sampler validated against the synthetic pair before it measures anything
 // real: on the z=0 slice its measured max inflation must land on the
-// hand-computed ridge value k/4 (grid can only UNDERSHOOT the ridge peak).
+// hand-computed ridge value k/6 (grid can only UNDERSHOOT the ridge peak).
 const pairSlice = sampleSlice(PAIR, 0.25, 2, 0);
 assert(pairSlice.count > 100, `sampler finds the pair contour (${pairSlice.count} crossings)`);
 assert(pairSlice.minInfl > -1e-6, `sampler: pair contour never dips below a raw surface (min ${pairSlice.minInfl.toExponential(2)})`);
@@ -1183,7 +1185,7 @@ assert(pairSlice.minInfl > -1e-6, `sampler: pair contour never dips below a raw 
 // contour away from the ridge crease — so the sampler UNDERSHOOTS the true
 // peak by up to ~a cell (MEASURED 0.0545 at res 96) and must never exceed
 // it. The exact ridge value itself is anchored analytically above.
-assert(pairSlice.maxInfl > 0.05 && pairSlice.maxInfl <= 0.0625 + 1e-9, `sampler lands within a cell of the pair ridge (${pairSlice.maxInfl.toFixed(4)}, true peak 0.0625, MEASURED 0.0545)`);
+assert(pairSlice.maxInfl > 0.03 && pairSlice.maxInfl <= 0.25 / 6 + 1e-9, `sampler lands within a cell of the pair ridge (${pairSlice.maxInfl.toFixed(4)}, true peak 0.0417, MEASURED 0.0335 at res 96)`);
 // Dilated sampling: on a dilated field the contour's raw-min distance is
 // smin + inflate >= inflate everywhere — the sampler must see the whole
 // contour floating at least the dilate above every raw surface.
@@ -1209,20 +1211,22 @@ function creatureSlices(prims) {
 }
 
 // MEASURED inflation ceilings (max over the sampled slices, +0.02 margin).
-// FINDING: the pairwise theory bound k/4 is WRONG for 3+ close prims —
-// mapSDF folds smin sequentially, so each fold can deepen the deficit
-// again. Measured: hopper 0.0969 at k=0.25 (k/4 = 0.0625, +55%: body +
-// both feet fold under the belly); longneck 0.2969 at k=0.6 (k/4 = 0.15,
-// ~2x). This is why the decal fix subtracts ACTUAL local inflation, never
-// an assumed k/4. Re-measure (the INFO lines print live values) whenever
-// a pass changes the field, and update this table.
+// FINDING: the pairwise theory bound (k/6, cubic since R2) is WRONG for
+// 3+ close prims — mapSDF folds smin sequentially, so each fold can
+// deepen the deficit again. Measured (cubic): critter 0.0638 at k=0.25
+// (k/6 = 0.0417, +53%: the knee crotch); longneck 0.2176 at k=0.6
+// (k/6 = 0.10, ~2.2x) — same compounding shape as the quadratic era, at
+// about two-thirds the magnitude. This is why
+// the decal fix subtracts ACTUAL local inflation, never an assumed bound.
+// Re-measure (the INFO lines print live values) whenever a pass changes
+// the field, and update this table.
 const INFL_CEILING = {
-  critter: { 0.25: 0.115, 0.6: 0.33 }, // re-MEASURED after A5 knees (0.0952/0.3094): the knee crotch is a new uncapped pair
-  hopper: { 0.25: 0.13, 0.6: 0.265 }, // at breath peak (+0.012)
-  longneck: { 0.25: 0.14, 0.6: 0.38 }, // re-MEASURED after A5 knees (0.1176/0.3593): same knee-crotch mechanism
-  pudge: { 0.25: 0.142, 0.6: 0.229 }, // at breath peak (dilate 0.04 + amplitude 0.02)
-  snail: { 0.25: 0.094, 0.6: 0.182 }, // at breath peak (+0.012); the shell's absolute k still caps compounding
-  skitter: { 0.25: 0.03, 0.6: 0.03 }, // fully authored blends: MEASURED 0.0097 at BOTH k (every close pair capped)
+  critter: { 0.25: 0.084, 0.6: 0.219 }, // re-MEASURED after R2 cubic smin (0.0638/0.1984); quadratic era was 0.0974/0.3088
+  hopper: { 0.25: 0.098, 0.6: 0.189 }, // at breath peak (+0.012); re-MEASURED after R2 (0.0776/0.1689)
+  longneck: { 0.25: 0.082, 0.6: 0.238 }, // re-MEASURED after R2 (0.0615/0.2176); the knee crotch still compounds
+  pudge: { 0.25: 0.122, 0.6: 0.18 }, // at breath peak (dilate 0.04 + amplitude 0.02); re-MEASURED after R2 (0.1016/0.1598)
+  snail: { 0.25: 0.074, 0.6: 0.132 }, // at breath peak (+0.012); re-MEASURED after R2 (0.0534/0.1118)
+  skitter: { 0.25: 0.03, 0.6: 0.03 }, // fully authored blends: MEASURED 0.0064 at BOTH k after R2 (every close pair capped)
 };
 // Carved creatures: MEASURED bounds (+0.02 margin) for the generalized
 // invariants. hardBand = how far the smooth contour may sit inside the
@@ -1233,13 +1237,16 @@ const INFL_CEILING = {
 // hand-computed penetration depth 0.1068, confirmed by the field).
 const CARVE_BOUNDS = {
   hopper: {
-    // MEASURED at breath peak (+0.012): min infl -0.1019, min hard
-    // -0.0007 at k=0.25 / +0.0120 at k=0.6.
+    // MEASURED at breath peak (+0.012), re-MEASURED after R2: min infl
+    // -0.1019 (unchanged — the carve depth is sdiff's, and sdiff kept its
+    // quadratic math in the union-only swap); min hard -0.0027 at k=0.25
+    // / +0.0047 at k=0.6.
     0.25: { hardBand: 0.021, carveFloor: 0.122 },
     0.6: { hardBand: 0.02, carveFloor: 0.122 },
   },
   pudge: {
-    // MEASURED at breath peak (dilate 0.04 + amplitude 0.02): min infl
+    // MEASURED at breath peak (dilate 0.04 + amplitude 0.02), re-MEASURED
+    // after R2 (identical — every close pair on this face is capped): min infl
     // -0.0387, min hard POSITIVE (+0.0600 — the peak dilate lifts the
     // contour even further outside hard CSG).
     0.25: { hardBand: 0.02, carveFloor: 0.059 },
@@ -1292,7 +1299,7 @@ for (const creature of CREATURES) {
     }
     measured[k] = maxInfl;
     const at = maxSlice.maxAt;
-    console.log(`  INFO  ${tag} k=${k}: ${slices.length} slices, ${count} crossings, max inflation ${maxInfl.toFixed(4)} at (${at[0].toFixed(2)}, ${at[1].toFixed(2)}, ${at[2].toFixed(2)})${negs.length ? `, min infl ${minInfl.toFixed(4)}, min hard ${minHard.toFixed(4)}` : ''} [pairwise k/4 = ${(k / 4).toFixed(4)}]`);
+    console.log(`  INFO  ${tag} k=${k}: ${slices.length} slices, ${count} crossings, max inflation ${maxInfl.toFixed(4)} at (${at[0].toFixed(2)}, ${at[1].toFixed(2)}, ${at[2].toFixed(2)})${negs.length ? `, min infl ${minInfl.toFixed(4)}, min hard ${minHard.toFixed(4)}` : ''} [pairwise k/6 = ${(k / 6).toFixed(4)}]`);
 
     if (!(count > 500)) dumpSlice(maxSlice ?? sampleSlice(prims, k, 2, 0));
     assert(count > 500, `${tag} k=${k}: the slices see the creature (${count} contour crossings > 500)`);
@@ -1315,7 +1322,7 @@ for (const creature of CREATURES) {
     }
     // Regression ceiling: MEASURED max + margin. If a pass legitimately
     // moves this, re-measure from the INFO line and update the table.
-    const ceiling = INFL_CEILING[creature.id]?.[k] ?? k / 4 + 0.02;
+    const ceiling = INFL_CEILING[creature.id]?.[k] ?? k / 6 + 0.02;
     if (!(maxInfl <= ceiling)) dumpSlice(maxSlice);
     assert(maxInfl <= ceiling, `${tag} k=${k}: max inflation ${maxInfl.toFixed(4)} <= ${ceiling} (MEASURED ceiling)`);
   }
@@ -1323,7 +1330,7 @@ for (const creature of CREATURES) {
   // probe: inflation must actually GROW with k — UNLESS the creature is
   // fully authored (every close pair kCap'd/k'd below the slider range:
   // Skitter — six thin legs NEED caps, so the slider legitimately has
-  // nothing left to govern; measured 0.0097 at BOTH k). Strict growth
+  // nothing left to govern; measured 0.0064 at BOTH k after R2). Strict growth
   // applies only where >= 2 solids are slider-governed.
   assert(measured[BLEND_K] > 0.005, `${tag} inflation is live at k=${BLEND_K} (${measured[BLEND_K].toFixed(4)} > 0.005 — the sampler is not inert)`);
   const sliderGoverned = solids.filter((p) => p.k == null && (p.kCap == null || p.kCap >= K_MAX)).length >= 2;

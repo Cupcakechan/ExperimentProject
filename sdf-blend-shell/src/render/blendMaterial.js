@@ -60,12 +60,17 @@ float sdCapsule(vec3 p, vec3 a, vec3 b, float r) {
   return length(pa - ba * h) - r;
 }
 
-// Polynomial smooth minimum — the "clay smoothing" operator.
+// CUBIC smooth minimum (R2, C2-continuous — RESEARCH_TECHNIQUE.md 2b).
 // k is the blend radius: how far from an intersection the surfaces
-// start melting into each other.
+// start melting into each other. The quadratic version was C1 only
+// (curvature JUMPED at the blend boundary — toon-band kinks at every
+// join) and non-local (influence never truly ended). Cubic: influence
+// ends EXACTLY at abs(a - b) = k, and the equal-pair deficit shrinks
+// k/4 -> k/6, so blends read TIGHTER at the same slider value (every
+// INFL ceiling re-MEASURED in the suite against this field).
 float smin(float a, float b, float k) {
-  float h = clamp(0.5 + 0.5 * (b - a) / k, 0.0, 1.0);
-  return mix(b, a, h) - k * h * (1.0 - h);
+  float h = max(k - abs(a - b), 0.0) / k;
+  return min(a, b) - h * h * h * k * (1.0 / 6.0);
 }
 
 // Polynomial smooth DIFFERENCE (carving) — fogleman dn.py verbatim, see
