@@ -1520,6 +1520,61 @@ for (const creature of CREATURES) {
   }
 }
 
+// ---- C1 creature I/O: the executable authoring rules + the round trip ----
+// validate.js is the AUTHORING RULES as one pure function — the import
+// gate, this suite, and the C2 generator's grader are the SAME module,
+// so a rule can never drift between Node and the browser. Parity here:
+// (1) every authored creature passes with zero errors and zero warnings,
+// (2) a rogue's gallery of hand-built bad creatures is rejected FOR THE
+// RIGHT REASON (label-matched — a validator that rejects everything
+// would pass a weaker probe), (3) the JSON round trip is bit-faithful
+// and preserves fields the tool does not manage.
+{
+  const { validateCreature } = await import('./src/data/validate.js');
+  const { exportCreature, parseCreatureJSON, CREATURE_FORMAT } = await import('./src/data/creatureIO.js');
+
+  for (const c of CREATURES) {
+    const v = validateCreature(c);
+    assert(v.ok && v.errors.length === 0, `[${c.id}] passes the executable authoring rules${v.errors.length ? ' — ' + v.errors[0] : ''}`);
+    assert(v.warnings.length === 0, `[${c.id}] fits the shared stage (zero warnings${v.warnings.length ? ' — ' + v.warnings[0] : ''})`);
+  }
+
+  // The rogue's gallery: each bad creature trips its OWN rule.
+  const base = () => JSON.parse(JSON.stringify(CREATURES.find((c) => c.id === 'critter')));
+  const rejects = (mutate, keyword, label) => {
+    const c = base();
+    mutate(c);
+    const v = validateCreature(c);
+    assert(!v.ok && v.errors.some((e) => e.includes(keyword)), `validator rejects ${label} (${v.ok ? 'PASSED it' : `"${v.errors[0]}"`})`);
+  };
+  rejects((c) => { while (c.prims.length <= 16) c.prims.push({ id: 'x' + c.prims.length, type: 'sphere', a: [0, 0.5, 0], r: 0.1 }); }, 'shader capacity', 'an over-capacity creature');
+  rejects((c) => { c.prims[1].id = 'body'; }, 'unique', 'duplicate prim ids');
+  rejects((c) => { c.prims[0].a[1] = NaN; }, 'finite', 'a NaN coordinate');
+  rejects((c) => { c.prims[0].r = 0; }, "'r' must be", 'a zero radius');
+  rejects((c) => { c.prims[1].b = [0, 0, 0]; }, 'must not carry', 'a sphere carrying b');
+  rejects((c) => { c.prims[1].paint = true; c.prims[1].negative = true; }, 'both paint and negative', 'a paint+negative prim');
+  rejects((c) => { c.prims.find((p) => p.id === 'iris_l').a = [-3, 3, 0]; }, 'floats OUTSIDE', 'a floating decal');
+  rejects((c) => { c.blink.eyes.push('ghost'); }, "blink eye 'ghost'", 'an unresolved blink id');
+  rejects((c) => { c.step.groups = [[0, 1], [1, 2, 3]]; }, 'partition', 'groups that do not partition the feet');
+  rejects((c) => { c.prims.find((p) => p.id === 'thigh_fl').b = [-0.52, 0.265, 0.25]; }, 'EXACTLY', 'a knee joint gap');
+  rejects((c) => { for (const p of c.prims) if (!p.paint) p.paint = true; }, 'SOLID prim required', 'a creature of only decals');
+
+  // Round trip: envelope in, RAW object out — bit-faithful for the cast,
+  // and a field the tool does not manage survives export -> import.
+  assert(CREATURES.every((c) => JSON.stringify(JSON.parse(JSON.stringify(c))) === JSON.stringify(c)), 'the whole cast is pure JSON-serializable data (the registry carries no live objects)');
+  const rt = parseCreatureJSON(exportCreature(CREATURES[0]));
+  assert(rt.ok && JSON.stringify(rt.creature) === JSON.stringify(CREATURES[0]), 'export -> import is bit-faithful (the raw object flows through, never a reconstruction)');
+  const custom = base();
+  custom.author_note = 'hand-written, not mine to drop';
+  custom.prims[0].flavor = 'extra crunchy';
+  const rt2 = parseCreatureJSON(exportCreature(custom));
+  assert(rt2.ok && rt2.creature.author_note === custom.author_note && rt2.creature.prims[0].flavor === 'extra crunchy', 'fields the tool does not manage SURVIVE the round trip (the preserve-hand-authored-data rule, executable)');
+  assert(parseCreatureJSON(JSON.stringify(CREATURES[0])).ok, 'a BARE creature object imports (hand-made files need no envelope)');
+  assert(!parseCreatureJSON('{ not json').ok, 'garbage text is rejected as not-JSON, never thrown');
+  const future = JSON.stringify({ format: CREATURE_FORMAT, version: 99, creature: CREATURES[0] });
+  assert(!parseCreatureJSON(future).ok && parseCreatureJSON(future).errors[0].includes('version'), 'a future format version is refused politely (never half-read)');
+}
+
 // ---- R1 ink pass (screen-space, depth-only): the module contract ----
 // The pass itself needs a GPU; what Node anchors instead: the depth
 // linearization math (the GLSL mirrors linearizeDepth — same formula by

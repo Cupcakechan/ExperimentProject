@@ -26,6 +26,7 @@ import { createRoam } from './roam.js';
 import { createGait } from './gait.js';
 import { createHop } from './hop.js';
 import { createBlink } from './blink.js';
+import { exportCreature, parseCreatureJSON } from './data/creatureIO.js';
 import {
   BLEND_K,
   BACKGROUND_COLOR,
@@ -82,20 +83,33 @@ const ground = new THREE.Mesh(
 scene.add(ground);
 
 // --- the actors: every creature, alive at once ---
-const actors = CREATURES.map((creature, i) => {
+// C1: actor construction is a FUNCTION now — the authored cast and
+// imported JSON creatures spawn through the same door. The slider's
+// current value must reach late spawns too (a build-time BLEND_K on an
+// imported actor would silently disagree with the field).
+const actors = [];
+let currentK = BLEND_K;
+
+function spawnActor(creature, roamTotal = actors.length + 1) {
+  const i = actors.length; // live index: seeds, phases, spawn ring slot
   const geometry = buildShellGeometry(creature.prims, creature.step?.knees);
   const material = createBlendMaterial(creature.prims, creature.inflate, creature.step?.knees);
+  material.uniforms.uK.value = currentK; // late spawns join the CURRENT field mood
   const shell = new THREE.Mesh(geometry, material);
   // Vertices move in the shader, so CPU-side bounds are wrong — never cull.
   shell.frustumCulled = false;
   const rig = new THREE.Group();
   rig.add(shell);
+  // Banking rolls about the creature's FORWARD axis, which is LOCAL X
+  // (creatures face -X). Order YXZ applies heading first, then the roll
+  // happens in the already-yawed frame.
+  rig.rotation.order = 'YXZ';
   scene.add(rig);
-  return {
+  const actor = {
     creature,
     material,
     rig,
-    roam: createRoam(i, CREATURES.length, creature.idle), // seed = index; count-spaced spawn ring; per-creature idle
+    roam: createRoam(i, roamTotal, creature.idle), // seed = index; count-spaced spawn ring; per-creature idle
     // A hopping creature's feet belong to the HOP state machine — running
     // the reactive gait underneath it would fight over the same anchors.
     hop: createHop(creature),
@@ -108,12 +122,14 @@ const actors = CREATURES.map((creature, i) => {
     lean: 0, // smoothed bank angle
     prevHeading: null, // for wrap-safe omega
   };
-});
+  actors.push(actor);
+  return actor;
+}
 
-// Banking rolls about the creature's FORWARD axis, which is LOCAL X
-// (creatures face -X). Order YXZ applies heading first, then the roll
-// happens in the already-yawed frame.
-for (const a of actors) a.rig.rotation.order = 'YXZ';
+// The authored cast spawns with the ORIGINAL ring total, so the six keep
+// their exact pre-C1 seeds and spawn spots (deterministic-roam parity);
+// imports slot in after them at the then-current count.
+for (const creature of CREATURES) spawnActor(creature, CREATURES.length);
 
 // The ink pass owns the offscreen target + the fullscreen edge pass.
 const inkPass = createInkPass(renderer, camera);
@@ -121,12 +137,27 @@ const inkPass = createInkPass(renderer, camera);
 const ui = createControls({
   initialK: BLEND_K,
   onK: (v) => {
+    currentK = v; // remembered for actors spawned AFTER the drag
     for (const a of actors) {
       a.material.uniforms.uK.value = v; // one draw now — the ink has no field to follow
     }
   },
+  // C1 creature I/O — controls owns the DOM, main owns the data:
+  roster: () => actors.map((a) => ({ id: a.creature.id, name: a.creature.name ?? a.creature.id })),
+  onExport: (id) => {
+    const a = actors.find((x) => x.creature.id === id);
+    // The RAW registry object exports — fields this tool doesn't manage
+    // ride along untouched (the preserve-hand-authored-data rule).
+    return a ? { filename: id + '.json', text: exportCreature(a.creature) } : null;
+  },
+  onImport: (text) => {
+    const r = parseCreatureJSON(text);
+    if (!r.ok) return r;
+    const actor = spawnActor(r.creature); // validated: safe past the gate
+    return { ok: true, name: actor.creature.name ?? actor.creature.id, warnings: r.warnings };
+  },
 });
-void ui; // controls has no return contract anymore; kept for symmetry
+void ui; // { refreshRoster } — controls refreshes itself on import
 
 window.addEventListener('resize', () => {
   camera.aspect = window.innerWidth / window.innerHeight;

@@ -36,3 +36,35 @@ canvas {
   vertical-align: middle;
   margin: 0 8px;
 }
+
+#io-row {
+  margin-top: 8px;
+}
+
+#io-row select,
+#io-row button {
+  font: 12px/1.2 system-ui, sans-serif;
+  color: #cdd5de;
+  background: #23262c;
+  border: 1px solid #3a3f47;
+  border-radius: 3px;
+  padding: 3px 8px;
+  margin-right: 6px;
+  cursor: pointer;
+}
+
+#io-row button:hover {
+  background: #2c3037;
+}
+
+#io-status {
+  margin-left: 4px;
+}
+
+#io-status.ok {
+  color: #6fc79a;
+}
+
+#io-status.err {
+  color: #d98a8a;
+}
