@@ -66,10 +66,18 @@ export function setPrimTransform(material, idx, prim, mat) {
 export function updateAnim(material, tSec, creature, idx) {
   if (idx < 0 || !creature || !creature.anim) return;
   const prim = creature.prims[idx];
-  const { axis, amplitude, speed } = creature.anim;
-  const [ax, ay, az] = prim.a;
+  const { axis, amplitude, speed, mode, pivot } = creature.anim;
+  // SPIN (reference queue pass 2): angle = t * speed — unbounded and
+  // monotonic, but still ABSOLUTE from rest each frame (pause-safe and
+  // drift-proof by the same law as the wave; sin/cos are periodic, so an
+  // hour of angle costs nothing). pivot overrides the rotation center:
+  // a propeller's hub is its blade's MIDPOINT, which endpoint-a rotation
+  // cannot express (the blade would orbit the mast like a tetherball).
+  // Both fields ??-guard to the old behavior — every existing creature
+  // is byte-identical.
+  const [ax, ay, az] = pivot ?? prim.a;
 
-  const angle = Math.sin(tSec * speed) * amplitude;
+  const angle = (mode ?? 'wave') === 'spin' ? tSec * speed : Math.sin(tSec * speed) * amplitude;
 
   // World-space rotation about the pivot point a: T(a) * R * T(-a).
   _axis.set(...axis).normalize();

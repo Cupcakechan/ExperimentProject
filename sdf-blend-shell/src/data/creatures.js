@@ -387,4 +387,37 @@ export const CREATURES = [
       { id: 'iris_r', type: 'sphere', a: [-0.313, 0.606, -0.131], r: 0.036, color: 0x241d33, paint: true },
     ],
   },
+  {
+    id: 'flyer',
+    name: 'Whirr',
+    // The reference queue's PROPELLER FLYER: hover (pass 1) + the anim
+    // system's first SPIN mode (pass 2). The blade is ONE full-span
+    // capsule; anim.pivot puts the rotation center at its MIDPOINT hub —
+    // endpoint-a rotation would orbit the mast like a tetherball.
+    // APPENDED to the cast (index parity: seeds/phases of the seven
+    // stay exact). Displayed crown = 0.93 + 0.5 + 0.05 = 1.48 < 1.7;
+    // dangling feet bottom out at 0 + 0.5 - 0.05 = 0.45 (hand-computed,
+    // suite-anchored).
+    hover: { height: 0.5, amp: 0.05, speed: 1.4 },
+    anim: { primId: 'prop', axis: [0, 1, 0], speed: 8, mode: 'spin', pivot: [0, 0.88, 0] },
+    breath: { amplitude: 0.01, speed: 1.6 },
+    blink: { eyes: ['eyeball_l', 'eyeball_r', 'iris_l', 'iris_r'] },
+    prims: [
+      { id: 'body', type: 'sphere', a: [0, 0.45, 0], r: 0.28, color: 0xd98f4a },
+      // Mast rooted 0.05 inside the crown; the blade's hub sits on its tip.
+      { id: 'mast', type: 'capsule', a: [0, 0.68, 0], b: [0, 0.88, 0], r: 0.05, kCap: 0.035, color: 0xb06f33 },
+      // The blade: full z-span through the hub, thin-part kCap'd.
+      { id: 'prop', type: 'capsule', a: [0, 0.88, -0.32], b: [0, 0.88, 0.32], r: 0.05, kCap: 0.038, color: 0x4ab8a8 },
+      // Two dangling stub feet — a flyer's landing gear, never grounded.
+      { id: 'foot_l', type: 'capsule', a: [-0.02, 0.2, 0.1], b: [-0.03, 0.06, 0.12], r: 0.06, kCap: 0.045, color: 0xb06f33 },
+      { id: 'foot_r', type: 'capsule', a: [-0.02, 0.2, -0.1], b: [-0.03, 0.06, -0.12], r: 0.06, kCap: 0.045, color: 0xb06f33 },
+      // Ball eyes rooted 0.018 in the body front (peak dilate 0.01 <= r/3).
+      { id: 'eyeball_l', type: 'sphere', a: [-0.241, 0.486, 0.096], r: 0.09, kCap: 0.03, color: 0xffffff },
+      { id: 'eyeball_r', type: 'sphere', a: [-0.241, 0.486, -0.096], r: 0.09, kCap: 0.03, color: 0xffffff },
+      // Decal mouth below the eyes (endpoints sd -0.024, in band).
+      { id: 'mouth', type: 'capsule', a: [-0.249, 0.413, 0.045], b: [-0.249, 0.413, -0.045], r: 0.05, paint: true, color: 0x33241d },
+      { id: 'iris_l', type: 'sphere', a: [-0.316, 0.497, 0.126], r: 0.036, color: 0x2b2030, paint: true },
+      { id: 'iris_r', type: 'sphere', a: [-0.316, 0.497, -0.126], r: 0.036, color: 0x2b2030, paint: true },
+    ],
+  },
 ];

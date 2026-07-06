@@ -128,7 +128,11 @@ export function validateCreature(c) {
     const a = c.anim;
     if (!byId.has(a.primId)) err(`anim.primId '${a.primId}' is not a prim id`);
     if (!isVec3(a.axis) || len(a.axis) < 1e-8) err('anim.axis must be a non-zero [x, y, z]');
-    if (!isNum(a.amplitude) || !isNum(a.speed)) err('anim.amplitude and anim.speed must be finite numbers');
+    if (a.mode != null && a.mode !== 'wave' && a.mode !== 'spin') err("anim.mode must be 'wave' or 'spin' when present");
+    if (!isNum(a.speed)) err('anim.speed must be a finite number');
+    // A spin needs no amplitude (angle = t * speed); a wave does.
+    if ((a.mode ?? 'wave') === 'wave' && !isNum(a.amplitude)) err('a wave anim needs a finite amplitude');
+    if (a.pivot != null && !isVec3(a.pivot)) err('anim.pivot must be [x, y, z] when present');
   }
 
   // --- step: feet, groups, knees (the gait's structural contract) ---
