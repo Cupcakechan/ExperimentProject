@@ -374,20 +374,44 @@ export const CREATURES = [
     // (the breath-decorrelation pattern), and bit-exact rest at t=0
     // survives. Speeds straddle the hover bob (1.1) so the sway reads
     // as part of the float. Levers: amplitude (swing), speeds (tempo).
+    // amplitude 0.3 (was 0.2 — browser: too subtle): tip travel ~0.095
+    // per side. CEILING ~0.3: at worst-case beat phase opposing tendrils
+    // close to a ~0.06 surface gap, still clear of the kCap blend range;
+    // past 0.35 they'd visibly web together when the beat aligns them.
+    // THE BEND PASS (browser: rigid pendulum read as stiff at any
+    // amplitude/speed — no value fixes tip-lag). Each tendril is TWO
+    // segments; both swing about the SAME top pivot at ONE speed, the
+    // lower at LARGER amplitude. At rest both angles are 0 — the joint
+    // matches exactly (bit-exact t=0 survives). Mid-swing the angles
+    // diverge by up to 0.10 rad, mapping the shared joint 0.016 apart —
+    // far inside the segment radii (0.04), so the segments stay
+    // physically OVERLAPPED and the divergence renders as a smooth
+    // ELBOW: flex on pure data, zero engine change (suite-anchored).
+    // LEVERS: bend depth = the amplitude DELTA (0.36 - 0.26); sway size
+    // = the lower amplitude; tempo = the four speeds (beat-note stagger).
     anim: [
-      { primId: 'tendril_fl', axis: [0, 0, 1], amplitude: 0.2, speed: 1.0 },
-      { primId: 'tendril_fr', axis: [0, 0, 1], amplitude: 0.2, speed: 1.08 },
-      { primId: 'tendril_bl', axis: [0, 0, 1], amplitude: 0.2, speed: 1.16 },
-      { primId: 'tendril_br', axis: [0, 0, 1], amplitude: 0.2, speed: 1.24 },
+      { primId: 'tendril_fl_up', axis: [0, 0, 1], amplitude: 0.26, speed: 1.4 },
+      { primId: 'tendril_fl_lo', axis: [0, 0, 1], amplitude: 0.36, speed: 1.4, pivot: [-0.11, 0.33, 0.11] },
+      { primId: 'tendril_fr_up', axis: [0, 0, 1], amplitude: 0.26, speed: 1.52 },
+      { primId: 'tendril_fr_lo', axis: [0, 0, 1], amplitude: 0.36, speed: 1.52, pivot: [-0.11, 0.33, -0.11] },
+      { primId: 'tendril_bl_up', axis: [0, 0, 1], amplitude: 0.26, speed: 1.63 },
+      { primId: 'tendril_bl_lo', axis: [0, 0, 1], amplitude: 0.36, speed: 1.63, pivot: [0.11, 0.33, 0.11] },
+      { primId: 'tendril_br_up', axis: [0, 0, 1], amplitude: 0.26, speed: 1.74 },
+      { primId: 'tendril_br_lo', axis: [0, 0, 1], amplitude: 0.36, speed: 1.74, pivot: [0.11, 0.33, -0.11] },
     ],
     prims: [
       { id: 'bell', type: 'sphere', a: [0, 0.55, 0], r: 0.28, color: 0x8f7ad1 },
-      // Four thin tendrils, kCap'd (the thin-part rule: r < 0.18 near a
-      // bigger mass melts uncapped).
-      { id: 'tendril_fl', type: 'capsule', a: [-0.11, 0.33, 0.11], b: [-0.17, 0.02, 0.17], r: 0.045, kCap: 0.032, color: 0x6f5cab },
-      { id: 'tendril_fr', type: 'capsule', a: [-0.11, 0.33, -0.11], b: [-0.17, 0.02, -0.17], r: 0.045, kCap: 0.032, color: 0x6f5cab },
-      { id: 'tendril_bl', type: 'capsule', a: [0.11, 0.33, 0.11], b: [0.17, 0.02, 0.17], r: 0.045, kCap: 0.032, color: 0x6f5cab },
-      { id: 'tendril_br', type: 'capsule', a: [0.11, 0.33, -0.11], b: [0.17, 0.02, -0.17], r: 0.045, kCap: 0.032, color: 0x6f5cab },
+      // Four tendrils in TWO SEGMENTS each (the bend pass), joints shared
+      // EXACTLY at rest; lower segments taper 0.045 -> 0.04 (organic
+      // tips). All kCap'd (the thin-part rule).
+      { id: 'tendril_fl_up', type: 'capsule', a: [-0.11, 0.33, 0.11], b: [-0.14, 0.175, 0.14], r: 0.045, kCap: 0.032, color: 0x6f5cab },
+      { id: 'tendril_fl_lo', type: 'capsule', a: [-0.14, 0.175, 0.14], b: [-0.17, 0.02, 0.17], r: 0.04, kCap: 0.032, color: 0x6f5cab },
+      { id: 'tendril_fr_up', type: 'capsule', a: [-0.11, 0.33, -0.11], b: [-0.14, 0.175, -0.14], r: 0.045, kCap: 0.032, color: 0x6f5cab },
+      { id: 'tendril_fr_lo', type: 'capsule', a: [-0.14, 0.175, -0.14], b: [-0.17, 0.02, -0.17], r: 0.04, kCap: 0.032, color: 0x6f5cab },
+      { id: 'tendril_bl_up', type: 'capsule', a: [0.11, 0.33, 0.11], b: [0.14, 0.175, 0.14], r: 0.045, kCap: 0.032, color: 0x6f5cab },
+      { id: 'tendril_bl_lo', type: 'capsule', a: [0.14, 0.175, 0.14], b: [0.17, 0.02, 0.17], r: 0.04, kCap: 0.032, color: 0x6f5cab },
+      { id: 'tendril_br_up', type: 'capsule', a: [0.11, 0.33, -0.11], b: [0.14, 0.175, -0.14], r: 0.045, kCap: 0.032, color: 0x6f5cab },
+      { id: 'tendril_br_lo', type: 'capsule', a: [0.14, 0.175, -0.14], b: [0.17, 0.02, -0.17], r: 0.04, kCap: 0.032, color: 0x6f5cab },
       // Ball eyes on the bell front (rooted 0.018, poke 0.072; peak
       // dilate 0.012 <= r/3 = 0.03 — the boundary holds).
       { id: 'eyeball_l', type: 'sphere', a: [-0.238, 0.593, 0.1], r: 0.09, kCap: 0.03, color: 0xffffff },

@@ -208,7 +208,12 @@ for (const creature of CREATURES) {
       const t = (pos.getX(i) - longest.a[0]) * dir[0] + (pos.getY(i) - longest.a[1]) * dir[1] + (pos.getZ(i) - longest.a[2]) * dir[2];
       if (t > 0.02 && t < longestLen - 0.02) interior.add(t.toFixed(3));
     }
-    assert(interior.size >= 3, `${tag} longest capsule '${longest.id}' has interior rings (saw ${interior.size}, need >= 3)`);
+    // SPACING-based since the tendril bend pass: the builder keeps ring
+    // spacing constant, so a halved segment legitimately carries fewer
+    // rings — the starving class is governed by the DISTANCE between
+    // donor rings, not their count (0.32/4 = 0.08 then; 0.16/2 = 0.08 now).
+    const spacing = longestLen / (interior.size + 1);
+    assert(spacing <= 0.1, `${tag} longest capsule '${longest.id}' keeps donor-ring spacing tight (${spacing.toFixed(3)} <= 0.1 over ${interior.size} interior rings — joins along it never starve)`);
   }
 
   // paint prims: anchored inside a solid host AND poking through its skin:
@@ -1414,7 +1419,7 @@ for (const creature of CREATURES) {
   assert(hi - lo > amp, `hover is not inert (range ${(hi - lo).toFixed(3)} > amp over 12s)`);
   const bell = floater.prims.find((p) => p.id === 'bell');
   assert(Math.abs(bell.a[1] + bell.r + height + amp - 1.44) < 1e-9, 'Bloop displayed crown = 1.44 < 1.7 (hand-computed: 0.83 + 0.55 + 0.06 — the shared camera keeps everyone)');
-  const tip = floater.prims.find((p) => p.id === 'tendril_fl').b;
+  const tip = floater.prims.find((p) => p.id === 'tendril_fl_lo').b;
   assert(tip[1] + height - amp > 0.4, `tendril tips clear the stage at the bob's low point (${(tip[1] + height - amp).toFixed(2)} > 0.4)`);
 }
 
@@ -1447,11 +1452,27 @@ for (const creature of CREATURES) {
 // ---- Tendril sway (feel pass): the anims-array's first customer ----
 {
   const floater = CREATURES.find((c) => c.id === 'floater');
-  assert(Array.isArray(floater.anim) && floater.anim.length === 4, "Bloop's tendrils sway: FOUR anim entries (the array form, earned by a real creature)");
-  assert(floater.anim.every((a) => a.primId.startsWith('tendril_') && (a.mode ?? 'wave') === 'wave'), 'all four sway entries are tendril waves from their tops (default pivot = the attachment)');
-  assert(new Set(floater.anim.map((a) => a.speed)).size === 4, 'sway speeds are all DISTINCT — stagger by speed divergence, not phase, so t=0 stays bit-exact rest and the sway never settles into a loop');
-  const angles = floater.anim.map((a) => Math.sin(30 * a.speed) * a.amplitude);
-  assert(new Set(angles.map((x) => x.toFixed(3))).size >= 3, 'by t=30 the tendrils are genuinely out of step (the beat-note is real, hand-computed)');
+  assert(Array.isArray(floater.anim) && floater.anim.length === 8, "Bloop's tendrils sway in TWO SEGMENTS each (8 anim entries — the bend pass)");
+  assert(floater.anim.every((a) => a.primId.startsWith('tendril_') && (a.mode ?? 'wave') === 'wave'), 'all sway entries are tendril waves');
+  assert(new Set(floater.anim.map((a) => a.speed)).size === 4, 'four distinct speeds, SHARED within each tendril pair — segments must swing at one rate or the elbow shears over time');
+  for (const side of ['fl', 'fr', 'bl', 'br']) {
+    const up = floater.prims.find((p) => p.id === `tendril_${side}_up`);
+    const lo = floater.prims.find((p) => p.id === `tendril_${side}_lo`);
+    const aUp = floater.anim.find((a) => a.primId === `tendril_${side}_up`);
+    const aLo = floater.anim.find((a) => a.primId === `tendril_${side}_lo`);
+    assert(up.b.every((v, i) => v === lo.a[i]), `[${side}] segments share the joint EXACTLY at rest (bit-exact t=0)`);
+    assert(aLo.pivot.every((v, i) => v === up.a[i]), `[${side}] the lower segment pivots about the tendril TOP, not its own a`);
+    assert(aUp.speed === aLo.speed && aLo.amplitude > aUp.amplitude, `[${side}] one speed per pair, lower amplitude LARGER (the bend's whole mechanism)`);
+    // The illusion's load-bearing number: worst joint divergence =
+    // |ampLo - ampUp| * dist(joint, top). It must stay far inside the
+    // segment radii so the joint stays physically overlapped — an
+    // ELBOW, never a tear.
+    const dJT = Math.hypot(up.b[0] - up.a[0], up.b[1] - up.a[1], up.b[2] - up.a[2]);
+    const gap = Math.abs(aLo.amplitude - aUp.amplitude) * dJT;
+    assert(gap < Math.min(up.r, lo.r) * 0.5, `[${side}] worst joint divergence ${gap.toFixed(4)} < half the thinner segment radius ${(Math.min(up.r, lo.r) * 0.5).toFixed(3)} — an elbow, never a tear`);
+  }
+  const angles = floater.anim.filter((a) => a.primId.endsWith('_lo')).map((a) => Math.sin(30 * a.speed) * a.amplitude);
+  assert(new Set(angles.map((x) => x.toFixed(3))).size >= 3, 'by t=30 the tendrils are genuinely out of step (the beat-note survives the split)');
 }
 
 // ---- C1 creature I/O: the executable authoring rules + the round trip ----
