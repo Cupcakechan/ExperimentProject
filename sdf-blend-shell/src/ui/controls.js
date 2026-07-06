@@ -9,7 +9,7 @@
 
 import { K_MIN, K_MAX, K_STEP } from '../config.js';
 
-export function createControls({ initialK, onK, roster, onExport, onImport, onGenerate }) {
+export function createControls({ initialK, onK, roster, onExport, onImport, onGenerate, onPopulate }) {
   const wrap = document.getElementById('controls');
   if (!wrap) return null; // graceful: missing container (or headless test)
 
@@ -125,11 +125,24 @@ export function createControls({ initialK, onK, roster, onExport, onImport, onGe
     }
   });
 
+  const popBtn = document.createElement('button');
+  popBtn.textContent = 'populate +5';
+  popBtn.addEventListener('click', () => {
+    const r = onPopulate();
+    if (r.ok) {
+      refreshRoster();
+      say(r.name, false);
+    } else {
+      say(r.errors[0], true);
+    }
+  });
+
   io.appendChild(select);
   io.appendChild(exportBtn);
   io.appendChild(importBtn);
   io.appendChild(seedInput);
   io.appendChild(genBtn);
+  io.appendChild(popBtn);
   io.appendChild(status);
   wrap.appendChild(io);
 

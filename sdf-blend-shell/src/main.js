@@ -28,6 +28,7 @@ import { createHop } from './hop.js';
 import { createBlink } from './blink.js';
 import { exportCreature, parseCreatureJSON } from './data/creatureIO.js';
 import { generateCreature, GENERATE_MAX_ATTEMPTS } from './data/generate.js';
+import { createWorld } from './render/world.js';
 import {
   BLEND_K,
   BACKGROUND_COLOR,
@@ -39,8 +40,7 @@ import {
   LEAN_MAX,
   LEAN_SMOOTH,
   LIFT_SMOOTH,
-  GROUND_RADIUS,
-  GROUND_COLOR,
+  ACTOR_CAP,
 } from './config.js';
 import { stridePulse, leanTarget, approach, headingDelta } from './feel.js';
 
@@ -72,16 +72,10 @@ const controls = new OrbitControls(camera, renderer.domElement);
 controls.target.set(...ORBIT_TARGET);
 controls.enableDamping = true;
 
-// The field floor: flat and unlit (the toon look wants flat), a plain mesh
-// outside the blend-shell system. Feet dipping a hair below y=0 get hidden
-// by it — which reads as planted, for free. (It KEEPS writing depth for
-// exactly that reason; the ink pass sees it as a real surface, so the
-// stage rim inks against the background — a deliberate stage line.)
-const ground = new THREE.Mesh(
-  new THREE.CircleGeometry(GROUND_RADIUS, 48).rotateX(-Math.PI / 2),
-  new THREE.MeshBasicMaterial({ color: new THREE.Color().setHex(GROUND_COLOR, THREE.LinearSRGBColorSpace) })
-);
-scene.add(ground);
+// The TERRARIUM (C3) replaces the flat disc: same y=0 plane and same
+// GROUND_COLOR inside the roam clamp (the feet-dip trick survives —
+// world.js carries the contract), seeded hills and props beyond it.
+createWorld(scene);
 
 // --- the actors: every creature, alive at once ---
 // C1: actor construction is a FUNCTION now — the authored cast and
@@ -135,6 +129,15 @@ for (const creature of CREATURES) spawnActor(creature, CREATURES.length);
 // The ink pass owns the offscreen target + the fullscreen edge pass.
 const inkPass = createInkPass(renderer, camera);
 
+// The stage cap: every spawn door respects it (populate, generate,
+// import). Purely a perf guard — each actor is a draw + real per-pixel
+// field work, and 24 keeps the field smooth on modest GPUs.
+const stageFull = () => actors.length >= ACTOR_CAP;
+const fullMsg = () => 'the stage is full (' + ACTOR_CAP + ' actors) — reload to clear';
+// Populate draws from its own seed lane, far from the seed field's
+// neighborhood, so mashing populate never collides with hand-picked seeds.
+let populateSeed = 1001;
+
 const ui = createControls({
   initialK: BLEND_K,
   onK: (v) => {
@@ -152,18 +155,32 @@ const ui = createControls({
     return a ? { filename: id + '.json', text: exportCreature(a.creature) } : null;
   },
   onImport: (text) => {
+    if (stageFull()) return { ok: false, errors: [fullMsg()], warnings: [] };
     const r = parseCreatureJSON(text);
     if (!r.ok) return r;
     const actor = spawnActor(r.creature); // validated: safe past the gate
     return { ok: true, name: actor.creature.name ?? actor.creature.id, warnings: r.warnings };
   },
   onGenerate: (seed) => {
+    if (stageFull()) return { ok: false, errors: [fullMsg()] };
     // Deterministic and pre-graded: the generator already ran the same
     // validator that gates imports, so this spawn is safe by contract.
     const r = generateCreature(seed);
     if (!r.creature) return { ok: false, errors: [`seed ${seed} exhausted ${GENERATE_MAX_ATTEMPTS} attempts (deterministically unlucky — try the next one)`] };
     spawnActor(r.creature);
     return { ok: true, name: `${r.creature.name} (${r.archetype}, seed ${seed})` };
+  },
+  onPopulate: () => {
+    if (stageFull()) return { ok: false, errors: [fullMsg()] };
+    const spawned = [];
+    while (spawned.length < 5 && !stageFull()) {
+      const r = generateCreature(populateSeed++);
+      if (r.creature) {
+        spawnActor(r.creature);
+        spawned.push(r.creature.name);
+      }
+    }
+    return { ok: true, name: `populated +${spawned.length}: ${spawned.join(', ')}` };
   },
 });
 void ui; // { refreshRoster } — controls refreshes itself on import

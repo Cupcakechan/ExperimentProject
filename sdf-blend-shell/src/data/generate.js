@@ -31,7 +31,7 @@ export const GENERATE_MAX_ATTEMPTS = 10;
 
 // mulberry32 — small, seedable, deterministic (the project rule: no
 // unseeded RNG anywhere; a generated creature is reproducible data).
-function mulberry32(a) {
+export function mulberry32(a) {
   return function () {
     a |= 0;
     a = (a + 0x6d2b79f5) | 0;

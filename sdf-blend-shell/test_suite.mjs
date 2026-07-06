@@ -469,7 +469,7 @@ assert(buryT(0.1) === 0, 'exposed verts never tuck (buryT = 0)');
 
 // Roam: deterministic, seeded, bounded, separated, resettable.
 const { createRoam, idleSpeedMul } = await import('./src/roam.js');
-const { ROAM_SPEED, ROAM_HARD_RADIUS, ROAM_SEP_RADIUS, GROUND_RADIUS, STRIDE_LIFT, LEAN_MAX } = await import('./src/config.js');
+const { ROAM_SPEED, ROAM_HARD_RADIUS, ROAM_SEP_RADIUS, WORLD_FLAT_RADIUS, STRIDE_LIFT, LEAN_MAX } = await import('./src/config.js');
 const { IDLE_PERIOD, IDLE_DURATION, IDLE_RAMP } = await import('./src/config.js');
 const { stridePulse, leanTarget, approach, headingDelta, squashEndpoints } = await import('./src/feel.js');
 assert(ROAM_SPEED > 0 && STRIDE_LIFT > 0 && LEAN_MAX > 0, 'roam/feel constants are live');
@@ -512,7 +512,7 @@ assert(JSON.stringify(squashEndpoints(SQ_PRIM, -0.09)) === JSON.stringify({ a: [
     }
   }
 }
-assert(GROUND_RADIUS > ROAM_HARD_RADIUS, `the ground outreaches the roamers (${GROUND_RADIUS} > ${ROAM_HARD_RADIUS}) — nobody walks off the world`);
+assert(WORLD_FLAT_RADIUS > ROAM_HARD_RADIUS, `the flat stage outreaches the roamers (${WORLD_FLAT_RADIUS} > ${ROAM_HARD_RADIUS}) — nobody walks off the world or onto a hill`);
 
 // Idle envelope, hand-computed: exactly 1 outside the window, exactly 0
 // on the plateau (a genuine stop), smooth shoulders in between.
@@ -1634,6 +1634,58 @@ for (const creature of CREATURES) {
   }), 'every generated mouth is PROPORTIONAL (r <= 30% of its host — voids stay dead)');
   const rt = parseG(exportG(generateCreature(42).creature));
   assert(rt.ok && JSON.stringify(rt.creature) === JSON.stringify(generateCreature(42).creature), 'a generated creature is ordinary data: it round-trips through the C1 pipeline bit-faithfully');
+}
+
+// ---- C3 terrarium: the world is scenery, the locomotion plane is law ----
+// world.js is probed on its PURE exports. The load-bearing invariant:
+// terrain height is EXACTLY zero everywhere a creature can stand — the
+// roam/gait/hop stack assumes the y=0 plane and a dozen sims above
+// certify it, so the world must never reach into creature space. Props
+// obey the same border. Everything is seed-deterministic: a world is
+// data, like a creature.
+{
+  const { terrainHeight, propPlacements, buildTerrainGeometry, bandColor } = await import('./src/render/world.js');
+  const { WORLD_SEED, WORLD_RADIUS, WORLD_FLAT_RADIUS: FLAT, WORLD_HILL_HEIGHT, WORLD_PROP_MIN_R, ROAM_HARD_RADIUS: HARD } = await import('./src/config.js');
+
+  let flatOk = true;
+  for (let ri = 0; ri <= 20; ri++) {
+    for (let ti = 0; ti < 24; ti++) {
+      const r = (ri / 20) * FLAT; // the invariant's own boundary: the mask is identically 0 through r = FLAT inclusive
+      const th = (ti / 24) * Math.PI * 2;
+      if (terrainHeight(Math.cos(th) * r, Math.sin(th) * r, WORLD_SEED) !== 0) flatOk = false;
+    }
+  }
+  assert(flatOk, `terrain is EXACTLY flat through r = ${FLAT} (the locomotion plane, sampled 21x24, zero by construction — and FLAT > hard clamp is asserted above with margin)`);
+
+  let maxH = 0;
+  let minH = 0;
+  for (let i = 0; i < 900; i++) {
+    const r = FLAT + 0.2 + ((WORLD_RADIUS - FLAT - 0.4) * (i % 30)) / 30;
+    const th = (i / 900) * Math.PI * 2 * 7;
+    const h = terrainHeight(Math.cos(th) * r, Math.sin(th) * r, WORLD_SEED);
+    maxH = Math.max(maxH, h);
+    minH = Math.min(minH, h);
+  }
+  assert(maxH > 0.15, `the hills exist (max sampled height ${maxH.toFixed(3)} > 0.15 — the ring is not inert)`);
+  assert(minH >= 0 && maxH <= WORLD_HILL_HEIGHT + 1e-9, `hills stay in [0, ${WORLD_HILL_HEIGHT}] (no pits below the stage plane, ceiling held)`);
+  assert(terrainHeight(6.2, 3.1, WORLD_SEED) === terrainHeight(6.2, 3.1, WORLD_SEED), 'terrain is deterministic (same inputs, same height)');
+  assert(terrainHeight(6.2, 3.1, WORLD_SEED) !== terrainHeight(6.2, 3.1, WORLD_SEED + 1), 'a different world seed is a different world');
+
+  const props = propPlacements(WORLD_SEED);
+  const all = [...props.rocks, ...props.grass];
+  assert(all.every((p) => Math.hypot(p.x, p.z) >= WORLD_PROP_MIN_R && WORLD_PROP_MIN_R > HARD), `all ${all.length} props sit at r >= ${WORLD_PROP_MIN_R}, strictly outside creature space (hard clamp ${HARD})`);
+  assert(all.every((p) => p.y === terrainHeight(p.x, p.z, WORLD_SEED)), 'every prop sits ON the terrain (y from the same height function)');
+  assert(JSON.stringify(propPlacements(WORLD_SEED)) === JSON.stringify(props), 'prop placement is deterministic');
+
+  const geo = buildTerrainGeometry(WORLD_SEED);
+  const pos = geo.getAttribute('position');
+  let meshOk = true;
+  for (let i = 0; i < pos.count; i += 97) {
+    if (Math.abs(pos.getY(i) - terrainHeight(pos.getX(i), pos.getZ(i), WORLD_SEED)) > 1e-6) meshOk = false;
+  }
+  assert(meshOk && geo.getAttribute('color') !== undefined, 'the terrain mesh mirrors terrainHeight exactly and carries band colors');
+  const low = bandColor(0);
+  assert(low[0] === ((0x1b1f24 >> 16) & 255) / 255 && low[1] === ((0x1b1f24 >> 8) & 255) / 255, 'the flat band is EXACTLY GROUND_COLOR (the old disc look survives seamlessly, raw channels)');
 }
 
 // ---- R1 ink pass (screen-space, depth-only): the module contract ----

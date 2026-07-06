@@ -128,11 +128,25 @@ export const ROAM_SPAWN_RADIUS = 1.9;
 // guarantee at any scale; the suite re-measures the max every run.
 export const ROAM_HARD_RADIUS = 4.0;
 
-// Ground disc: a flat, unlit stage floor (toon look wants flat). Radius
-// must exceed the roamers' hard extent (soft radius + overshoot) so nobody
-// ever wanders off the edge of the world — suite-enforced.
-export const GROUND_RADIUS = 4.6;
+// The stage floor color (the terrarium's inner flat band uses it, so the
+// old disc's look survives seamlessly).
 export const GROUND_COLOR = 0x1b1f24;
+
+// C3 TERRARIUM. The load-bearing value is WORLD_FLAT_RADIUS: terrain
+// height is EXACTLY 0 inside it, and it must exceed the roam hard clamp
+// (suite-enforced) — the locomotion stack lives on a flat y=0 plane and
+// the world is built AROUND that plane, never through it. Hills and
+// props are scenery beyond creature reach.
+export const WORLD_SEED = 1; // the world is data too: one seed, one world
+export const WORLD_RADIUS = 9;
+export const WORLD_FLAT_RADIUS = 4.2; // > ROAM_HARD_RADIUS 4 (replaces GROUND_RADIUS 4.6)
+export const WORLD_HILL_HEIGHT = 0.55; // gentle: tall enough to silhouette, low enough to keep the cast the skyline
+export const WORLD_COLOR_MOSS = 0x24352c; // height bands (palette discipline): GROUND_COLOR -> moss -> rock
+export const WORLD_COLOR_ROCK = 0x343941;
+export const WORLD_ROCK_COUNT = 26;
+export const WORLD_GRASS_COUNT = 90;
+export const WORLD_PROP_MIN_R = 4.4; // props strictly outside creature space — no collision question exists
+export const ACTOR_CAP = 24; // populate/generate/import all respect it (perf: one draw + heavy fragment work per actor)
 
 // Reactive gait (stage 3). A planted foot steps when its HOME (rest spot
 // carried by the body) drifts more than STEP_TRIGGER away; the swing takes
