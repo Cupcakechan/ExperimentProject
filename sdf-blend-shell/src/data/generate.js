@@ -140,10 +140,17 @@ function makeEyes(rng, host, peak, pal, out) {
 // void, not a mouth (the generator's first browser lesson). Endpoint
 // band still held by construction: half-span capped so both slit
 // ends stay inside the host (-r < sd < 0).
-function makeMouth(rng, host, pal, out) {
-  const rM = round3v(host.r * rng.range(0.17, 0.26));
+function makeMouth(rng, host, pal, out, peak = 0) {
+  // Size the DISPLAYED mouth, not the authored one: a decal's visible
+  // footprint balloons with the host's peak dilate (inflate + breath —
+  // pudgy's mouths read at nearly eye-blob size, browser-caught), so the
+  // sampled radius is compensated by the peak and floored at 10% of the
+  // host. Zero-dilate archetypes are untouched (peak 0).
+  const rM = round3v(Math.max(host.r * rng.range(0.17, 0.26) - peak, host.r * 0.1));
   const root = Math.min(0.03, host.r * 0.12, rM * 0.6);
-  const dirRaw = [-1, rng.range(-0.15, 0.05), 0];
+  // Strictly BELOW the eyes (was up to +0.05 = eye level on small heads
+  // — the mouth merged with the ballooned pupils into one black blob).
+  const dirRaw = [-1, rng.range(-0.35, -0.12), 0];
   const dl = Math.hypot(...dirRaw);
   const u = dirRaw.map((v) => v / dl);
   const c = [host.a[0] + u[0] * (host.r - root), host.a[1] + u[1] * (host.r - root), host.a[2] + u[2] * (host.r - root)];
@@ -227,7 +234,7 @@ const ARCHETYPES = {
     // Budget: 2 + 8 legs = 10; eyes 2 + irises 2 = 14; mouth 15; tail 16.
     const breath = rng.chance(0.5) ? { amplitude: round3v(rng.range(0.01, 0.018)), speed: round3v(rng.range(1.8, 2.6)) } : null;
     makeEyes(rng, head, breath ? breath.amplitude : 0, pal, out);
-    makeMouth(rng, head, pal, out);
+    makeMouth(rng, head, pal, out, breath ? breath.amplitude : 0);
     out.prims.push({ id: 'tail', type: 'capsule', a: [round3(half), round3(yBody + 0.12), 0], b: [round3(half + rng.range(0.4, 0.55)), round3(yBody + rng.range(0.3, 0.45)), 0], r: round3v(rng.range(0.11, 0.14)), kCap: 0.09, color: pal.accent });
     out.prims.push(...out.irisQueue);
     const c = { anim: { primId: 'tail', axis: [1, 0, 0], amplitude: round3v(rng.range(0.4, 0.7)), speed: round3v(rng.range(2.2, 3.0)) }, step: out.step, blink: out.blink, prims: out.prims };
@@ -248,7 +255,7 @@ const ARCHETYPES = {
     const inflate = round3v(rng.range(0.02, 0.04));
     const breath = { amplitude: round3v(rng.range(0.014, 0.02)), speed: round3v(rng.range(1.4, 1.9)) };
     makeEyes(rng, head, inflate + breath.amplitude, pal, out);
-    makeMouth(rng, head, pal, out);
+    makeMouth(rng, head, pal, out, inflate + breath.amplitude);
     out.prims.push({ id: 'tail', type: 'capsule', a: [round3(body.a[0] + rBody * 0.9), round3(yBody + 0.05), 0], b: [round3(body.a[0] + rBody * 0.9 + 0.2), round3(yBody + 0.18), 0], r: 0.11, kCap: 0.08, color: pal.accent });
     out.prims.push(...out.irisQueue);
     return { inflate, breath, anim: { primId: 'tail', axis: [0, 1, 0], amplitude: round3v(rng.range(0.4, 0.6)), speed: round3v(rng.range(2.6, 3.2)) }, step: out.step, blink: out.blink, prims: out.prims };
@@ -268,7 +275,7 @@ const ARCHETYPES = {
     }
     const breath = { amplitude: 0.012, speed: round3v(rng.range(2.0, 2.5)) };
     makeEyes(rng, body, breath.amplitude, pal, out);
-    makeMouth(rng, body, pal, out);
+    makeMouth(rng, body, pal, out, breath.amplitude);
     out.prims.push(...out.irisQueue);
     return { breath, hop: {}, anim: { primId: 'ear_l', axis: [1, 0, 0], amplitude: round3v(rng.range(0.25, 0.35)), speed: round3v(rng.range(2.8, 3.4)) }, step: { feet: ['foot_l', 'foot_r'], groups: [[0], [1]] }, blink: out.blink, prims: out.prims };
   },
