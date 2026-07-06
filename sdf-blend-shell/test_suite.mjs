@@ -1594,6 +1594,29 @@ for (const creature of CREATURES) {
     for (const s of solids) if (Math.hypot(m.a[0] - s.a[0], m.a[1] - s.a[1], m.a[2] - s.a[2]) - s.r < Math.hypot(m.a[0] - host.a[0], m.a[1] - host.a[1], m.a[2] - host.a[2]) - host.r) host = s;
     return m.r <= 0.3 * host.r;
   }), 'every generated mouth is PROPORTIONAL (r <= 30% of its host — voids stay dead)');
+  // Knee fidelity (the leg-cuts analysis, Daniel's call): generated
+  // kneed legs carry the CAST's expressive fold — bends off the old
+  // 0.05 formula floor (cast: 0.060-0.070) and front feet planted
+  // FORWARD of their hips (the A5.1 Z-fold), so generated knees read
+  // in the silhouette like the authored ones.
+  const kneedGens = sweep.filter((r) => r.creature.step?.knees);
+  assert(kneedGens.length > 0, 'the sweep contains kneed creatures to judge');
+  const foldStats = kneedGens.map((r) => {
+    const th = r.creature.prims.find((p) => p.id === 'thigh_fl');
+    const sh = r.creature.prims.find((p) => p.id === 'leg_fl');
+    const H = th.a, K = th.b, F = sh.b;
+    const hf = [F[0] - H[0], F[1] - H[1], F[2] - H[2]];
+    const L = Math.hypot(...hf);
+    const u = hf.map((v) => v / L);
+    const d = (K[0] - H[0]) * u[0] + (K[1] - H[1]) * u[1] + (K[2] - H[2]) * u[2];
+    return {
+      bend: Math.hypot(K[0] - H[0] - u[0] * d, K[1] - H[1] - u[1] * d, K[2] - H[2] - u[2] * d),
+      splayF: F[0] - H[0],
+    };
+  });
+  const minBend = Math.min(...foldStats.map((f) => f.bend));
+  assert(minBend > 0.052, `generated knees are OFF the old 0.05 floor (min bend ${minBend.toFixed(3)} — cast-parity fold, MEASURED)`);
+  assert(foldStats.every((f) => f.splayF < 0), 'generated FRONT feet plant FORWARD of their hips (the Z-fold splay, like the cast)');
   const rt = parseG(exportG(generateCreature(42).creature));
   assert(rt.ok && JSON.stringify(rt.creature) === JSON.stringify(generateCreature(42).creature), 'a generated creature is ordinary data: it round-trips through the C1 pipeline bit-faithfully');
 }

@@ -176,18 +176,34 @@ function makeQuadLegs(rng, body, yBody, rBody, half, kneed, pal, out) {
   const hipY = yBody - rng.range(0.08, 0.12);
   const footY = 0.08;
   const zHip = rBody * rng.range(0.42, 0.52);
-  const xF = -(half - rng.range(0.02, 0.08));
-  const xB = half - rng.range(0.02, 0.08);
+  // KNEE FIDELITY (cast parity): kneed hips sit deeper inside the body
+  // span (cast insets 0.07-0.08), so the deeper forward bend below never
+  // pushes the knee past the body capsule's end — the knee-inside-body
+  // margin is protected by construction, not only by the clamp loop.
+  const insetLo = kneed ? 0.07 : 0.02;
+  const insetHi = kneed ? 0.11 : 0.08;
+  const xF = -(half - rng.range(insetLo, insetHi));
+  const xB = half - rng.range(insetLo, insetHi);
   const feet = [];
   const knees = {};
   for (const [px, tagX] of [[xF, 'f'], [xB, 'b']]) {
     for (const [sign, tagZ] of [[1, 'l'], [-1, 'r']]) {
       const legId = `leg_${tagX}${tagZ}`;
       const hip = [px, hipY, sign * zHip];
-      const foot = [px + rng.range(-0.02, 0.06) * (tagX === 'f' ? 1 : 1), footY, sign * (zHip + 0.02)];
+      // KNEE FIDELITY: kneed feet SPLAY OUTWARD like the cast's fold
+      // (front feet forward of front hips, back feet behind — the A5.1
+      // Z-fold support polygon); straight-legged archetypes keep their
+      // judged stance untouched (same draw count either branch).
+      const splay = kneed ? rng.range(0.01, 0.05) * (tagX === 'f' ? -1 : 1) : rng.range(-0.02, 0.06);
+      const foot = [px + splay, footY, sign * (zHip + 0.02)];
       if (kneed) {
-        const D = Math.hypot(foot[0] - hip[0], foot[1] - hip[1], foot[2] - hip[2]);
-        const bend = Math.max(0.05, 0.12 * D); // reach <= ~0.972: off the straight lock by construction
+        // Cast-parity bend (the leg-cuts analysis, Daniel's Option C):
+        // the authored cast bends 0.060-0.070 — "the knee reads in the
+        // silhouette." The old max(0.05, 0.12*D) pinned every generated
+        // leg at its 0.05 floor: valid but expressionless. Sampled from
+        // the cast's range instead; reach stays far off the straight
+        // lock (deeper bend = SHORTER reach, the safe direction).
+        const bend = rng.range(0.055, 0.075);
         let knee = [(hip[0] + foot[0]) / 2 - bend, (hip[1] + foot[1]) / 2, sign * (zHip + 0.01)];
         // Capless validity: the knee must sit INSIDE the body at rest.
         // Clamp z inward until sd(knee, body) <= -0.03 (same sd math as
