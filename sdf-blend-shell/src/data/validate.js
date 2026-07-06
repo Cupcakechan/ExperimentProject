@@ -188,8 +188,16 @@ export function validateCreature(c) {
     }
   }
 
-  // --- hop / blink / body-level fields ---
+  // --- hop / hover / blink / body-level fields ---
   if (c.hop != null && (typeof c.hop !== 'object' || Array.isArray(c.hop))) err('hop must be an object (empty = all config defaults)');
+  if (c.hover != null) {
+    const h = c.hover;
+    if (!isNum(h.height) || h.height <= 0 || !isNum(h.amp) || h.amp < 0 || !isNum(h.speed) || h.speed <= 0) {
+      err('hover must be { height > 0, amp >= 0, speed > 0 }');
+    }
+    // A floater neither walks nor jumps: hover owns the rig's vertical.
+    if (c.step != null || c.hop != null) err('hover excludes step and hop (one system owns the rig)');
+  }
   if (c.blink != null) {
     if (!Array.isArray(c.blink.eyes)) err('blink.eyes must be an array of prim ids');
     else {
@@ -240,12 +248,21 @@ export function validateCreature(c) {
     else if (pi < si) err(`'${pupil.id}' must come AFTER 'sclera_${side}' (decals composite in registry order — later wins)`);
   }
 
-  // --- warnings: the shared stage (one global camera serves everyone) ---
+  // --- warnings: the shared stage (one global camera serves everyone).
+  // Hover-aware: a floater's DISPLAYED extent is rest + height +- amp —
+  // rest-only bounds would pass a creature that hovers into the camera
+  // ceiling or dips its tendrils through the stage. ---
+  const hoverLift = c.hover && isNum(c.hover.height) ? c.hover.height : 0;
+  const hoverAmp = c.hover && isNum(c.hover.amp) ? c.hover.amp : 0;
   for (const s of solids) {
     const pts = s.b ? [s.a, s.b] : [s.a];
     for (const pt of pts) {
-      if (Math.abs(pt[0]) + s.r > 1.3 + 1e-9 || pt[1] + s.r > 1.7 + 1e-9 || pt[1] - s.r < -0.05) {
-        warnings.push(`'${s.id}' may exceed the shared stage (fit within x -1.3..1.3, ground y=0, top y < 1.7)`);
+      if (
+        Math.abs(pt[0]) + s.r > 1.3 + 1e-9 ||
+        pt[1] + s.r + hoverLift + hoverAmp > 1.7 + 1e-9 ||
+        pt[1] - s.r + hoverLift - hoverAmp < -0.05
+      ) {
+        warnings.push(`'${s.id}' may exceed the shared stage (fit within x -1.3..1.3, ground y=0, top y < 1.7${c.hover ? ', displayed at hover height' : ''})`);
         break;
       }
     }

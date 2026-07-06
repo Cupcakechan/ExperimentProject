@@ -348,4 +348,43 @@ export const CREATURES = [
       { id: 'iris_r', type: 'sphere', a: [-0.565, 0.545, -0.115], r: 0.03, color: 0x201a30, paint: true },
     ],
   },
+  {
+    id: 'floater',
+    name: 'Bloop',
+    // The reference queue's FLOATER: the first non-grounded creature.
+    // hover replaces walking — the roam brain still steers, the body
+    // rides at height + amp*sin (free bob was RETIRED for walkers
+    // because it read as floating; for a floater, floating is the job).
+    // APPENDED to the cast deliberately: roam seeds, bob phases, and
+    // blink staggers key off cast index, so appending preserves the six
+    // confirmed creatures' exact seeds and spawn slots.
+    // Authored COMPACT near the ground (all rest y >= 0); hover.height
+    // lifts the rig — displayed bell top 0.83 + 0.55 + 0.06 = 1.44 < 1.7,
+    // tendril tips bottom out at 0.02 + 0.55 - 0.06 = 0.51 (hand-computed,
+    // suite-anchored).
+    hover: { height: 0.55, amp: 0.06, speed: 1.1 },
+    // Breath shares the actor's bob phase, so Bloop inhales as it rises —
+    // deliberate, not a bug.
+    breath: { amplitude: 0.012, speed: 1.2 },
+    blink: { eyes: ['eyeball_l', 'eyeball_r', 'iris_l', 'iris_r'] },
+    // NO anim: the tendrils are a matched set (animating one reads
+    // broken) and they carry no decals; sway is a future feel pass.
+    prims: [
+      { id: 'bell', type: 'sphere', a: [0, 0.55, 0], r: 0.28, color: 0x8f7ad1 },
+      // Four thin tendrils, kCap'd (the thin-part rule: r < 0.18 near a
+      // bigger mass melts uncapped).
+      { id: 'tendril_fl', type: 'capsule', a: [-0.11, 0.33, 0.11], b: [-0.17, 0.02, 0.17], r: 0.045, kCap: 0.032, color: 0x6f5cab },
+      { id: 'tendril_fr', type: 'capsule', a: [-0.11, 0.33, -0.11], b: [-0.17, 0.02, -0.17], r: 0.045, kCap: 0.032, color: 0x6f5cab },
+      { id: 'tendril_bl', type: 'capsule', a: [0.11, 0.33, 0.11], b: [0.17, 0.02, 0.17], r: 0.045, kCap: 0.032, color: 0x6f5cab },
+      { id: 'tendril_br', type: 'capsule', a: [0.11, 0.33, -0.11], b: [0.17, 0.02, -0.17], r: 0.045, kCap: 0.032, color: 0x6f5cab },
+      // Ball eyes on the bell front (rooted 0.018, poke 0.072; peak
+      // dilate 0.012 <= r/3 = 0.03 — the boundary holds).
+      { id: 'eyeball_l', type: 'sphere', a: [-0.238, 0.593, 0.1], r: 0.09, kCap: 0.03, color: 0xffffff },
+      { id: 'eyeball_r', type: 'sphere', a: [-0.238, 0.593, -0.1], r: 0.09, kCap: 0.03, color: 0xffffff },
+      // Small decal mouth below the eyes (endpoints sd -0.024, in band).
+      { id: 'mouth', type: 'capsule', a: [-0.25, 0.52, 0.045], b: [-0.25, 0.52, -0.045], r: 0.05, paint: true, color: 0x2a2136 },
+      { id: 'iris_l', type: 'sphere', a: [-0.313, 0.606, 0.131], r: 0.036, color: 0x241d33, paint: true },
+      { id: 'iris_r', type: 'sphere', a: [-0.313, 0.606, -0.131], r: 0.036, color: 0x241d33, paint: true },
+    ],
+  },
 ];

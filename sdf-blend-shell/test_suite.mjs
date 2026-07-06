@@ -1219,6 +1219,7 @@ const INFL_CEILING = {
   pudge: { 0.25: 0.122, 0.6: 0.18 }, // at breath peak (dilate 0.04 + amplitude 0.02); re-MEASURED after R2 (0.1016/0.1598)
   snail: { 0.25: 0.074, 0.6: 0.132 }, // at breath peak (+0.012); re-MEASURED after R2 (0.0534/0.1118)
   skitter: { 0.25: 0.03, 0.6: 0.03 }, // fully authored blends: MEASURED 0.0064 at BOTH k after R2 (every close pair capped)
+  floater: { 0.25: 0.038, 0.6: 0.038 }, // Bloop: MEASURED 0.0172 at BOTH k (tendril kCaps govern every close pair — slider-immune like Skitter)
 };
 // Carved creatures: MEASURED bounds (+0.02 margin) for the generalized
 // invariants. hardBand = how far the smooth contour may sit inside the
@@ -1385,6 +1386,29 @@ for (const creature of CREATURES) {
 // git history, where the full instrument can be revived if an offset-
 // surface draw ever returns.
 
+// ---- Hover locomotion (reference queue, pass 1): the Floater ----
+// The rig math mirrored from main's hover branch, walked over time:
+// deterministic, bounded to [height - amp, height + amp], never inert.
+// Plus the Bloop design anchors (hand-computed displayed extents).
+{
+  const floater = CREATURES.find((c) => c.id === 'floater');
+  assert(floater && floater.hover && !floater.step && !floater.hop, 'the cast has a FLOATER: hover data, no step, no hop (one system owns the rig)');
+  const { height, amp, speed } = floater.hover;
+  let lo = Infinity;
+  let hi = -Infinity;
+  for (let t = 0; t < 12; t += 0.016) {
+    const y = height + amp * Math.sin(t * speed + 6 * 2.1); // actor index 6: the same bobPhase main derives
+    lo = Math.min(lo, y);
+    hi = Math.max(hi, y);
+  }
+  assert(lo >= height - amp - 1e-9 && hi <= height + amp + 1e-9, `hover stays in [height - amp, height + amp] ([${lo.toFixed(3)}, ${hi.toFixed(3)}] within [${(height - amp).toFixed(3)}, ${(height + amp).toFixed(3)}])`);
+  assert(hi - lo > amp, `hover is not inert (range ${(hi - lo).toFixed(3)} > amp over 12s)`);
+  const bell = floater.prims.find((p) => p.id === 'bell');
+  assert(Math.abs(bell.a[1] + bell.r + height + amp - 1.44) < 1e-9, 'Bloop displayed crown = 1.44 < 1.7 (hand-computed: 0.83 + 0.55 + 0.06 — the shared camera keeps everyone)');
+  const tip = floater.prims.find((p) => p.id === 'tendril_fl').b;
+  assert(tip[1] + height - amp > 0.4, `tendril tips clear the stage at the bob's low point (${(tip[1] + height - amp).toFixed(2)} > 0.4)`);
+}
+
 // ---- C1 creature I/O: the executable authoring rules + the round trip ----
 // validate.js is the AUTHORING RULES as one pure function — the import
 // gate, this suite, and the C2 generator's grader are the SAME module,
@@ -1425,6 +1449,8 @@ for (const creature of CREATURES) {
   rejects((c) => { for (const p of c.prims) if (!p.paint) p.paint = true; }, 'SOLID prim required', 'a creature of only decals');
   rejects((c) => { const th = c.prims.find((p) => p.id === 'thigh_bl'); const sh = c.prims.find((p) => p.id === 'leg_bl'); th.b = [0.42, 0.265, 0.7]; sh.a = [0.42, 0.265, 0.7]; }, 'exits the skin', 'a knee outside the body (the capless validity boundary)');
   rejects((c) => { c.breath = { amplitude: 0.2, speed: 2.0 }; }, 'thinnest solid', 'a breath peak that balloons past the thinnest solid');
+  rejects((c) => { c.hover = { height: 0.5, amp: 0.05, speed: 1.0 }; }, 'hover excludes', 'a hovering walker (one system owns the rig)');
+  rejects((c) => { delete c.step; delete c.anim; c.hover = { height: -1, amp: 0.05, speed: 1.0 }; }, 'hover must be', 'a malformed hover block');
 
   // Round trip: envelope in, RAW object out — bit-faithful for the cast,
   // and a field the tool does not manage survives export -> import.

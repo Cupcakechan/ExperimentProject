@@ -247,7 +247,16 @@ renderer.setAnimationLoop(() => {
     actor.prevHeading = pose.heading;
     actor.lean = approach(actor.lean, leanTarget(omega, LEAN_GAIN, LEAN_MAX), LEAN_SMOOTH, dt);
 
-    if (actor.hop) {
+    if (actor.creature.hover) {
+      // HOVER (reference queue): the roam brain steers as ever; the body
+      // rides at an authored altitude with a gentle bob. Free bob was
+      // retired for walkers because it read as floating — here floating
+      // IS the locomotion. bobPhase decorrelates the field (and syncs
+      // the bob with this creature's breath — inhale on the rise).
+      const hv = actor.creature.hover;
+      actor.rig.position.set(pose.x, hv.height + hv.amp * Math.sin(tAnim * hv.speed + actor.bobPhase), pose.z);
+      actor.rig.rotation.y = pose.heading;
+    } else if (actor.hop) {
       // The hop returns the DISPLAYED pose (bursting between points on
       // the logical path) and owns the feet; no stride lift — the arc IS
       // the vertical life for this creature.
