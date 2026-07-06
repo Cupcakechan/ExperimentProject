@@ -5,11 +5,11 @@
 // (uA/uB) in lockstep with them — the mesh and the field must
 // always agree about where a prim is.
 //
-// Today's only animation is still the single-prim wave (BEHAVIOR
-// PARITY with the old uAnimMat path — same sine, same pivot,
-// ABSOLUTE from rest each frame so it cannot drift). The plumbing
-// is what changed: IK stepping (stage 3) will write many prims'
-// transforms per frame through this same lockstep helper.
+// Animation is data: 'anim' accepts ONE entry or an ARRAY of them
+// (the tendril-sway generalization — a single object is just the
+// array-of-one case everywhere downstream). Each entry is a wave
+// (sine) or a spin (t * speed), rotating about pivot ?? prim.a,
+// ABSOLUTE from rest each frame so nothing can drift.
 // ============================================================
 
 import * as THREE from 'three';
@@ -35,11 +35,19 @@ export function breathInflate(tSec, creature, phase = 0) {
   return base + amplitude * 0.5 * (1 - Math.cos(tSec * speed + phase));
 }
 
-// -1 when the creature has no anim, or names a prim that isn't there —
-// animation becomes a silent no-op instead of a crash.
-export function animPrimIndex(creature) {
-  if (!creature || !creature.anim) return -1;
-  return creature.prims.findIndex((p) => p.id === creature.anim.primId);
+// Normalized anim entries with resolved prims — [] when the creature has
+// no anim, and entries naming missing prims are dropped (animation stays
+// a silent no-op instead of a crash). Callers cache this at spawn time:
+// findIndex is spawn work, not frame work.
+export function animEntries(creature) {
+  if (!creature || !creature.anim) return [];
+  const list = Array.isArray(creature.anim) ? creature.anim : [creature.anim];
+  const out = [];
+  for (const anim of list) {
+    const idx = creature.prims.findIndex((p) => p.id === anim.primId);
+    if (idx >= 0) out.push({ anim, prim: creature.prims[idx], idx });
+  }
+  return out;
 }
 
 // Scratch objects — reused every frame, zero per-frame allocation.
@@ -62,29 +70,28 @@ export function setPrimTransform(material, idx, prim, mat) {
   material.uniforms.uB.value[idx].copy(_b);
 }
 
-// idx is animPrimIndex(creature), cached by the caller at switch time.
-export function updateAnim(material, tSec, creature, idx) {
-  if (idx < 0 || !creature || !creature.anim) return;
-  const prim = creature.prims[idx];
-  const { axis, amplitude, speed, mode, pivot } = creature.anim;
-  // SPIN (reference queue pass 2): angle = t * speed — unbounded and
-  // monotonic, but still ABSOLUTE from rest each frame (pause-safe and
-  // drift-proof by the same law as the wave; sin/cos are periodic, so an
-  // hour of angle costs nothing). pivot overrides the rotation center:
-  // a propeller's hub is its blade's MIDPOINT, which endpoint-a rotation
-  // cannot express (the blade would orbit the mast like a tetherball).
-  // Both fields ??-guard to the old behavior — every existing creature
-  // is byte-identical.
-  const [ax, ay, az] = pivot ?? prim.a;
+// entries = animEntries(creature), cached by the caller at spawn time.
+// Every entry writes its OWN prim slot — the validator guarantees no two
+// entries target one prim (two matrices cannot share a slot).
+export function updateAnim(material, tSec, entries) {
+  if (!entries || entries.length === 0) return;
+  for (const { anim, prim, idx } of entries) {
+    const { axis, amplitude, speed, mode, pivot } = anim;
+    // SPIN: angle = t * speed — unbounded and monotonic, but still
+    // ABSOLUTE from rest each frame (pause-safe and drift-proof by the
+    // same law as the wave). pivot overrides the rotation center: a
+    // propeller's hub is its blade's MIDPOINT, which endpoint-a rotation
+    // cannot express. Both fields ??-guard to the old behavior.
+    const [ax, ay, az] = pivot ?? prim.a;
+    const angle = (mode ?? 'wave') === 'spin' ? tSec * speed : Math.sin(tSec * speed) * amplitude;
 
-  const angle = (mode ?? 'wave') === 'spin' ? tSec * speed : Math.sin(tSec * speed) * amplitude;
+    // World-space rotation about the pivot point: T(p) * R * T(-p).
+    _axis.set(...axis).normalize();
+    _rot.makeRotationAxis(_axis, angle);
+    _toOrigin.makeTranslation(-ax, -ay, -az);
+    _back.makeTranslation(ax, ay, az);
+    _back.multiply(_rot).multiply(_toOrigin);
 
-  // World-space rotation about the pivot point a: T(a) * R * T(-a).
-  _axis.set(...axis).normalize();
-  _rot.makeRotationAxis(_axis, angle);
-  _toOrigin.makeTranslation(-ax, -ay, -az);
-  _back.makeTranslation(ax, ay, az);
-  _back.multiply(_rot).multiply(_toOrigin);
-
-  setPrimTransform(material, idx, prim, _back);
+    setPrimTransform(material, idx, prim, _back);
+  }
 }

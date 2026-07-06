@@ -20,7 +20,7 @@ import { CREATURES } from './data/creatures.js';
 import { buildShellGeometry } from './render/buildShell.js';
 import { createBlendMaterial } from './render/blendMaterial.js';
 import { createInkPass } from './render/inkPass.js';
-import { updateAnim, animPrimIndex, breathInflate } from './anim.js';
+import { updateAnim, animEntries, breathInflate } from './anim.js';
 import { createControls } from './ui/controls.js';
 import { createRoam } from './roam.js';
 import { createGait } from './gait.js';
@@ -109,7 +109,7 @@ function spawnActor(creature, roamTotal = actors.length + 1) {
     // the reactive gait underneath it would fight over the same anchors.
     hop: createHop(creature),
     gait: creature.hop ? null : createGait(creature), // null for creatures without feet
-    animIdx: animPrimIndex(creature),
+    anims: animEntries(creature), // cached {anim, prim, idx} entries — findIndex is spawn work, not frame work
     bobPhase: i * 2.1, // breath decorrelator (synchronized breathing is uncanny)
     blink: createBlink(creature, i * 1.3), // staggered — unison blinking is worse
     pos: { x: 0, z: 0 }, // last frame's position, read by the OTHERS' separation
@@ -220,7 +220,7 @@ renderer.setAnimationLoop(() => {
     // One draw per actor now — every lockstep write targets the skin
     // material alone (the write paths all take a materials LIST, so the
     // single-element array is the whole change).
-    updateAnim(actor.material, tAnim, actor.creature, actor.animIdx);
+    updateAnim(actor.material, tAnim, actor.anims);
 
     // Blink (A4): eye decals submerge into their host on a deterministic,
     // phase-staggered schedule — absolute from rest, so a non-blinking

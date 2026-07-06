@@ -367,8 +367,19 @@ export const CREATURES = [
     // deliberate, not a bug.
     breath: { amplitude: 0.012, speed: 1.2 },
     blink: { eyes: ['eyeball_l', 'eyeball_r', 'iris_l', 'iris_r'] },
-    // NO anim: the tendrils are a matched set (animating one reads
-    // broken) and they carry no decals; sway is a future feel pass.
+    // Tendril sway (feel pass): the anims-ARRAY's first customer — all
+    // four swing fore-aft from their tops (default pivot = prim.a, the
+    // attachment). Stagger comes from SPEED divergence, not phase: the
+    // tendrils beat against each other and never settle into a loop
+    // (the breath-decorrelation pattern), and bit-exact rest at t=0
+    // survives. Speeds straddle the hover bob (1.1) so the sway reads
+    // as part of the float. Levers: amplitude (swing), speeds (tempo).
+    anim: [
+      { primId: 'tendril_fl', axis: [0, 0, 1], amplitude: 0.2, speed: 1.0 },
+      { primId: 'tendril_fr', axis: [0, 0, 1], amplitude: 0.2, speed: 1.08 },
+      { primId: 'tendril_bl', axis: [0, 0, 1], amplitude: 0.2, speed: 1.16 },
+      { primId: 'tendril_br', axis: [0, 0, 1], amplitude: 0.2, speed: 1.24 },
+    ],
     prims: [
       { id: 'bell', type: 'sphere', a: [0, 0.55, 0], r: 0.28, color: 0x8f7ad1 },
       // Four thin tendrils, kCap'd (the thin-part rule: r < 0.18 near a

@@ -125,14 +125,23 @@ export function validateCreature(c) {
   // --- anim: one prim's wave; a broken reference is a silent no-op in
   // the engine, but an IMPORTED creature deserves the loud version ---
   if (c.anim != null) {
-    const a = c.anim;
-    if (!byId.has(a.primId)) err(`anim.primId '${a.primId}' is not a prim id`);
-    if (!isVec3(a.axis) || len(a.axis) < 1e-8) err('anim.axis must be a non-zero [x, y, z]');
-    if (a.mode != null && a.mode !== 'wave' && a.mode !== 'spin') err("anim.mode must be 'wave' or 'spin' when present");
-    if (!isNum(a.speed)) err('anim.speed must be a finite number');
-    // A spin needs no amplitude (angle = t * speed); a wave does.
-    if ((a.mode ?? 'wave') === 'wave' && !isNum(a.amplitude)) err('a wave anim needs a finite amplitude');
-    if (a.pivot != null && !isVec3(a.pivot)) err('anim.pivot must be [x, y, z] when present');
+    // ONE entry or an ARRAY of entries (the tendril-sway form) — a
+    // single object is the array-of-one case.
+    const entries = Array.isArray(c.anim) ? c.anim : [c.anim];
+    if (entries.length === 0) err('anim array must not be empty (omit the field instead)');
+    const targets = new Set();
+    for (const a of entries) {
+      if (!a || typeof a !== 'object') { err('every anim entry must be an object'); continue; }
+      if (!byId.has(a.primId)) err(`anim.primId '${a.primId}' is not a prim id`);
+      else if (targets.has(a.primId)) err(`two anim entries target '${a.primId}' (two matrices cannot share one prim slot)`);
+      targets.add(a.primId);
+      if (!isVec3(a.axis) || len(a.axis) < 1e-8) err('anim.axis must be a non-zero [x, y, z]');
+      if (a.mode != null && a.mode !== 'wave' && a.mode !== 'spin') err("anim.mode must be 'wave' or 'spin' when present");
+      if (!isNum(a.speed)) err('anim.speed must be a finite number');
+      // A spin needs no amplitude (angle = t * speed); a wave does.
+      if ((a.mode ?? 'wave') === 'wave' && !isNum(a.amplitude)) err('a wave anim needs a finite amplitude');
+      if (a.pivot != null && !isVec3(a.pivot)) err('anim.pivot must be [x, y, z] when present');
+    }
   }
 
   // --- step: feet, groups, knees (the gait's structural contract) ---

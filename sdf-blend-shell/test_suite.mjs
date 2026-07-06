@@ -68,7 +68,7 @@ const { MAX_PRIMS, BLEND_K, COLOR_SOFT, COLOR_POW, TUCK_DEPTH, BURY_EPS, PAINT_E
 const { buildShellGeometry } = await import('./src/render/buildShell.js');
 const { createBlendMaterial } = await import('./src/render/blendMaterial.js');
 const THREE = await import('three');
-const { rotateAboutPivot, updateAnim, animPrimIndex, breathInflate } = await import('./src/anim.js');
+const { rotateAboutPivot, updateAnim, animEntries, breathInflate } = await import('./src/anim.js');
 
 // --- shared math (JS mirrors of the shader) ---
 function sdCapsule(p, a, b, r) {
@@ -342,30 +342,33 @@ for (const creature of CREATURES) {
   assert(mat.uniforms.uTuck.value === TUCK_DEPTH, `${tag} skin tucks buried verts (uTuck = TUCK_DEPTH)`);
   assert(mat.uniforms.uBuryBand.value > 0, `${tag} the skin carries the burial ramp (uBuryBand > 0)`);
 
-  // anim: named prim exists, rest pose at t=0, actually moves at peak —
-  // BEHAVIOR PARITY with the old single-slot path, now via uPrimMat.
+  // anim: every entry resolves, rest pose at t=0, each entry moves at
+  // its own peak — generalized to the anims ARRAY (tendril sway): a
+  // single object is the array-of-one case, and every entry owns its
+  // own prim slot.
   if (creature.anim) {
-    const idx = animPrimIndex(creature);
-    assert(idx >= 0, `${tag} anim prim '${creature.anim.primId}' found`);
-    if (idx >= 0) {
-      const restA = mat.uniforms.uA.value[idx].clone();
-      const restB = mat.uniforms.uB.value[idx].clone();
-      updateAnim(mat, 0, creature, idx);
-      assert(mat.uniforms.uB.value[idx].distanceTo(restB) < 1e-9, `${tag} updateAnim(t=0) keeps rest pose`);
-      assert(mat.uniforms.uPrimMat.value[idx].equals(IDENTITY), `${tag} updateAnim(t=0) writes identity to uPrimMat`);
-      updateAnim(mat, Math.PI / 2 / creature.anim.speed, creature, idx);
-      const moved = mat.uniforms.uB.value[idx].distanceTo(restB);
-      assert(moved > 0.01, `${tag} updateAnim(peak) moves '${creature.anim.primId}' (${moved.toFixed(3)} > 0.01) — the wave is not inert`);
-      // Pivot invariant, PIVOT-AWARE since pass 2: the fixed point of the
-      // rotation is anim.pivot ?? prim.a — apply the written matrix to
-      // that point and it must not move (for spin-with-hub creatures,
-      // endpoint a deliberately orbits, so asserting on a would be wrong).
-      const fixedPt = new THREE.Vector3(...(creature.anim.pivot ?? creature.prims[idx].a));
-      assert(fixedPt.clone().applyMatrix4(mat.uniforms.uPrimMat.value[idx]).distanceTo(fixedPt) < 1e-9, `${tag} pivot invariant: the FIXED POINT (pivot ?? a) never moves under the anim matrix`);
-      assert(!mat.uniforms.uPrimMat.value[idx].equals(IDENTITY), `${tag} peak writes a non-identity uPrimMat`);
-      const untouched = mat.uniforms.uPrimMat.value.filter((m, i) => i !== idx);
-      assert(untouched.every((m) => m.equals(IDENTITY)), `${tag} non-animated prims stay at identity`);
-    }
+    const entries = animEntries(creature);
+    const declared = Array.isArray(creature.anim) ? creature.anim.length : 1;
+    assert(entries.length === declared, `${tag} every anim entry resolves its prim (${entries.length}/${declared})`);
+    const rests = entries.map(({ idx }) => mat.uniforms.uB.value[idx].clone());
+    updateAnim(mat, 0, entries);
+    entries.forEach(({ idx }, i) => {
+      assert(mat.uniforms.uB.value[idx].distanceTo(rests[i]) < 1e-9, `${tag} anim[${i}] t=0 keeps rest pose`);
+      assert(mat.uniforms.uPrimMat.value[idx].equals(IDENTITY), `${tag} anim[${i}] t=0 writes identity`);
+    });
+    entries.forEach(({ anim, prim, idx }, i) => {
+      // Each entry judged at ITS OWN quarter period (speeds may differ).
+      updateAnim(mat, Math.PI / 2 / anim.speed, entries);
+      const moved = mat.uniforms.uB.value[idx].distanceTo(rests[i]);
+      assert(moved > 0.01, `${tag} anim[${i}] moves '${anim.primId}' at its peak (${moved.toFixed(3)} > 0.01)`);
+      // Pivot invariant, PIVOT-AWARE: the fixed point is pivot ?? a.
+      const fixedPt = new THREE.Vector3(...(anim.pivot ?? prim.a));
+      assert(fixedPt.clone().applyMatrix4(mat.uniforms.uPrimMat.value[idx]).distanceTo(fixedPt) < 1e-9, `${tag} anim[${i}] fixed point (pivot ?? a) never moves`);
+      assert(!mat.uniforms.uPrimMat.value[idx].equals(IDENTITY), `${tag} anim[${i}] peak writes non-identity`);
+    });
+    updateAnim(mat, 0.7, entries);
+    const animIdxSet = new Set(entries.map((e) => e.idx));
+    assert(mat.uniforms.uPrimMat.value.every((m, i) => animIdxSet.has(i) || m.equals(IDENTITY)), `${tag} non-animated prims stay at identity`);
   }
 }
 
@@ -1423,21 +1426,32 @@ for (const creature of CREATURES) {
 {
   const flyer = CREATURES.find((c) => c.id === 'flyer');
   assert(flyer && flyer.anim?.mode === 'spin' && flyer.hover && !flyer.step && !flyer.hop, 'the cast has a PROPELLER FLYER: spin anim + hover, no step, no hop');
-  const idx = animPrimIndex(flyer);
+  const [flyerEntry] = animEntries(flyer);
+  const idx = flyerEntry.idx;
   const prop = flyer.prims[idx];
   const mid = [(prop.a[0] + prop.b[0]) / 2, (prop.a[1] + prop.b[1]) / 2, (prop.a[2] + prop.b[2]) / 2];
   assert(prop.id === 'prop' && flyer.anim.pivot.every((v, i) => v === mid[i]), 'the pivot IS the blade midpoint (the hub — not endpoint a)');
   const mat = createBlendMaterial(flyer.prims);
-  updateAnim(mat, 0, flyer, idx);
+  updateAnim(mat, 0, [flyerEntry]);
   assert(mat.uniforms.uA.value[idx].distanceTo(new THREE.Vector3(...prop.a)) === 0, 'spin at t=0 is the EXACT registry pose (bit-exact rest, the absolute-from-rest law)');
-  updateAnim(mat, 1, flyer, idx);
+  updateAnim(mat, 1, [flyerEntry]);
   const expect = rotateAboutPivot(flyer.anim.pivot, prop.b, flyer.anim.axis, flyer.anim.speed);
   assert(mat.uniforms.uB.value[idx].distanceTo(expect) < 1e-9, 'spin angle = t * speed exactly (endpoint b hand-rotated about the hub matches at t=1)');
   const P = new THREE.Vector3(...flyer.anim.pivot);
   assert(mat.uniforms.uA.value[idx].distanceTo(new THREE.Vector3(...prop.a)) > 0.1, 'endpoint a ORBITS too (the hub is the fixed point, not a)');
   assert(Math.abs(mat.uniforms.uA.value[idx].distanceTo(P) - P.distanceTo(new THREE.Vector3(...prop.a))) < 1e-9, 'the spin conserves blade radius about the hub');
-  updateAnim(mat, (2 * Math.PI) / flyer.anim.speed, flyer, idx);
+  updateAnim(mat, (2 * Math.PI) / flyer.anim.speed, [flyerEntry]);
   assert(mat.uniforms.uB.value[idx].distanceTo(new THREE.Vector3(...prop.b)) < 1e-6, 'a full circle closes (t = 2pi/speed returns to rest within float noise)');
+}
+
+// ---- Tendril sway (feel pass): the anims-array's first customer ----
+{
+  const floater = CREATURES.find((c) => c.id === 'floater');
+  assert(Array.isArray(floater.anim) && floater.anim.length === 4, "Bloop's tendrils sway: FOUR anim entries (the array form, earned by a real creature)");
+  assert(floater.anim.every((a) => a.primId.startsWith('tendril_') && (a.mode ?? 'wave') === 'wave'), 'all four sway entries are tendril waves from their tops (default pivot = the attachment)');
+  assert(new Set(floater.anim.map((a) => a.speed)).size === 4, 'sway speeds are all DISTINCT — stagger by speed divergence, not phase, so t=0 stays bit-exact rest and the sway never settles into a loop');
+  const angles = floater.anim.map((a) => Math.sin(30 * a.speed) * a.amplitude);
+  assert(new Set(angles.map((x) => x.toFixed(3))).size >= 3, 'by t=30 the tendrils are genuinely out of step (the beat-note is real, hand-computed)');
 }
 
 // ---- C1 creature I/O: the executable authoring rules + the round trip ----
@@ -1485,6 +1499,8 @@ for (const creature of CREATURES) {
   rejects((c) => { c.anim.mode = 'wobble'; }, 'anim.mode', 'an unknown anim mode');
   rejects((c) => { c.anim.pivot = [1, 2]; }, 'anim.pivot', 'a malformed anim pivot');
   rejects((c) => { delete c.anim.amplitude; }, 'wave anim needs', 'a wave anim without an amplitude');
+  rejects((c) => { c.anim = [c.anim, { ...c.anim }]; }, 'two anim entries target', 'two anim entries fighting over one prim');
+  rejects((c) => { c.anim = []; }, 'must not be empty', 'an empty anim array');
 
   // Round trip: envelope in, RAW object out — bit-faithful for the cast,
   // and a field the tool does not manage survives export -> import.
