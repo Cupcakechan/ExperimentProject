@@ -26,7 +26,7 @@
 // ============================================================
 
 import * as THREE from 'three';
-import { OUTLINE_COLOR, INK_PX, INK_DEPTH_THRESHOLD } from '../config.js';
+import { OUTLINE_COLOR, INK_PX, INK_DEPTH_THRESHOLD, INK_INTERIOR } from '../config.js';
 
 // Pure (suite-anchored): perspective depth-buffer value [0..1] -> world
 // distance along the view ray. linearDepth() in INK_FRAG mirrors this —
@@ -52,6 +52,7 @@ uniform float uInkPx;     // line weight, device pixels
 uniform float uNear;
 uniform float uFar;
 uniform float uThreshold; // relative depth step that inks
+uniform float uInteriorInk; // interior-line strength; 1.0 = uniform ink (pre-fade look)
 uniform vec3 uInkColor;
 
 varying vec2 vUv;
@@ -85,7 +86,16 @@ void main() {
   // the closer surface, and one threshold holds whether the edge sits 3
   // or 30 units deep. The 2x span makes the line edge soft (cheap AA).
   float dMin = min(dC, min(min(dL, dR), min(dB, dT)));
-  float edge = smoothstep(uThreshold, uThreshold * 2.0, g / dMin);
+  float rel = g / dMin;
+  float edge = smoothstep(uThreshold, uThreshold * 2.0, rel);
+  // Limb-read: classify by relative step size. INTERIOR contours (both
+  // sides creature-depth: leg-over-leg, belly overhang, eye rings) sit
+  // at 1-4x threshold; OUTER silhouettes (background ~1000x, ground and
+  // creature-vs-creature 10x+) far above. Interior lines fade to
+  // uInteriorInk; silhouettes keep full weight — the classic toon
+  // two-tier line, in one classification band (4x..12x threshold).
+  float outerness = smoothstep(uThreshold * 4.0, uThreshold * 12.0, rel);
+  edge *= mix(uInteriorInk, 1.0, outerness);
   vec3 col = texture2D(tColor, vUv).rgb;
   gl_FragColor = vec4(mix(col, uInkColor, edge), 1.0);
 }
@@ -117,6 +127,7 @@ export function createInkPass(renderer, camera) {
     uNear: { value: camera.near }, // static by design: this camera never changes planes
     uFar: { value: camera.far },
     uThreshold: { value: INK_DEPTH_THRESHOLD },
+    uInteriorInk: { value: INK_INTERIOR },
     // Same construction as the hull's uOutlineColor — identical ink color.
     uInkColor: { value: new THREE.Color(OUTLINE_COLOR) },
   };

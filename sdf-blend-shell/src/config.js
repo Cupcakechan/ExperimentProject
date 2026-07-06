@@ -226,3 +226,10 @@ export const KNEE_MIN_GAP = 1.05;
 // OUTLINE_COLOR still supplies the line color.
 export const INK_PX = 6.0; // line weight in CSS pixels (the old 0.035-world hull reads ~7 px at the default camera — near parity; screen-constant, so it no longer thickens on zoom)
 export const INK_DEPTH_THRESHOLD = 0.02; // relative depth step that inks: step/nearest > this (lower = more interior lines + ground-noise risk; higher = silhouettes only)
+// Limb-read feel pass: INTERIOR lines (creature-depth on both sides —
+// leg-over-leg crescents, belly-overhang lines, eye rings) render at this
+// strength; OUTER silhouettes (background/ground behind the edge) stay
+// full black. The clustered leg contours are REAL occlusion edges, so no
+// threshold can quiet them without killing wanted lines — class-based
+// fading can. 1.0 = uniform ink (the exact pre-pass look, the revert).
+export const INK_INTERIOR = 0.45;

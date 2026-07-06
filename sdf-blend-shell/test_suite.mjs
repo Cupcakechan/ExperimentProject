@@ -1562,7 +1562,7 @@ for (const creature of CREATURES) {
 // material and the shader source, and the config levers' sanity.
 {
   const { linearizeDepth, INK_FRAG, INK_VERT } = await import('./src/render/inkPass.js');
-  const { INK_PX, INK_DEPTH_THRESHOLD } = await import('./src/config.js');
+  const { INK_PX, INK_DEPTH_THRESHOLD, INK_INTERIOR } = await import('./src/config.js');
   // Hand-computed anchors at the app's real planes (near 0.1, far 100):
   assert(Math.abs(linearizeDepth(0, 0.1, 100) - 0.1) < 1e-12, 'ink linearizeDepth(0) = near (hand-computed)');
   assert(Math.abs(linearizeDepth(1, 0.1, 100) - 100) < 1e-9, 'ink linearizeDepth(1) = far (hand-computed)');
@@ -1570,7 +1570,7 @@ for (const creature of CREATURES) {
   assert(linearizeDepth(0.2, 0.1, 100) < linearizeDepth(0.8, 0.1, 100), 'ink linearizeDepth is monotonic (deeper buffer value = farther surface)');
   const BACKTICK = '\u0060';
   assert(!INK_FRAG.includes(BACKTICK) && !INK_VERT.includes(BACKTICK), 'ink GLSL contains no backticks (the template-literal termination lesson)');
-  for (const u of ['tColor', 'tDepth', 'uResolution', 'uInkPx', 'uNear', 'uFar', 'uThreshold', 'uInkColor']) {
+  for (const u of ['tColor', 'tDepth', 'uResolution', 'uInkPx', 'uNear', 'uFar', 'uThreshold', 'uInkColor', 'uInteriorInk']) {
     assert(INK_FRAG.includes(u), `ink fragment shader declares ${u} (the quad material's uniform contract)`);
   }
   assert(INK_PX > 0, 'INK_PX is a positive pixel weight');
@@ -1598,6 +1598,22 @@ for (const creature of CREATURES) {
     assert(Math.abs(second(stepP) - 0.15) < 1e-12, 'occlusion step 0.15 reads at FULL size in the second difference (hand-computed)');
     assert(second(stepP) / 4.5 > T, 'occlusion step still inks (rel 0.033 > T — wanted lines keep their response)');
     assert(INK_FRAG.includes('2.0 * dC'), 'ink fragment uses the SECOND-difference detector (the joint-cut regression guard)');
+  }
+
+  // Limb-read fade (feel pass): JS mirror of the two-tier classification,
+  // hand-computed at the measured edge classes. Interior contours (the
+  // clustered limb lines, rel 1-4x threshold) ink at INK_INTERIOR;
+  // silhouettes (background ~1000x, ground/creature-vs-creature 10x+)
+  // keep full weight. INK_INTERIOR = 1.0 is the exact pre-pass look.
+  {
+    const T = INK_DEPTH_THRESHOLD;
+    const ss = (a, b, x) => { const t = Math.min(Math.max((x - a) / (b - a), 0), 1); return t * t * (3 - 2 * t); };
+    const factor = (rel) => INK_INTERIOR + (1 - INK_INTERIOR) * ss(T * 4, T * 12, rel);
+    assert(INK_INTERIOR > 0 && INK_INTERIOR <= 1, 'INK_INTERIOR is a sane strength (0..1]; 1.0 = uniform ink, the revert');
+    assert(Math.abs(factor(T * 2) - INK_INTERIOR) < 1e-12, 'a limb-class contour (rel 2x threshold) inks at exactly INK_INTERIOR strength (the reported clutter, quieted)');
+    assert(factor(T * 25) === 1, 'a creature-vs-creature / ground edge (rel 25x) keeps FULL ink (separation lines stay bold)');
+    assert(factor(1000) === 1, 'a background silhouette keeps FULL ink');
+    assert(INK_FRAG.includes('mix(uInteriorInk, 1.0, outerness)'), 'ink fragment carries the two-tier fade (the limb-read regression guard)');
   }
 }
 
