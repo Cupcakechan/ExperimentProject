@@ -66,8 +66,7 @@ console.log('Section 1: creature invariants');
 const { CREATURES } = await import('./src/data/creatures.js');
 const { MAX_PRIMS, BLEND_K, COLOR_SOFT, COLOR_POW, TUCK_DEPTH, BURY_EPS, PAINT_EDGE } = await import('./src/config.js');
 const { buildShellGeometry } = await import('./src/render/buildShell.js');
-const { createBlendMaterial, createOutlineMaterial } = await import('./src/render/blendMaterial.js');
-const { OUTLINE_WIDTH } = await import('./src/config.js');
+const { createBlendMaterial } = await import('./src/render/blendMaterial.js');
 const THREE = await import('three');
 const { rotateAboutPivot, updateAnim, animPrimIndex, breathInflate } = await import('./src/anim.js');
 
@@ -335,31 +334,13 @@ for (const creature of CREATURES) {
   assert(new Set(mat.uniforms.uPrimMat.value).size === MAX_PRIMS, `${tag} uPrimMat slots are SEPARATE instances (no shared matrix)`);
   assert(mat.uniforms.uAnimPrim === undefined, `${tag} old single-slot uAnimPrim is gone`);
 
-  // outline material: same field, offset snap target, back faces only
-  const ink = createOutlineMaterial(prims, creature.inflate);
-  assert(ink.uniforms.uInflate.value === mat.uniforms.uInflate.value, `${tag} skin and ink dilate by the SAME amount (or the outline detaches)`);
-  assert(ink.uniforms.uSnapOffset.value === OUTLINE_WIDTH, `${tag} outline snaps to the +${OUTLINE_WIDTH} offset surface`);
-  assert(ink.side === THREE.BackSide, `${tag} outline renders BACK faces only (inverted hull on the offset surface)`);
-  assert(ink.uniforms.uA.value.length === MAX_PRIMS && ink.uniforms.uKCap.value.length === MAX_PRIMS, `${tag} outline uniforms padded to MAX_PRIMS`);
-  assert(ink.uniforms.uB.value !== mat.uniforms.uB.value, `${tag} skin and outline own SEPARATE uniform instances (anim writes both explicitly)`);
-  // The ink IGNORES carves (folds impossible by construction): negatives
-  // are surface-less in the OUTLINE's uniforms only — measured 16 folded
-  // ink triangles at pudge's mouth on the carved field, 0 without it.
-  assert(prims.every((p, i) => !p.negative || (ink.uniforms.uPaint.value[i] === 1.0 && ink.uniforms.uNeg.value[i] === 0.0)), `${tag} ink treats carves as surface-less (uPaint=1, uNeg=0 — no crease to fold into)`);
-  assert(prims.every((p, i) => mat.uniforms.uNeg.value[i] === (p.negative ? (p.color != null ? 2.0 : 1.0) : 0.0)), `${tag} the SKIN keeps its carves (uNeg unchanged)`);
-  // Buried patches fold when projected onto a target surface — part of a
-  // buried cap lands with INVERTED winding, showing back faces (= black on
-  // the BackSide ink) from outside. The buried ink patch must therefore end
-  // BELOW the skin, occluded: ink tuck = snapOffset + TUCK_DEPTH puts
-  // buried ink verts at -TUCK_DEPTH (inside the creature).
+  // R-SIMPLIFY: the inverted-hull outline material and its probe block
+  // retired (the ink is the screen-space pass since R1; hull-era probes
+  // live in git history). The SKIN's burial/tuck machinery stays — its
+  // subject, coincident donor layers z-fighting, predates the hull.
+  assert(prims.every((p, i) => mat.uniforms.uNeg.value[i] === (p.negative ? (p.color != null ? 2.0 : 1.0) : 0.0)), `${tag} the SKIN mirrors carves (uNeg — live vocabulary since R3)`);
   assert(mat.uniforms.uTuck.value === TUCK_DEPTH, `${tag} skin tucks buried verts (uTuck = TUCK_DEPTH)`);
-  assert(ink.uniforms.uTuck.value === OUTLINE_WIDTH + TUCK_DEPTH, `${tag} ink tuck = OUTLINE_WIDTH + TUCK_DEPTH`);
-  assert(ink.uniforms.uSnapOffset.value - ink.uniforms.uTuck.value < 0, `${tag} buried ink ends BELOW the skin (${(ink.uniforms.uSnapOffset.value - ink.uniforms.uTuck.value).toFixed(3)} < 0) — occluded, not painted`);
-  assert(mat.uniforms.uBuryBand.value > 0 && ink.uniforms.uBuryBand.value > 0, `${tag} both materials carry the burial ramp (uBuryBand > 0)`);
-
-  // the ink must be thinner than the thinnest solid, or it swallows it
-  const minSolidR = Math.min(...solids.map((s) => s.r));
-  assert(OUTLINE_WIDTH < minSolidR, `${tag} OUTLINE_WIDTH ${OUTLINE_WIDTH} < thinnest solid r ${minSolidR}`);
+  assert(mat.uniforms.uBuryBand.value > 0, `${tag} the skin carries the burial ramp (uBuryBand > 0)`);
 
   // anim: named prim exists, rest pose at t=0, actually moves at peak —
   // BEHAVIOR PARITY with the old single-slot path, now via uPrimMat.
@@ -1032,11 +1013,10 @@ assert(Math.abs(mapField([0.35, 0, 0], LONE, 0.25, 0.05)) < 1e-12, 'dilated lone
 assert(Math.abs(mapField([0, 0, 0], PAIR, 0.25, 0.05) - -(0.25 / 6 + 0.05)) < 1e-12, 'dilated pair midpoint = -k/6 - inflate = -0.0917 (hand-computed)');
 const RIDGE_Y_DIL = Math.sqrt((0.3 + 0.25 / 6 + 0.05) ** 2 - 0.09); // raw d = k/6 + 0.05
 assert(Math.abs(mapField([0, RIDGE_Y_DIL, 0], PAIR, 0.25, 0.05)) < 1e-12, 'dilated ridge contour is on the zero surface (hand-computed)');
-// Materials carry it on BOTH draws (outline must ride the plumped skin),
-// and its absence is guarded — existing creatures behave exactly as before.
+// The material carries it, and its absence is guarded — existing
+// creatures behave exactly as before the field existed.
 const dMat = createBlendMaterial(PAIR, 0.05);
-const dInk = createOutlineMaterial(PAIR, 0.05);
-assert(dMat.uniforms.uInflate.value === 0.05 && dInk.uniforms.uInflate.value === 0.05, 'skin AND ink mirror an explicit inflate (0.05)');
+assert(dMat.uniforms.uInflate.value === 0.05, 'the material mirrors an explicit inflate (0.05)');
 assert(createBlendMaterial(PAIR).uniforms.uInflate.value === 0, 'inflate defaults to 0 (?? guard — a creature without the field is unchanged)');
 assert(dMat.vertexShader.includes('return d - uInflate'), 'GLSL mapSDF subtracts the dilate');
 assert(dMat.vertexShader.includes('dOther - uInflate'), 'GLSL burial boundary shifts with the dilated skin (the raw-band tuck gap)');
@@ -1397,128 +1377,13 @@ for (const creature of CREATURES) {
   }
 }
 
-// ---- Fold detector (A4, permanent): zero folded INK triangles at carves ----
-// The black-domes defect class, closed structurally: a folded triangle
-// shows its back face, which is exactly what BackSide ink draws. Since
-// the ink IGNORES carves (uniform-level), its field has no crease to
-// fold into — this probe re-runs the FULL ink vertex pipeline (burial
-// ramp, snap iterations, tuck) on the real INDEXED geometry around every
-// carve and asserts the invariant holds. Both instrument lessons are
-// baked in: walk geo.index (raw position triplets are NOT triangles),
-// and mirror every pipeline stage (omitting burial+tuck once counted
-// known leg-root folds as signal).
-{
-  const { SNAP_ITERS } = await import('./src/config.js');
-  const H = 0.02; // tetrahedron normal probe step, mirrors FIELD_GLSL
-  const TET = [[1, -1, -1], [-1, -1, 1], [-1, 1, -1], [1, 1, 1]];
-  for (const creature of CREATURES) {
-    const negs = creature.prims.filter((p) => p.negative);
-    // Scan regions: every carve bbox AND (A5) every knee — the seam-ring
-    // defect lived exactly where the fold/tuck machinery met a new
-    // junction class, so kneed creatures joined the detector's beat.
-    const kneesMap = creature.step?.knees ?? {};
-    const kneeBoxes = Object.values(kneesMap).map((thighId) => {
-      const t = creature.prims.find((p) => p.id === thighId);
-      return t ? { c: t.b, r: Math.max(t.r, 0.1) + 0.1 } : null;
-    }).filter(Boolean);
-    if (negs.length === 0 && kneeBoxes.length === 0) continue;
-    const tag = `[${creature.id}]`;
-    // The limb map, mirrored (same-limb prims never bury each other).
-    const limbOf = new Array(creature.prims.length).fill(0);
-    Object.entries(kneesMap).forEach(([shinId, thighId], gi) => {
-      limbOf[creature.prims.findIndex((p) => p.id === shinId)] = gi + 1;
-      limbOf[creature.prims.findIndex((p) => p.id === thighId)] = gi + 1;
-    });
-    const inflate = creature.inflate ?? 0;
-    const inkPrims = creature.prims.filter((p) => !p.negative); // the ink's field: carves hidden
-    const F = (p) => mapField(p, inkPrims, BLEND_K, inflate);
-    const N = (p) => {
-      const n = [0, 0, 0];
-      for (const s of TET) {
-        const f = F([p[0] + s[0] * H, p[1] + s[1] * H, p[2] + s[2] * H]);
-        n[0] += s[0] * f;
-        n[1] += s[1] * f;
-        n[2] += s[2] * f;
-      }
-      const l = Math.hypot(n[0], n[1], n[2]);
-      return [n[0] / l, n[1] / l, n[2] / l];
-    };
-    const geo = buildShellGeometry(creature.prims, kneesMap); // mirror the render path: capless knees
-    const pos = geo.getAttribute('position');
-    const aPrim = geo.getAttribute('aPrim');
-    const idx = geo.index;
-    const tuck = OUTLINE_WIDTH + TUCK_DEPTH; // the INK's tuck
-    const cache = new Map();
-    const pipeline = (vi) => {
-      if (cache.has(vi)) return cache.get(vi);
-      const p = [pos.getX(vi), pos.getY(vi), pos.getZ(vi)];
-      const own = aPrim.array[vi];
-      let dOther = 1e9;
-      creature.prims.forEach((pr, i) => {
-        if (i === own || pr.paint || pr.negative) return;
-        if (limbOf[own] > 0 && limbOf[i] === limbOf[own]) return; // same limb: no mutual burial
-        dOther = Math.min(dOther, sdPrim(p, pr));
-      });
-      const buryT = 1 - smoothstep(-BURY_EPS - BURY_BAND - inflate, -BURY_EPS - inflate, dOther - inflate);
-      let q = [p[0], p[1], p[2]];
-      for (let i = 0; i < SNAP_ITERS; i++) {
-        const d = F(q) - OUTLINE_WIDTH;
-        const n = N(q);
-        q = [q[0] - n[0] * d, q[1] - n[1] * d, q[2] - n[2] * d];
-      }
-      const n = N(q);
-      const out = { p: [q[0] - n[0] * tuck * buryT, q[1] - n[1] * tuck * buryT, q[2] - n[2] * tuck * buryT], dOther };
-      cache.set(vi, out);
-      return out;
-    };
-    let openFolds = 0; // folds in OPEN SKIN — the actual defect class
-    let creaseFolds = 0; // folds inside junction creases — measured benign
-    let scanned = 0;
-    const regions = negs.map((neg) => {
-      const nb = neg.b ?? neg.a;
-      return {
-        lo: [Math.min(neg.a[0], nb[0]) - neg.r - 0.15, Math.min(neg.a[1], nb[1]) - neg.r - 0.15, Math.min(neg.a[2], nb[2]) - neg.r - 0.15],
-        hi: [Math.max(neg.a[0], nb[0]) + neg.r + 0.15, Math.max(neg.a[1], nb[1]) + neg.r + 0.15, Math.max(neg.a[2], nb[2]) + neg.r + 0.15],
-      };
-    }).concat(kneeBoxes.map((kb) => ({
-      lo: [kb.c[0] - kb.r, kb.c[1] - kb.r, kb.c[2] - kb.r],
-      hi: [kb.c[0] + kb.r, kb.c[1] + kb.r, kb.c[2] + kb.r],
-    })));
-    for (const region of regions) {
-      const lo = region.lo;
-      const hi = region.hi;
-      for (let t = 0; t < idx.count; t += 3) {
-        const vi = [idx.getX(t), idx.getX(t + 1), idx.getX(t + 2)];
-        const inBox = vi.every((i) => {
-          const x = pos.getX(i);
-          const y = pos.getY(i);
-          const z = pos.getZ(i);
-          return x >= lo[0] && x <= hi[0] && y >= lo[1] && y <= hi[1] && z >= lo[2] && z <= hi[2];
-        });
-        if (!inBox) continue;
-        scanned++;
-        const s = vi.map(pipeline);
-        const e1 = [s[1].p[0] - s[0].p[0], s[1].p[1] - s[0].p[1], s[1].p[2] - s[0].p[2]];
-        const e2 = [s[2].p[0] - s[0].p[0], s[2].p[1] - s[0].p[1], s[2].p[2] - s[0].p[2]];
-        const gn = [e1[1] * e2[2] - e1[2] * e2[1], e1[2] * e2[0] - e1[0] * e2[2], e1[0] * e2[1] - e1[1] * e2[0]];
-        const c = [(s[0].p[0] + s[1].p[0] + s[2].p[0]) / 3, (s[0].p[1] + s[1].p[1] + s[2].p[1]) / 3, (s[0].p[2] + s[1].p[2] + s[2].p[2]) / 3];
-        const fn = N(c);
-        if (gn[0] * fn[0] + gn[1] * fn[1] + gn[2] * fn[2] < 0) {
-          // Classify by crease proximity: the offset surface pinches at
-          // ANY concave junction (pre-existing, nestled in the join's
-          // darkest crevice — visually crease shadow, MEASURED benign:
-          // hopper's body-foot junction carries 7). The DEFECT class is
-          // a fold in OPEN skin — where the original run-offs lived and
-          // where a back face is nakedly visible.
-          if (s.every((v) => v.dOther > 0.08)) openFolds++;
-          else creaseFolds++;
-        }
-      }
-    }
-    console.log(`  INFO  ${tag} fold scan: ${scanned} ink triangles at carve regions — ${openFolds} OPEN-SKIN folds, ${creaseFolds} junction-crease folds (benign class)`);
-    assert(openFolds === 0, `${tag} ZERO folded ink triangles in OPEN SKIN at carves (${openFolds} — the black-domes/run-off class stays closed)`);
-  }
-}
+// ---- Fold detector: RETIRED at R-SIMPLIFY ----
+// Its subject — folded inverted-hull ink triangles showing back faces —
+// cannot occur since R1 replaced the hull draw with the screen-space ink
+// pass. The detector's lessons (black domes, the junction-crease
+// taxonomy, the knee-ring provenance work) live in LESSONS 12-16 and in
+// git history, where the full instrument can be revived if an offset-
+// surface draw ever returns.
 
 // ---- C1 creature I/O: the executable authoring rules + the round trip ----
 // validate.js is the AUTHORING RULES as one pure function — the import

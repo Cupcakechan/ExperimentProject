@@ -60,11 +60,8 @@ export const CAPSULE_RINGS_PER_UNIT = 14;
 export const PAINT_EDGE = 0.02;
 
 
-// Toon outline: a second draw of the shell snapped to the surface this far
-// OUTSIDE the skin (world units), flat-colored, back faces only. Keep it
-// SMALLER than the thinnest solid prim radius or the ink swallows thin
-// parts (suite-enforced per creature).
-export const OUTLINE_WIDTH = 0.035;
+// The ink line color — read by the R1 screen-space ink pass. (The hull
+// draw's world-unit OUTLINE_WIDTH retired with the hull at R-SIMPLIFY.)
 export const OUTLINE_COLOR = 0x0d0f12;
 
 // Burial ramp width (world units of depth): the tuck fades IN over this
@@ -226,7 +223,6 @@ export const KNEE_MIN_GAP = 1.05;
 // by a post-process edge detect on the depth buffer: smooth blends are
 // depth-continuous, so the concave-crease seam family (knee rings,
 // body-exit slashes) cannot ink — deleted by construction, not by tuning.
-// OUTLINE_COLOR still supplies the line color; OUTLINE_WIDTH now serves
-// only the legacy hull material (kept for the suite's instrumentation).
+// OUTLINE_COLOR still supplies the line color.
 export const INK_PX = 6.0; // line weight in CSS pixels (the old 0.035-world hull reads ~7 px at the default camera — near parity; screen-constant, so it no longer thickens on zoom)
 export const INK_DEPTH_THRESHOLD = 0.02; // relative depth step that inks: step/nearest > this (lower = more interior lines + ground-noise risk; higher = silhouettes only)

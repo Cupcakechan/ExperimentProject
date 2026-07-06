@@ -25,7 +25,7 @@
 // ============================================================
 
 import * as THREE from 'three';
-import { BLEND_K, SNAP_ITERS, MAX_PRIMS, SHELL_COLOR, COLOR_SOFT, COLOR_POW, TUCK_DEPTH, BURY_EPS, BURY_BAND, PAINT_EDGE, OUTLINE_WIDTH, OUTLINE_COLOR } from '../config.js';
+import { BLEND_K, SNAP_ITERS, MAX_PRIMS, SHELL_COLOR, COLOR_SOFT, COLOR_POW, TUCK_DEPTH, BURY_EPS, BURY_BAND, PAINT_EDGE } from '../config.js';
 
 // NOTE: three.js auto-prepends 'position', the matrices, and precision
 // headers to ShaderMaterial shaders (never redeclare those) — but CUSTOM
@@ -217,7 +217,7 @@ uniform float uLimb[MAX_PRIMS]; // limb group id (0 = none): same-limb prims nev
 uniform float uTuck;
 uniform float uBuryEps;
 uniform float uBuryBand;
-uniform float uSnapOffset; // 0 = the skin; OUTLINE_WIDTH = the ink shell
+uniform float uSnapOffset; // the skin targets the zero surface (0); the offset machinery survives as vocabulary
 
 varying vec3 vPos;
 
@@ -310,18 +310,14 @@ void main() {
 }
 `;
 
-const FRAG_OUTLINE = /* glsl */ `
-uniform vec3 uOutlineColor;
-
-void main() {
-  gl_FragColor = vec4(uOutlineColor, 1.0);
-}
-`;
-
-// Fresh uniform set per material — the skin and outline materials each own
-// their instances (anim.js writes uB/uAnimMat per material; sharing value
-// objects would couple them invisibly).
-function buildUniforms(prims, snapOffset, inflate, knees) {
+// Fresh uniform set per material (anim.js writes uB/uPrimMat per material;
+// sharing value objects across materials would couple them invisibly).
+// R-SIMPLIFY: the inverted-hull OUTLINE material retired here — the ink
+// has been the screen-space pass (inkPass.js) since R1, so the hull and
+// its snapOffset plumbing were dead weight. The skin's burial/tuck stays:
+// its subject (coincident donor layers z-fighting as stitched seams)
+// predates the hull ink and outlives it.
+function buildUniforms(prims, inflate, knees) {
   // Limb groups from step.knees (foot id -> thigh id): each pair shares a
   // nonzero id; everything else is 0. Derived, never authored twice.
   const limb = new Array(MAX_PRIMS).fill(0.0);
@@ -354,15 +350,7 @@ function buildUniforms(prims, snapOffset, inflate, knees) {
     // ?? guard: a registry entry without a color must never break the shader.
     uColors.push(new THREE.Color(prim ? prim.color ?? SHELL_COLOR : 0x000000));
     // paint is optional; absent = solid (existing entries unaffected).
-    // THE INK IGNORES CARVES: on the offset surface a slit pinches closed
-    // and projected triangles FOLD — and folded triangles show back
-    // faces, which is exactly what the BackSide ink draws (the
-    // black-domes defect class; MEASURED: 16 folded ink triangles at
-    // pudge's mouth on the carved field, 0 on the uncarved field).
-    // Negatives become surface-less for the OUTLINE material only —
-    // absent from union, subtraction, and burial; the skin keeps them.
-    const hideNeg = prim && prim.negative && snapOffset > 0;
-    uPaint.push(prim && (prim.paint || hideNeg) ? 1.0 : 0.0);
+    uPaint.push(prim && prim.paint ? 1.0 : 0.0);
     // kCap is optional; absent = uncapped. The sentinel just has to be
     // larger than any slider value so min(uK, sentinel) === uK.
     uKCap.push(prim && prim.kCap != null ? prim.kCap : 1e3);
@@ -373,7 +361,7 @@ function buildUniforms(prims, snapOffset, inflate, knees) {
     // negative: 0 = solid; 1 = carve without a color (the host's blended
     // color lines the bowl — the SHELL_COLOR fallback above must NOT tint
     // it, hence the encoding); 2 = carve WITH an authored interior color.
-    uNeg.push(prim && prim.negative && !hideNeg ? (prim.color != null ? 2.0 : 1.0) : 0.0);
+    uNeg.push(prim && prim.negative ? (prim.color != null ? 2.0 : 1.0) : 0.0);
   }
   return {
     uA: { value: uA },
@@ -391,16 +379,12 @@ function buildUniforms(prims, snapOffset, inflate, knees) {
     // SEPARATE identity per slot — a shared instance would make every
     // prim follow whichever one anim.js writes.
     uPrimMat: { value: Array.from({ length: MAX_PRIMS }, () => new THREE.Matrix4()) },
-    // Buried patches FOLD when projected onto a target surface: a buried
-    // end cap faces many directions, so part of it lands with INVERTED
-    // winding — and inverted triangles show their back faces to an outside
-    // camera, which is exactly what the BackSide ink draws. The only safe
-    // place for a buried ink patch is INSIDE the creature, occluded by the
-    // skin: ink tuck = OUTLINE_WIDTH + TUCK_DEPTH lands buried ink verts at
-    // snapOffset - tuck = -TUCK_DEPTH, below the skin from every angle.
-    // (The skin's own fold is invisible — it is skin-colored and shaded
-    // from the same position as the true skin behind it.)
-    uTuck: { value: snapOffset > 0 ? snapOffset + TUCK_DEPTH : TUCK_DEPTH },
+    // Buried verts sink TUCK_DEPTH beneath the skin: coincident donor
+    // layers snapped to one surface z-fight as stitched seams at glancing
+    // angles — the class this machinery exists for, older than the
+    // retired hull ink. (The skin's own folds are invisible: skin-colored
+    // and shaded from the same position as the true skin before them.)
+    uTuck: { value: TUCK_DEPTH },
     uBuryBand: { value: BURY_BAND },
     uBuryEps: { value: BURY_EPS },
     uPaintEdge: { value: PAINT_EDGE },
@@ -408,8 +392,7 @@ function buildUniforms(prims, snapOffset, inflate, knees) {
     // ?? guard: a creature without an inflate field must behave exactly
     // as before this field existed (0 = the raw field, no dilate).
     uInflate: { value: inflate ?? 0 },
-    uSnapOffset: { value: snapOffset },
-    uOutlineColor: { value: new THREE.Color(OUTLINE_COLOR) },
+    uSnapOffset: { value: 0 }, // the zero surface; the uniform stays as offset-surface vocabulary
   };
 }
 
@@ -417,22 +400,11 @@ function buildUniforms(prims, snapOffset, inflate, knees) {
 export function createBlendMaterial(prims, inflate, knees) {
   return new THREE.ShaderMaterial({
     defines: { MAX_PRIMS, SNAP_ITERS },
-    uniforms: buildUniforms(prims, 0.0, inflate, knees),
+    uniforms: buildUniforms(prims, inflate, knees),
     vertexShader: VERT,
     fragmentShader: FRAG,
   });
 }
 
-// The ink line: the SAME vertex shader snapping to the surface
-// OUTLINE_WIDTH outside the skin, flat-colored, BACK faces only — the
-// inflated shell shows around every silhouette (outer and interior),
-// and its front faces never occlude the creature.
-export function createOutlineMaterial(prims, inflate, knees) {
-  return new THREE.ShaderMaterial({
-    defines: { MAX_PRIMS, SNAP_ITERS },
-    uniforms: buildUniforms(prims, OUTLINE_WIDTH, inflate, knees),
-    vertexShader: VERT,
-    fragmentShader: FRAG_OUTLINE,
-    side: THREE.BackSide,
-  });
-}
+// (createOutlineMaterial retired at R-SIMPLIFY: the ink is inkPass.js
+// since R1. Pre-simplify versions live in git history.)

@@ -19,10 +19,10 @@
 // in SCREEN pixels — constant on screen, unlike the world-width
 // hull line, which grew as the camera zoomed in.
 //
-// blendMaterial.js is untouched: createOutlineMaterial and the
-// tuck/limb/capless machinery stay for the suite's instrumentation;
-// they are simplification-pass candidates AFTER the browser verdict
-// (handoff R1 note), not part of this pass.
+// R-SIMPLIFY (post-R1): createOutlineMaterial and the hull-era probe
+// blocks are gone; the skin keeps its tuck/limb/capless machinery
+// because it serves the SKIN itself (coincident donor layers
+// z-fighting), not the retired hull.
 // ============================================================
 
 import * as THREE from 'three';
