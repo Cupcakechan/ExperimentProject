@@ -380,6 +380,80 @@ const ARCHETYPES = {
     out.prims.push(...out.irisQueue);
     return { anim: { primId: 'tail', axis: [1, 0, 0], amplitude: round3v(rng.range(0.5, 0.7)), speed: round3v(rng.range(2.4, 3.0)) }, step: out.step, blink: out.blink, prims: out.prims };
   },
+
+  floater(rng, pal) {
+    // Reference parity with Bloop: hover locomotion, four TWO-SEGMENT
+    // tendrils with amplitude-delta bend sway (the judged look — the
+    // joint-divergence invariant is held BY CONSTRUCTION: delta * half
+    // length stays under half the thinner segment radius), ball eyes,
+    // small decal mouth. Budget: 1 + 8 + 2 + 1 + 2 = 14 of 16.
+    const rBell = rng.range(0.24, 0.32);
+    const yBell = rng.range(0.5, 0.6);
+    const bell = { id: 'bell', type: 'sphere', a: [0, round3(yBell), 0], r: round3v(rBell), color: pal.head };
+    const out = { prims: [bell], irisQueue: [] };
+    const tendrilLen = rng.range(0.26, 0.34);
+    const spread = rBell * rng.range(0.35, 0.45);
+    const drop = rBell * rng.range(0.65, 0.8);
+    const rUp = 0.045;
+    const rLo = 0.04;
+    const ampUp = round3v(rng.range(0.24, 0.28));
+    const delta = round3v(rng.range(0.08, 0.1)); // gap = delta * len/2 <= 0.1 * 0.17 = 0.017 < rLo/2
+    const baseSpeed = rng.range(1.3, 1.55);
+    const anims = [];
+    const mults = [1, 1.08, 1.16, 1.24]; // the beat-note stagger (cast pattern)
+    let mi = 0;
+    for (const [sx, tagX] of [[-1, 'f'], [1, 'b']]) {
+      for (const [sz, tagZ] of [[1, 'l'], [-1, 'r']]) {
+        const side = tagX + tagZ;
+        const top = [round3(sx * spread), round3(yBell - drop), round3(sz * spread)];
+        const tip = [round3(sx * (spread + 0.06)), round3(Math.max(yBell - drop - tendrilLen, 0.02)), round3(sz * (spread + 0.06))];
+        const joint = [round3((top[0] + tip[0]) / 2), round3((top[1] + tip[1]) / 2), round3((top[2] + tip[2]) / 2)];
+        out.prims.push({ id: `tendril_${side}_up`, type: 'capsule', a: top, b: joint, r: rUp, kCap: 0.032, color: pal.limb });
+        out.prims.push({ id: `tendril_${side}_lo`, type: 'capsule', a: joint, b: tip, r: rLo, kCap: 0.032, color: pal.limb });
+        const speed = round3v(baseSpeed * mults[mi++]);
+        anims.push({ primId: `tendril_${side}_up`, axis: [0, 0, 1], amplitude: ampUp, speed });
+        anims.push({ primId: `tendril_${side}_lo`, axis: [0, 0, 1], amplitude: round3v(ampUp + delta), speed, pivot: top });
+      }
+    }
+    const breath = { amplitude: round3v(rng.range(0.01, 0.014)), speed: round3v(rng.range(1.0, 1.4)) };
+    makeEyes(rng, bell, breath.amplitude, pal, out);
+    makeMouth(rng, bell, pal, out, breath.amplitude);
+    out.prims.push(...out.irisQueue);
+    // Displayed crown clamped under the camera ceiling by construction.
+    const amp = round3v(rng.range(0.04, 0.07));
+    const height = round3v(Math.min(rng.range(0.45, 0.65), 1.66 - (yBell + rBell) - amp));
+    return { hover: { height, amp, speed: round3v(rng.range(0.9, 1.3)) }, breath, anim: anims, blink: out.blink, prims: out.prims };
+  },
+
+  flyer(rng, pal) {
+    // Reference parity with Whirr: hover + the SPIN mode about the
+    // blade's midpoint hub (by construction: pivot = the mast top = the
+    // blade midpoint). Budget: 10 of 16.
+    const rBody = rng.range(0.24, 0.3);
+    const yBody = rBody + rng.range(0.12, 0.2);
+    const body = { id: 'body', type: 'sphere', a: [0, round3(yBody), 0], r: round3v(rBody), color: pal.body };
+    const topY = round3(yBody + rBody + rng.range(0.14, 0.2));
+    const mast = { id: 'mast', type: 'capsule', a: [0, round3(yBody + rBody - 0.06), 0], b: [0, topY, 0], r: 0.05, kCap: 0.035, color: pal.limb };
+    const half = round3(rng.range(0.26, 0.36));
+    const prop = { id: 'prop', type: 'capsule', a: [0, topY, -half], b: [0, topY, half], r: 0.05, kCap: 0.038, color: pal.tip };
+    const out = { prims: [body, mast, prop], irisQueue: [] };
+    for (const [sign, s] of [[1, 'l'], [-1, 'r']]) {
+      out.prims.push({ id: `foot_${s}`, type: 'capsule', a: [-0.02, round3(rng.range(0.18, 0.22)), round3(sign * rBody * 0.36)], b: [-0.03, 0.06, round3(sign * (rBody * 0.36 + 0.02))], r: 0.06, kCap: 0.045, color: pal.limb });
+    }
+    const breath = { amplitude: 0.01, speed: round3v(rng.range(1.4, 1.8)) };
+    makeEyes(rng, body, breath.amplitude, pal, out);
+    makeMouth(rng, body, pal, out, breath.amplitude);
+    out.prims.push(...out.irisQueue);
+    const amp = round3v(rng.range(0.04, 0.06));
+    const height = round3v(Math.min(rng.range(0.4, 0.6), 1.66 - (topY + prop.r) - amp));
+    return {
+      hover: { height, amp, speed: round3v(rng.range(1.2, 1.6)) },
+      anim: { primId: 'prop', axis: [0, 1, 0], speed: round3v(rng.range(6, 11)), mode: 'spin', pivot: [0, topY, 0] },
+      breath,
+      blink: out.blink,
+      prims: out.prims,
+    };
+  },
 };
 
 export const ARCHETYPE_NAMES = Object.keys(ARCHETYPES);

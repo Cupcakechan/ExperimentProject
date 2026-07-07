@@ -1585,7 +1585,7 @@ for (const creature of CREATURES) {
   // and every generated mouth is PROPORTIONAL to its host (the absolute
   // sizing turned small heads into voids — browser-caught, 2026-07-05).
   assert(sweep.filter((r) => r.archetype === 'slug' || r.archetype === 'sixLegger').every((r) => !r.creature.prims.some((p) => p.id === 'mouth')), 'slug and six-legger generate MOUTHLESS (cast parity with the judged originals)');
-  assert(sweep.filter((r) => ['pudgyQuad', 'hopper', 'kneedQuad'].includes(r.archetype)).every((r) => r.creature.prims.some((p) => p.id === 'mouth')), 'the mouthed archetypes still carry their mouths');
+  assert(sweep.filter((r) => ['pudgyQuad', 'hopper', 'kneedQuad', 'floater', 'flyer'].includes(r.archetype)).every((r) => r.creature.prims.some((p) => p.id === 'mouth')), 'the mouthed archetypes still carry their mouths');
   assert(sweep.every((r) => {
     const m = r.creature.prims.find((p) => p.id === 'mouth');
     if (!m) return true;
@@ -1617,6 +1617,27 @@ for (const creature of CREATURES) {
   const minBend = Math.min(...foldStats.map((f) => f.bend));
   assert(minBend > 0.052, `generated knees are OFF the old 0.05 floor (min bend ${minBend.toFixed(3)} — cast-parity fold, MEASURED)`);
   assert(foldStats.every((f) => f.splayF < 0), 'generated FRONT feet plant FORWARD of their hips (the Z-fold splay, like the cast)');
+  // Floater/flyer archetypes (reference parity): generated floaters get
+  // the JUDGED tendril look — two segments, amplitude-delta bend — with
+  // the joint-divergence invariant held by construction; generated
+  // flyers spin about the blade's authored midpoint hub.
+  const genFloaters = sweep.filter((r) => r.archetype === 'floater');
+  const genFlyers = sweep.filter((r) => r.archetype === 'flyer');
+  assert(genFloaters.length > 0 && genFlyers.length > 0, `the sweep grows floaters AND flyers (${genFloaters.length} / ${genFlyers.length})`);
+  assert(genFloaters.every((r) => r.creature.hover && !r.creature.step && !r.creature.hop && Array.isArray(r.creature.anim) && r.creature.anim.length === 8), 'generated floaters hover with two-segment sway on all four tendrils');
+  assert(genFloaters.every((r) => ['fl', 'fr', 'bl', 'br'].every((side) => {
+    const up = r.creature.prims.find((p) => p.id === `tendril_${side}_up`);
+    const lo = r.creature.prims.find((p) => p.id === `tendril_${side}_lo`);
+    const aUp = r.creature.anim.find((a) => a.primId === up.id);
+    const aLo = r.creature.anim.find((a) => a.primId === lo.id);
+    const dJT = Math.hypot(up.b[0] - up.a[0], up.b[1] - up.a[1], up.b[2] - up.a[2]);
+    return up.b.every((v, i) => v === lo.a[i]) && aUp.speed === aLo.speed && Math.abs(aLo.amplitude - aUp.amplitude) * dJT < Math.min(up.r, lo.r) * 0.5;
+  })), 'every generated floater holds the joint invariant: shared joints, one speed per pair, divergence under half the thinner radius (an elbow, never a tear — by construction)');
+  assert(genFlyers.every((r) => {
+    const prop = r.creature.prims.find((p) => p.id === 'prop');
+    const a = r.creature.anim;
+    return a.mode === 'spin' && a.pivot.every((v, i) => v === (prop.a[i] + prop.b[i]) / 2);
+  }), 'every generated flyer spins about the blade MIDPOINT hub (by construction)');
   const rt = parseG(exportG(generateCreature(42).creature));
   assert(rt.ok && JSON.stringify(rt.creature) === JSON.stringify(generateCreature(42).creature), 'a generated creature is ordinary data: it round-trips through the C1 pipeline bit-faithfully');
 }
