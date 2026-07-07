@@ -1689,7 +1689,7 @@ for (const creature of CREATURES) {
 // data, like a creature.
 {
   const { terrainHeight, propPlacements, buildTerrainGeometry, bandColor } = await import('./src/render/world.js');
-  const { WORLD_SEED, WORLD_RADIUS, WORLD_FLAT_RADIUS: FLAT, WORLD_HILL_HEIGHT, WORLD_PROP_MIN_R, ROAM_HARD_RADIUS: HARD } = await import('./src/config.js');
+  const { WORLD_SEED, WORLD_RADIUS, WORLD_FLAT_RADIUS: FLAT, WORLD_HILL_HEIGHT, WORLD_PROP_MIN_R, ROAM_HARD_RADIUS: HARD, WORLD_PINE_COUNT, WORLD_PINE_MIN_H, WORLD_PINE_MAX_H } = await import('./src/config.js');
 
   let flatOk = true;
   for (let ri = 0; ri <= 20; ri++) {
@@ -1720,6 +1720,9 @@ for (const creature of CREATURES) {
   assert(all.every((p) => Math.hypot(p.x, p.z) >= WORLD_PROP_MIN_R && WORLD_PROP_MIN_R > HARD), `all ${all.length} props sit at r >= ${WORLD_PROP_MIN_R}, strictly outside creature space (hard clamp ${HARD})`);
   assert(all.every((p) => p.y === terrainHeight(p.x, p.z, WORLD_SEED)), 'every prop sits ON the terrain (y from the same height function)');
   assert(JSON.stringify(propPlacements(WORLD_SEED)) === JSON.stringify(props), 'prop placement is deterministic');
+  assert(props.pines.length > 0 && props.pines.length <= WORLD_PINE_COUNT, `pines placed (${props.pines.length} of ${WORLD_PINE_COUNT} — deterministic rejection sampling may skip)`);
+  assert(props.pines.every((p) => Math.hypot(p.x, p.z) >= WORLD_PROP_MIN_R), 'every pine sits outside creature space');
+  assert(props.pines.every((p) => p.y === terrainHeight(p.x, p.z, WORLD_SEED) && p.y >= WORLD_PINE_MIN_H && p.y <= WORLD_PINE_MAX_H), `every pine roots ON terrain INSIDE the mid-slope band [${WORLD_PINE_MIN_H}, ${WORLD_PINE_MAX_H}] — the terrain-AWARE scatter, proven`);
 
   const geo = buildTerrainGeometry(WORLD_SEED);
   const pos = geo.getAttribute('position');

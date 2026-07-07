@@ -42,6 +42,9 @@ import {
   WORLD_ROCK_COUNT,
   WORLD_GRASS_COUNT,
   WORLD_PROP_MIN_R,
+  WORLD_PINE_COUNT,
+  WORLD_PINE_MIN_H,
+  WORLD_PINE_MAX_H,
 } from '../config.js';
 
 // --- seeded value noise (pure, suite-anchored) ---
@@ -142,6 +145,38 @@ export function buildTerrainGeometry(seed = WORLD_SEED) {
   return geo;
 }
 
+// Merge already-baked parts (position + color only — MeshBasicMaterial
+// never reads normals, and bakeTopLight consumed them during the bake).
+// Hand-merged deliberately: no addon import, the import map stays
+// untouched, and this module already builds geometry by hand.
+function mergeBaked(parts) {
+  const pos = [];
+  const col = [];
+  for (const g of parts) {
+    pos.push(...g.getAttribute('position').array);
+    col.push(...g.getAttribute('color').array);
+  }
+  const geo = new THREE.BufferGeometry();
+  geo.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
+  geo.setAttribute('color', new THREE.Float32BufferAttribute(col, 3));
+  return geo;
+}
+
+// The pine (the banked LAAS pattern, our idiom): trunk + three stacked
+// crown cones, each part baked in its OWN two-tone (bark vs needles),
+// merged into one geometry, instanced per class. Template ~1.35 tall.
+function buildPineGeometry() {
+  const BARK_D = 0x241d18;
+  const BARK_L = 0x3a2f24;
+  const NEEDLE_D = 0x18261f; // deeper green than the grass tufts, so pines READ as their own class
+  const NEEDLE_L = 0x2e5040;
+  const trunk = bakeTopLight(new THREE.CylinderGeometry(0.05, 0.075, 0.4, 6).translate(0, 0.2, 0), BARK_D, BARK_L);
+  const c1 = bakeTopLight(new THREE.ConeGeometry(0.42, 0.55, 7).translate(0, 0.55, 0), NEEDLE_D, NEEDLE_L);
+  const c2 = bakeTopLight(new THREE.ConeGeometry(0.3, 0.5, 7).translate(0, 0.85, 0), NEEDLE_D, NEEDLE_L);
+  const c3 = bakeTopLight(new THREE.ConeGeometry(0.2, 0.45, 7).translate(0, 1.12, 0), NEEDLE_D, NEEDLE_L);
+  return mergeBaked([trunk, c1, c2, c3]);
+}
+
 // Prop placements (pure, suite-anchored): everything at r >= PROP_MIN_R,
 // strictly outside creature space, sitting ON the terrain.
 export function propPlacements(seed = WORLD_SEED) {
@@ -158,7 +193,28 @@ export function propPlacements(seed = WORLD_SEED) {
     }
     return out;
   };
-  return { rocks: place(WORLD_ROCK_COUNT, 0.14, 0.38), grass: place(WORLD_GRASS_COUNT, 0.08, 0.16) };
+  const rocks = place(WORLD_ROCK_COUNT, 0.14, 0.38);
+  const grass = place(WORLD_GRASS_COUNT, 0.08, 0.16);
+  // PINES are terrain-AWARE (the banked scatter upgrade): each accepts
+  // only a MID-SLOPE site, rejection-sampled against the same height
+  // function with a deterministic cap — an exhausted pine is SKIPPED,
+  // never mis-placed. Placed AFTER rocks/grass so their draws (and thus
+  // the judged world) are byte-identical.
+  const pines = [];
+  for (let i = 0; i < WORLD_PINE_COUNT; i++) {
+    for (let attempt = 0; attempt < 40; attempt++) {
+      const th = range(0, Math.PI * 2);
+      const r = WORLD_PROP_MIN_R + Math.sqrt(rng()) * (WORLD_RADIUS - 0.5 - WORLD_PROP_MIN_R);
+      const x = Math.cos(th) * r;
+      const z = Math.sin(th) * r;
+      const y = terrainHeight(x, z, seed);
+      if (y >= WORLD_PINE_MIN_H && y <= WORLD_PINE_MAX_H) {
+        pines.push({ x, z, y, scale: range(0.6, 0.95), sy: range(0.95, 1.25), rot: range(0, Math.PI * 2) });
+        break;
+      }
+    }
+  }
+  return { rocks, grass, pines };
 }
 
 // Bake a fake top-light into a prop geometry's vertex colors: unlit
@@ -187,7 +243,7 @@ export function createWorld(scene) {
   const terrain = new THREE.Mesh(buildTerrainGeometry(WORLD_SEED), new THREE.MeshBasicMaterial({ vertexColors: true }));
   scene.add(terrain);
 
-  const { rocks, grass } = propPlacements(WORLD_SEED);
+  const { rocks, grass, pines } = propPlacements(WORLD_SEED);
   const rockGeo = bakeTopLight(new THREE.IcosahedronGeometry(1, 0), 0x22252b, 0x3c414b);
   const rockMesh = new THREE.InstancedMesh(rockGeo, new THREE.MeshBasicMaterial({ vertexColors: true }), rocks.length);
   const grassGeo = bakeTopLight(new THREE.ConeGeometry(1, 1, 5), 0x1d3226, 0x2c4a38);
@@ -209,8 +265,17 @@ export function createWorld(scene) {
     m.compose(new THREE.Vector3(p.x, p.y, p.z), q, new THREE.Vector3(p.scale * 0.5, p.scale * rangeless(p.rot), p.scale * 0.5));
     grassMesh.setMatrixAt(i, m);
   });
+  const pineMesh = new THREE.InstancedMesh(buildPineGeometry(), new THREE.MeshBasicMaterial({ vertexColors: true }), Math.max(pines.length, 1));
+  pines.forEach((p, i) => {
+    q.setFromAxisAngle(UP, p.rot);
+    // Trunks bed 0.05*scale into the slope — trees grow FROM ground.
+    m.compose(new THREE.Vector3(p.x, p.y - p.scale * 0.05, p.z), q, new THREE.Vector3(p.scale, p.scale * p.sy, p.scale));
+    pineMesh.setMatrixAt(i, m);
+  });
+  pineMesh.count = pines.length; // rejection sampling may land fewer than the budget
   scene.add(rockMesh);
   scene.add(grassMesh);
+  scene.add(pineMesh);
 }
 
 // Grass height varies with the (already-seeded) rotation draw instead of

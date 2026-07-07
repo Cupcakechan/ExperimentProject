@@ -143,6 +143,9 @@ export const WORLD_COLOR_ROCK = 0x343941;
 export const WORLD_ROCK_COUNT = 26;
 export const WORLD_GRASS_COUNT = 90;
 export const WORLD_PROP_MIN_R = 4.4; // props strictly outside creature space — no collision question exists
+export const WORLD_PINE_COUNT = 18; // conifer ring accents (the banked LAAS pattern)
+export const WORLD_PINE_MIN_H = 0.1; // terrain-AWARE band: pines accept MID-SLOPE sites only —
+export const WORLD_PINE_MAX_H = 0.45; // not the flat skirt, not the crests (rocks/grass keep their judged placement)
 export const ACTOR_CAP = 24; // populate/generate/import all respect it (perf: one draw + heavy fragment work per actor)
 
 // Footprint trails (the banked sand-tracks technique): an instanced
