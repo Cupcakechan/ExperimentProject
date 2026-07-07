@@ -278,3 +278,14 @@ export const WORLD_DOT_COUNT = 150; // seeded, own stream (never reshuffles the 
 export const WORLD_DOT_MIN_S = 0.14; // dot diameter range, world units —
 export const WORLD_DOT_MAX_S = 0.42; // varied enough to read hand-placed
 export const DOT_Y = 0.0005; // the floor-pattern layer: UNDER shadows (0.001) and prints (0.002)
+
+// LOOK TRACK pass B — the shading model. The research doc's SS1
+// reconstruction ("quantized toon shading") was WRONG: Daniel's
+// reference screenshots show SOFT airbrushed shading with a glossy
+// specular (the vinyl-toy read), no banding anywhere. The artifact
+// wins — half-Lambert wrap (bodies stay round and bright, darkness
+// pools only at the lower rim, never crushed) + Blinn-Phong gloss.
+// All three ride LIVE uniforms so feel rounds can drive them like uK.
+export const SHADE_AMBIENT = 0.55; // the lighting floor: bottom-of-body brightness relative to full light (reference bottoms read ~0.55-0.65)
+export const SPEC_POWER = 48; // Blinn-Phong exponent: higher = tighter, glassier streak
+export const SPEC_STRENGTH = 0.35; // highlight intensity — the vinyl gloss (0 = matte revert, one value)

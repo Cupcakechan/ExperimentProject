@@ -1830,6 +1830,22 @@ for (const creature of CREATURES) {
   assert(FOG_NEAR > 0 && FOG_NEAR < FOG_FAR, 'fog planes are sane (near before far)');
 }
 
+// ---- LOOK pass B: the shading model (soft wrap + gloss — the contract) ----
+// No CPU consumer mirrors the LIGHTING (color has a mirror; light does
+// not), so the contract is probed the ink-pass way: the shader SOURCE
+// carries the model, and the material carries the levers LIVE at their
+// config values.
+{
+  const { SHADE_AMBIENT, SPEC_POWER, SPEC_STRENGTH } = await import('./src/config.js');
+  const mB = createBlendMaterial([{ id: 'b', type: 'sphere', a: [0, 0.5, 0], r: 0.3 }], 0);
+  assert(mB.uniforms.uAmbient.value === SHADE_AMBIENT && SHADE_AMBIENT > 0 && SHADE_AMBIENT < 1, 'the lighting floor rides a LIVE uniform at its config value (a feel lever, not a bake)');
+  assert(mB.uniforms.uSpecPow.value === SPEC_POWER && SPEC_POWER > 1, 'gloss tightness is live');
+  assert(mB.uniforms.uSpecStrength.value === SPEC_STRENGTH && SPEC_STRENGTH >= 0, 'gloss intensity is live (0 = matte revert, one value)');
+  assert(mB.fragmentShader.includes('* 0.5 + 0.5') && mB.fragmentShader.includes('hl * hl'), 'the fragment carries the half-Lambert wrap (soft shading, dark rim never crushed)');
+  assert(!mB.fragmentShader.includes('floor(diff'), 'the 3-band quantize is GONE (SS1 reconstructed the reference wrong; the screenshots won)');
+  assert(mB.fragmentShader.includes('uSpecPow') && mB.fragmentShader.includes('cameraPosition'), 'the gloss rides the world-space view vector (cameraPosition: the r170 fragment prelude, source-verified)');
+}
+
 // ---- R1 ink pass (screen-space, depth-only): the module contract ----
 // The pass itself needs a GPU; what Node anchors instead: the depth
 // linearization math (the GLSL mirrors linearizeDepth — same formula by

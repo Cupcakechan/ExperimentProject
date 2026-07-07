@@ -25,7 +25,7 @@
 // ============================================================
 
 import * as THREE from 'three';
-import { BLEND_K, SNAP_ITERS, MAX_PRIMS, SHELL_COLOR, COLOR_SOFT, COLOR_POW, TUCK_DEPTH, BURY_EPS, BURY_BAND, PAINT_EDGE } from '../config.js';
+import { BLEND_K, SNAP_ITERS, MAX_PRIMS, SHELL_COLOR, COLOR_SOFT, COLOR_POW, TUCK_DEPTH, BURY_EPS, BURY_BAND, PAINT_EDGE, SHADE_AMBIENT, SPEC_POWER, SPEC_STRENGTH } from '../config.js';
 
 // NOTE: three.js auto-prepends 'position', the matrices, and precision
 // headers to ShaderMaterial shaders (never redeclare those) — but CUSTOM
@@ -286,7 +286,12 @@ void main() {
 const FRAG = /* glsl */ `
 // three declares modelMatrix for VERTEX shaders only; declaring it here by
 // its built-in name makes the renderer bind it for the fragment stage too.
+// (cameraPosition needs no declaration — it IS in three's fragment prelude,
+// verified in the pinned r170 source: WebGLProgram fragment prefix.)
 uniform mat4 modelMatrix;
+uniform float uAmbient; // LOOK pass B: the lighting floor (live feel lever)
+uniform float uSpecPow; // gloss tightness
+uniform float uSpecStrength; // gloss intensity (0 = matte revert)
 
 varying vec3 vPos;
 
@@ -299,13 +304,25 @@ void main() {
   // (a sunset that follows you around).
   vec3 n = normalize(mat3(modelMatrix) * sdfNormal(vPos));
   vec3 lightDir = normalize(vec3(0.6, 1.0, 0.5));
-  float diff = max(dot(n, lightDir), 0.0);
 
-  // Quantize the diffuse term into bands for the toon look.
-  // If lighting shows ANY visible line at a primitive join, the experiment failed.
-  float toon = floor(diff * 3.0 + 0.5) / 3.0;
+  // LOOK pass B: the 3-band quantize RETIRED — the reference read is
+  // soft airbrushed shading (RESEARCH SS1's "quantized toon" was the
+  // wrong reconstruction; the screenshots won). Half-Lambert wrap: the
+  // terminator slides past the equator, so bodies stay round and
+  // bright with darkness pooling only at the lower rim — never
+  // crushed to black. The old law still holds: if lighting shows ANY
+  // visible line at a primitive join, the experiment failed.
+  float hl = dot(n, lightDir) * 0.5 + 0.5;
+  float shade = uAmbient + (1.0 - uAmbient) * hl * hl;
 
-  vec3 col = blendColor(vPos) * (0.35 + 0.65 * toon);
+  // Blinn-Phong gloss: the vinyl-toy highlight (and a free glint on
+  // the white eyeballs). vPos is creature-space — lift it through
+  // modelMatrix for the world-space view vector.
+  vec3 worldPos = (modelMatrix * vec4(vPos, 1.0)).xyz;
+  vec3 halfDir = normalize(lightDir + normalize(cameraPosition - worldPos));
+  float spec = pow(max(dot(n, halfDir), 0.0), uSpecPow) * uSpecStrength;
+
+  vec3 col = blendColor(vPos) * shade + vec3(spec);
   gl_FragColor = vec4(col, 1.0);
 }
 `;
@@ -393,6 +410,11 @@ function buildUniforms(prims, inflate, knees) {
     // as before this field existed (0 = the raw field, no dilate).
     uInflate: { value: inflate ?? 0 },
     uSnapOffset: { value: 0 }, // the zero surface; the uniform stays as offset-surface vocabulary
+    // LOOK pass B shading levers — live uniforms (the uK pattern), so a
+    // feel round can drive them without a shader recompile.
+    uAmbient: { value: SHADE_AMBIENT },
+    uSpecPow: { value: SPEC_POWER },
+    uSpecStrength: { value: SPEC_STRENGTH },
   };
 }
 
