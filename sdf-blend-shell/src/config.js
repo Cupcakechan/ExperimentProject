@@ -146,6 +146,7 @@ export const WORLD_PROP_MIN_R = 4.4; // props strictly outside creature space â€
 export const WORLD_PINE_COUNT = 18; // conifer ring accents (the banked LAAS pattern)
 export const WORLD_PINE_MIN_H = 0.1; // terrain-AWARE band: pines accept MID-SLOPE sites only â€”
 export const WORLD_PINE_MAX_H = 0.45; // not the flat skirt, not the crests (rocks/grass keep their judged placement)
+export const WORLD_PINE_SPACING = 2.2; // min pine-to-pine distance: crowns at max scale (r ~1.0) never merge, so the ink draws each tree its OWN silhouette
 export const ACTOR_CAP = 24; // populate/generate/import all respect it (perf: one draw + heavy fragment work per actor)
 
 // Footprint trails (the banked sand-tracks technique): an instanced

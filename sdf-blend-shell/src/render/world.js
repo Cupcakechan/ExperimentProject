@@ -45,6 +45,7 @@ import {
   WORLD_PINE_COUNT,
   WORLD_PINE_MIN_H,
   WORLD_PINE_MAX_H,
+  WORLD_PINE_SPACING,
 } from '../config.js';
 
 // --- seeded value noise (pure, suite-anchored) ---
@@ -208,8 +209,20 @@ export function propPlacements(seed = WORLD_SEED) {
       const x = Math.cos(th) * r;
       const z = Math.sin(th) * r;
       const y = terrainHeight(x, z, seed);
-      if (y >= WORLD_PINE_MIN_H && y <= WORLD_PINE_MAX_H) {
-        pines.push({ x, z, y, scale: range(0.6, 0.95), sy: range(0.95, 1.25), rot: range(0, Math.PI * 2) });
+      // ...AND clear of every placed pine (Poisson-style): overlapping
+      // crowns merge into one inked silhouette — the blended-forest
+      // read, browser-caught after the size arc grew crowns to ~1.0.
+      const clear = pines.every((p) => Math.hypot(x - p.x, z - p.z) >= WORLD_PINE_SPACING);
+      if (y >= WORLD_PINE_MIN_H && y <= WORLD_PINE_MAX_H && clear) {
+        // scale 1.6-2.4 (second feel round — at ring distance a tree must
+        // be DISPROPORTIONATELY tall to read taller than a foreground
+        // creature): world heights ~2.1-4.1, median ~2.9, ~1.7x the
+        // tallest creature after the perspective penalty. Same draw
+        // count: every tree keeps its exact accepted site. Known trade:
+        // the camera now occasionally passes behind a tree (peek-through
+        // framing); the NEXT lever if that annoys is a dedicated pine
+        // minimum radius, not more height.
+        pines.push({ x, z, y, scale: range(1.6, 2.4), sy: range(0.95, 1.25), rot: range(0, Math.PI * 2) });
         break;
       }
     }
