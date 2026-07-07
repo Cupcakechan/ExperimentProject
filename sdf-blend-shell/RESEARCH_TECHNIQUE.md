@@ -111,3 +111,78 @@ R4. (Optional, bigger) SURFACE NETS MESHING: mesh the SDF on a worker
 - Some ecosystem attributions (which creator inspired whom) are
   inference; the TECHNIQUES are verified against primary references
   even where lineage is not.
+
+## 8. External technique bank (session 2026-07-05/07 finds)
+- **Sand tracks / footsteps (Reddit r/threejs, thread unreadable — blocked +
+  unindexed; triaged as a technique class): ADOPTED as `trails.js`.**
+  Deviations from the classic render-target splat, and why: our receiver is
+  the FLAT stage (a projected decal degenerates to a flat quad there), so
+  prints are an InstancedMesh ring buffer of quads fading BY COLOR into
+  GROUND_COLOR (opaque math, no per-frame texture upload), stamped from the
+  data this engine uniquely owns — gait swing->planted transitions, hop LAND
+  transitions, slug distance dabs; hover creatures stamp nothing. The
+  imprint READ required per-pixel softness: a pure-math radial-alpha
+  DataTexture (`makeBlobAlpha`, suite-anchored) on transparent quads with
+  depthWrite OFF (ink-blind by construction). Levers: TRAIL_LIFETIME,
+  TRAIL_CAP, TRAIL_COLOR, TRAIL_SLIDE_SPACING.
+  Related discourse "How to draw stuff on stuff" (t/48934): clustered
+  Forward+ decals (closed-source pipeline) and DecalGeometry both solve
+  CURVED-receiver projection — machinery our flat stage doesn't need.
+- **pine-forest-threejs ("LAAS", vinhhien112): BANKED -> the pine-prop pass.**
+  Stack-incompatible for code (WebGPU r185, TypeScript/Vite, Rapier,
+  MeshPhysicalMaterial); adopt patterns: (a) cone-stack conifer as a merged
+  trunk+crown geometry, instanced per class, our baked top-light two-tone;
+  (b) terrain-AWARE scatter (height/slope filters) upgrading our uniform
+  radius placement; (c) per-vertex wind on foliage — low-priority ambience
+  note (needs prop-shader work). Their DELTA/DEVIATIONS docs independently
+  converge on our LESSONS practice.
+
+## 9. three.js repo triage (mrdoob/three.js @ master, read at source level)
+Access method (repeatable): blobless clone (`git clone --depth 1
+--filter=blob:none --no-checkout`), then `git ls-tree` + `git checkout HEAD
+-- <file>` per file. 594 example pages verified; jsm addons readable.
+**VERSION-DRIFT CAUTION, read first:** master targets r18x and 219 of 594
+examples are WebGPU/TSL; our stack is WebGL r170 via CDN. Everything below
+is PATTERN reference — verify any API against r170 before adoption.
+
+Tier A — feeds queued passes:
+- `jsm/utils/BufferGeometryUtils.mergeGeometries` — the pine prop's
+  trunk+crown merge (one geometry per prop class, instanced). Next pass.
+- `jsm/math/ImprovedNoise.js` / `SimplexNoise.js` — gradient noise, drop-in
+  scale, if terrain features ever outgrow our value noise. Bank.
+- `webgl_geometry_terrain` — the canonical heightmap pattern; ours already
+  matches the family (polar grid, height-banded colors). Reference only.
+
+Tier B — future-direction, tool-grade (named for the queue):
+- **EXPORT-BAKE**: `jsm/exporters/GLTFExporter.js` (+ OBJ/STL/PLY/USDZ all
+  present). The bridge for the end goal — creatures LEAVING the tool. Key
+  feasibility insight: our meshes deform in the vertex shader, but the
+  suite already maintains a CPU vertex-pipeline mirror of the snap — so
+  "bake snapped mesh at rest/pose -> GLTFExporter" needs no new math.
+- **PICKING**: `webgl_interactive_cubes_gpu` — 32-bit integer ID picking
+  texture (verified in source). THE selection technique for snap-shader
+  creatures: a CPU raycaster cannot see shader-moved vertices; an ID
+  render target can. Future tool: click-a-creature.
+- **CONTACT-SHADOW**: `webgl_shadow_contact` — depth rendered to a small
+  RT, two-pass blur, shown on a plane under the subject (verified in
+  source). The grounding read our unlit creatures lack; fits the flat
+  stage exactly. Medium pass when wanted.
+- `jsm/objects/MarchingCubes.js` — CPU metaball isosurface; the classic
+  sibling of R4's banked Surface Nets. Reference mesher for R4.
+- `webgl_postprocessing_outline` / `_pixel` — depth(+normal) edge passes;
+  same family as our ink pass. Their normal-edge channel is exactly the
+  crease-risk our research flagged. Validation + comparison, not adoption.
+- `webgl_gpgpu_birds` — GPU flocking; population behavior if actor counts
+  ever outgrow CPU separation. Far-future.
+
+Tier C — noted, low priority: LOD / BatchedMesh (our per-creature
+ShaderMaterial resists batching — honest friction), instanced points for
+ambience (fireflies/dust), `jsm/objects/Sky`, MeshToonMaterial (props
+only — creatures keep the hand-rolled toon).
+
+Not applicable, and why: the skeletal/GLTF animation family (SkinnedMesh,
+AnimationMixer, bone IK — our creatures have no skeletons; knee IK is
+solveKnee, shipped), physics examples (Rapier/Jolt — zero-dependency
+stance, bespoke sim), WebXR, loaders (code-only project), css3d/svg.
+threejs.org's "showcase" section links EXTERNAL projects — often
+closed-source, case-by-case, unlike the fully readable examples catalog.
