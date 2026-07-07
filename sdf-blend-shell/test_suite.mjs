@@ -1480,7 +1480,7 @@ for (const creature of CREATURES) {
 // ARE the seamless-vanish guarantee. The plant detector is proven on a
 // real gait sim with the exact polling main uses.
 {
-  const { trailMode, fadeColor } = await import('./src/render/trails.js');
+  const { trailMode, fadeColor, makeBlobAlpha } = await import('./src/render/trails.js');
   const { TRAIL_COLOR, TRAIL_LIFETIME, TRAIL_CAP, GROUND_COLOR: GC } = await import('./src/config.js');
   assert(trailMode(CREATURES.find((c) => c.id === 'critter')) === 'step', 'walkers stamp per FOOTFALL');
   assert(trailMode(CREATURES.find((c) => c.id === 'hopper')) === 'hop', 'hoppers stamp on LANDING');
@@ -1490,6 +1490,13 @@ for (const creature of CREATURES) {
   assert(fadeColor(0, TRAIL_LIFETIME).every((v, i) => v === rawc(TRAIL_COLOR)[i]), 'a fresh print is exactly TRAIL_COLOR (raw channels — the parity rule)');
   assert(fadeColor(TRAIL_LIFETIME, TRAIL_LIFETIME).every((v, i) => v === rawc(GC)[i]), 'an expired print is exactly GROUND_COLOR — prints vanish seamlessly, never pop');
   assert(TRAIL_CAP > 0 && TRAIL_LIFETIME > 0, 'trail config is sane');
+  const blob = makeBlobAlpha(64);
+  const A = (x, y) => blob[(y * 64 + x) * 4 + 3];
+  assert(A(32, 32) === 255 && A(0, 0) === 0, 'the stamp blob is opaque at the core, nothing at the corner (per-pixel soft imprint, pure math)');
+  let mono = true;
+  for (let x = 32; x < 63; x++) if (A(x + 1, 32) > A(x, 32)) mono = false;
+  assert(mono, 'the blob alpha falls off monotonically core -> rim (no ring artifacts)');
+  assert(blob[(32 * 64 + 32) * 4] === 255 && blob[(32 * 64 + 32) * 4 + 2] === 255, 'the blob RGB is pure white — print color comes from the instances alone');
   const critter = CREATURES.find((c) => c.id === 'critter');
   const g = createGait(critter);
   const matG = createBlendMaterial(critter.prims, critter.inflate, critter.step?.knees);

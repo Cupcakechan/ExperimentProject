@@ -43,6 +43,29 @@ export function trailMode(creature) {
 }
 
 const raw = (hex) => [((hex >> 16) & 255) / 255, ((hex >> 8) & 255) / 255, (hex & 255) / 255];
+
+// Pure stamp ARTWORK (suite-anchored): a radial soft blob as RGBA bytes —
+// white RGB (print color comes from the instances alone), alpha solid in
+// the core easing smoothly to zero at the rim. Per-pixel softness is what
+// separates an IMPRINT from the hard-cornered sticker the first pass
+// shipped (browser-caught: the prints read as torn paper scraps).
+export function makeBlobAlpha(size) {
+  const data = new Uint8Array(size * size * 4);
+  const half = (size - 1) / 2;
+  for (let y = 0; y < size; y++) {
+    for (let x = 0; x < size; x++) {
+      const r01 = Math.hypot(x - half, y - half) / half;
+      const t = Math.min(Math.max((1 - r01) / 0.55, 0), 1); // solid core to ~45%, smooth rim
+      const a = Math.round(255 * t * t * (3 - 2 * t));
+      const i = (y * size + x) * 4;
+      data[i] = 255;
+      data[i + 1] = 255;
+      data[i + 2] = 255;
+      data[i + 3] = a;
+    }
+  }
+  return data;
+}
 const PRINT_RGB = raw(TRAIL_COLOR);
 const GROUND_RGB = raw(GROUND_COLOR);
 
@@ -63,7 +86,14 @@ export function createTrails(scene) {
   // Unit quad on the XZ plane; instances scale it into ellipse-ish
   // prints (local x = the long axis, aligned to the body via heading).
   const geo = new THREE.PlaneGeometry(1, 1).rotateX(-Math.PI / 2);
-  const mesh = new THREE.InstancedMesh(geo, new THREE.MeshBasicMaterial(), TRAIL_CAP);
+  const tex = new THREE.DataTexture(makeBlobAlpha(64), 64, 64, THREE.RGBAFormat);
+  tex.needsUpdate = true;
+  tex.magFilter = THREE.LinearFilter;
+  tex.minFilter = THREE.LinearFilter;
+  // Transparent + NO depth write: prints never enter the depth buffer,
+  // so the ink pass is blind to them BY CONSTRUCTION (not by margin),
+  // and overlapping coplanar prints cannot z-fight.
+  const mesh = new THREE.InstancedMesh(geo, new THREE.MeshBasicMaterial({ map: tex, transparent: true, depthWrite: false }), TRAIL_CAP);
   // Instances are placed at runtime across the stage; the geometry's own
   // bounds are a unit quad — default culling would drop them (the same
   // rule as the snap-shader creatures).
@@ -137,7 +167,7 @@ export function createTrails(scene) {
           const plantedNow = f.swingT < 0;
           if (plantedNow && !m.planted[i]) {
             // A fresh plant IS a footfall; the anchor is already WORLD.
-            stamp(f.anchor.x, f.anchor.z, heading, m.footR[i] * 2.6, m.footR[i] * 1.7, now);
+            stamp(f.anchor.x, f.anchor.z, heading, m.footR[i] * 1.6, m.footR[i] * 1.05, now);
           }
           m.planted[i] = plantedNow;
         });
@@ -155,7 +185,7 @@ export function createTrails(scene) {
             if (!b) continue;
             const wx = actor.rig.position.x + b[0] * cs + b[2] * sn;
             const wz = actor.rig.position.z - b[0] * sn + b[2] * cs;
-            stamp(wx, wz, heading, m.footR[i] * 2.6, m.footR[i] * 1.7, now);
+            stamp(wx, wz, heading, m.footR[i] * 1.6, m.footR[i] * 1.05, now);
           }
         }
         m.lastHop = state;
@@ -171,7 +201,7 @@ export function createTrails(scene) {
         return;
       }
       if (Math.hypot(x - m.lastX, z - m.lastZ) >= TRAIL_SLIDE_SPACING) {
-        stamp(x, z, heading, m.bodyR * 1.5, m.bodyR * 0.9, now);
+        stamp(x, z, heading, m.bodyR * 0.9, m.bodyR * 0.55, now);
         m.lastX = x;
         m.lastZ = z;
       }

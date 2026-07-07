@@ -150,7 +150,7 @@ export const ACTOR_CAP = 24; // populate/generate/import all respect it (perf: o
 // no textures, no transparency. Grounded creatures only.
 export const TRAIL_CAP = 240; // ring size: a crowded stage recycles faster (a lever, not a flaw)
 export const TRAIL_LIFETIME = 9; // seconds from strike to seamless vanish
-export const TRAIL_COLOR = 0x101318; // print-dark; fades to GROUND_COLOR exactly
+export const TRAIL_COLOR = 0x14171c; // print-dark, LOW contrast (softened after the first browser round — an imprint whispers); fades to GROUND_COLOR exactly
 export const TRAIL_Y = 0.002; // above the stage: ~50x below the ink threshold, no line
 export const TRAIL_SLIDE_SPACING = 0.35; // slug drag-dab interval (world units)
 
