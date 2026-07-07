@@ -289,3 +289,14 @@ export const DOT_Y = 0.0005; // the floor-pattern layer: UNDER shadows (0.001) a
 export const SHADE_AMBIENT = 0.55; // the lighting floor: bottom-of-body brightness relative to full light (reference bottoms read ~0.55-0.65)
 export const SPEC_POWER = 48; // Blinn-Phong exponent: higher = tighter, glassier streak
 export const SPEC_STRENGTH = 0.35; // highlight intensity — the vinyl gloss (0 = matte revert, one value)
+
+// LOOK pass B.1 (browser-caught: "feet blending into the ground").
+// MEASURED mechanism: the depth ink DIES at ground contact by geometry
+// — the foot-vs-ground step converges to 0 at the contact, so a band
+// under ANY threshold always exists (~the last 0.04-0.05 world units
+// at the default camera). The dark stage hid the un-inked band; the
+// pastel key + gloss exposed it. Fix class: CONTACT OCCLUSION in the
+// creature's own shading (the reference's dark-feet read), never
+// threshold tuning (lower thresholds re-admit the R1.1 noise class).
+export const CONTACT_AO = 0.45; // darkening at y = 0: color (and gloss) drop to 1 - this at the contact
+export const CONTACT_AO_H = 0.14; // the fade band: full darkening at the floor, none above this height

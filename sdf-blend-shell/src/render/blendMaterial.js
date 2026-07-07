@@ -25,7 +25,7 @@
 // ============================================================
 
 import * as THREE from 'three';
-import { BLEND_K, SNAP_ITERS, MAX_PRIMS, SHELL_COLOR, COLOR_SOFT, COLOR_POW, TUCK_DEPTH, BURY_EPS, BURY_BAND, PAINT_EDGE, SHADE_AMBIENT, SPEC_POWER, SPEC_STRENGTH } from '../config.js';
+import { BLEND_K, SNAP_ITERS, MAX_PRIMS, SHELL_COLOR, COLOR_SOFT, COLOR_POW, TUCK_DEPTH, BURY_EPS, BURY_BAND, PAINT_EDGE, SHADE_AMBIENT, SPEC_POWER, SPEC_STRENGTH, CONTACT_AO, CONTACT_AO_H } from '../config.js';
 
 // NOTE: three.js auto-prepends 'position', the matrices, and precision
 // headers to ShaderMaterial shaders (never redeclare those) — but CUSTOM
@@ -292,6 +292,8 @@ uniform mat4 modelMatrix;
 uniform float uAmbient; // LOOK pass B: the lighting floor (live feel lever)
 uniform float uSpecPow; // gloss tightness
 uniform float uSpecStrength; // gloss intensity (0 = matte revert)
+uniform float uContactAO; // pass B.1: contact darkening at y = 0 (the dead-ink band's replacement)
+uniform float uContactAOH; // pass B.1: the fade band height
 
 varying vec3 vPos;
 
@@ -322,7 +324,16 @@ void main() {
   vec3 halfDir = normalize(lightDir + normalize(cameraPosition - worldPos));
   float spec = pow(max(dot(n, halfDir), 0.0), uSpecPow) * uSpecStrength;
 
-  vec3 col = blendColor(vPos) * shade + vec3(spec);
+  // LOOK pass B.1 (browser-caught): the depth ink dies at ground
+  // contact by GEOMETRY — the foot-vs-ground step converges to 0, so a
+  // band under any threshold always exists (~the last 0.04 world units
+  // at the default camera; measured). Contact occlusion replaces the
+  // dead line: darken color AND gloss toward y = 0 — the reference's
+  // own dark-feet read. Hop tucks and hover heights fade it out free
+  // (worldPos.y is the true displayed height).
+  float groundAO = mix(1.0 - uContactAO, 1.0, smoothstep(0.0, uContactAOH, worldPos.y));
+
+  vec3 col = (blendColor(vPos) * shade + vec3(spec)) * groundAO;
   gl_FragColor = vec4(col, 1.0);
 }
 `;
@@ -415,6 +426,8 @@ function buildUniforms(prims, inflate, knees) {
     uAmbient: { value: SHADE_AMBIENT },
     uSpecPow: { value: SPEC_POWER },
     uSpecStrength: { value: SPEC_STRENGTH },
+    uContactAO: { value: CONTACT_AO },
+    uContactAOH: { value: CONTACT_AO_H },
   };
 }
 

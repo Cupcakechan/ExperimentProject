@@ -1844,6 +1844,10 @@ for (const creature of CREATURES) {
   assert(mB.fragmentShader.includes('* 0.5 + 0.5') && mB.fragmentShader.includes('hl * hl'), 'the fragment carries the half-Lambert wrap (soft shading, dark rim never crushed)');
   assert(!mB.fragmentShader.includes('floor(diff'), 'the 3-band quantize is GONE (SS1 reconstructed the reference wrong; the screenshots won)');
   assert(mB.fragmentShader.includes('uSpecPow') && mB.fragmentShader.includes('cameraPosition'), 'the gloss rides the world-space view vector (cameraPosition: the r170 fragment prelude, source-verified)');
+  const { CONTACT_AO, CONTACT_AO_H } = await import('./src/config.js');
+  assert(mB.uniforms.uContactAO.value === CONTACT_AO && CONTACT_AO > 0 && CONTACT_AO < 1, 'contact occlusion rides a live uniform (pass B.1: the dead-ink band at ground contact gets a shading answer, never a threshold one)');
+  assert(mB.uniforms.uContactAOH.value === CONTACT_AO_H && CONTACT_AO_H > 0, 'the contact fade band is live');
+  assert(mB.fragmentShader.includes('smoothstep(0.0, uContactAOH, worldPos.y)') && mB.fragmentShader.includes('* groundAO'), 'the fragment darkens color AND gloss toward y = 0 (no glint survives inside the contact)');
 }
 
 // ---- R1 ink pass (screen-space, depth-only): the module contract ----

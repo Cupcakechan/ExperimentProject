@@ -1,5 +1,14 @@
 # LESSONS.md — error record (feeds the dev-method)
 
+> **HARVESTED — 2026-07-07.** Every entry below through
+> "2026-07-07 — probes encode assumptions; refine the invariant, don't
+> delete the probe" (the original 20) has been included downstream:
+> process lessons (17 certified provenance, 18 edit-script discipline,
+> 20 probe-invariant refinement) into the dev-method skill; content
+> lessons (including 19, the displayed-read rule) into the
+> creature-forge skill. Entries AFTER that one are NEW since the
+> harvest — the unharvested queue starts there.
+
 ## 2026-07-03 — backtick inside a GLSL template literal
 - What broke / what happened: a backtick in a shader comment terminated the JS
   template literal early; the module failed to parse.
@@ -493,3 +502,24 @@
   contract lives where the contract is, never a softened probe).
 - Route: dev-method (process) — when a new feature breaks an old probe,
   find what the probe MEANT before touching it.
+
+## 2026-07-07 — depth ink dies at ground contact (exposed by the pastel re-key)
+- What broke / what happened: browser-caught (Daniel: "the feet are
+  blending into the ground") — planted feet dissolved into the pale
+  floor, with bright/glossy un-contained rims at the contact.
+- Root cause: GEOMETRIC, not a tuning miss — the ink's relative depth
+  step (foot front vs the ground it occludes) converges to 0 at the
+  contact, so a band under ANY threshold always exists (measured ~the
+  last 0.04-0.05 world units at the default camera). Pre-existing since
+  R1; the dark stage hid it (dark rim on dark ground), and pass A's
+  pastel key + pass B's bright glossy rims exposed it.
+- Verification gap it exposed: none automatable pre-browser — this is a
+  visual-contrast read (the suite cannot see "blends into"); the fix
+  ships with source-contract probes instead.
+- Plug shipped: CONTACT OCCLUSION in the creature fragment (uContactAO /
+  uContactAOH, live uniforms): color AND gloss darken toward y = 0 —
+  the reference's own dark-feet read; hop tucks and hover heights fade
+  it out for free. Threshold NOT touched (lower thresholds re-admit the
+  R1.1 grazing-noise class).
+- Route: creature-forge (artifact-taxonomy row: contact reads — the
+  depth-ink family's known blind spot and its fix class) + project fix.
