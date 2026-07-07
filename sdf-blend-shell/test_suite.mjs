@@ -1513,6 +1513,66 @@ for (const creature of CREATURES) {
   assert(plants >= 4, `the plant detector sees real footfalls over a 6s walk (${plants} >= 4 — the exact polling main uses)`);
 }
 
+// ---- Contact shadows (research build 1): the analytic blob law ----
+// shadowFootprint is the blob's rest geometry (an overhead projection
+// of the SOLIDS); the altitude law (fade/spread/color) is what lets
+// ONE mechanism serve walkers, hoppers, and hover creatures with no
+// per-mode branches. Anchors are hand-computed; the law's tolerance
+// (negative-altitude clamp) lives IN the code, not softened probes.
+{
+  const { shadowFootprint, shadowFade, shadowSpread, shadowColor } = await import('./src/render/shadows.js');
+  const { SHADOW_COLOR, SHADOW_FADE_H, SHADOW_SCALE, SHADOW_Y, TRAIL_Y: TY, GROUND_COLOR: GC2 } = await import('./src/config.js');
+  const rawSh = (hex) => [((hex >> 16) & 255) / 255, ((hex >> 8) & 255) / 255, (hex & 255) / 255];
+
+  // Hand-computed synthetic anchor (exact): sphere a[0.1,0.5,0] r0.3
+  // -> x [-0.2,0.4] z [-0.3,0.3]; capsule a[-0.2,0.4,-0.1]
+  // b[0.4,0.4,0.3] r0.1 -> x [-0.3,0.5] z [-0.2,0.4]. Union extent
+  // x [-0.3,0.5], z [-0.3,0.4] -> cx 0.1 rx 0.4, cz 0.05 rz 0.35.
+  // The paint and the carve sit at x=99: EXCLUDED (no surface casts).
+  const synth = { prims: [
+    { id: 's', type: 'sphere', a: [0.1, 0.5, 0], r: 0.3 },
+    { id: 'c', type: 'capsule', a: [-0.2, 0.4, -0.1], b: [0.4, 0.4, 0.3], r: 0.1 },
+    { id: 'p', type: 'sphere', a: [99, 0.5, 0], r: 0.3, paint: true },
+    { id: 'n', type: 'sphere', a: [99, 0.5, 9], r: 0.3, negative: true },
+  ] };
+  const fp = shadowFootprint(synth);
+  assert(Math.abs(fp.cx - 0.1) < 1e-12 && Math.abs(fp.rx - 0.4) < 1e-12, 'footprint x: hand-computed extent (paints and carves cast NOTHING)');
+  assert(Math.abs(fp.cz - 0.05) < 1e-12 && Math.abs(fp.rz - 0.35) < 1e-12, 'footprint z: hand-computed extent');
+  assert(shadowFootprint({ prims: [{ id: 'p', type: 'sphere', a: [0, 0, 0], r: 0.1, paint: true }] }) === null, 'no solids -> null, never a crash (a shadow-less actor is graceful)');
+
+  // Cast regression anchor (hand-computed from creatures.js): critter's
+  // x extent runs eyeball tip -1.184 to tail tip 1.19; in z the body's
+  // own radius governs (0.42 — the legs reach only 0.375/0.38).
+  const critFp = shadowFootprint(CREATURES.find((c) => c.id === 'critter'));
+  assert(Math.abs(critFp.cx - 0.003) < 1e-9 && Math.abs(critFp.rx - 1.187) < 1e-9, 'critter footprint x: eyeball tip to tail tip (hand-computed anchor)');
+  assert(critFp.cz === 0 && Math.abs(critFp.rz - 0.42) < 1e-12, 'critter footprint z: the body radius governs');
+  for (const c of CREATURES) {
+    const fc = shadowFootprint(c);
+    assert(fc && fc.rx > 0 && fc.rz > 0 && fc.rx <= 1.5 && fc.rz <= 1.5, `${c.id}: a finite, stage-scaled blob exists`);
+  }
+
+  // The altitude law: exact anchors first, then the shape.
+  assert(shadowFade(0) === 0, 'fade(0) = 0 exactly: a grounded blob is FULL strength');
+  assert(shadowFade(SHADOW_FADE_H) === 0.5, 'fade(SHADOW_FADE_H) = 0.5 exactly (the half-fade altitude — the tuning anchor)');
+  assert(shadowFade(-0.07) === 0, 'negative altitude clamps IN the law: the hop crouch dip never OVER-darkens past rest');
+  let fadeMono = true;
+  for (let h = 0; h < 1; h += 0.05) if (shadowFade(h + 0.05) <= shadowFade(h)) fadeMono = false;
+  assert(fadeMono && shadowFade(10) < 1, 'fade rises monotonically and never reaches 1: a hover creature KEEPS a faint blob');
+  assert(shadowSpread(0) === 1 && shadowSpread(0.55) > 1, 'spread(0) = 1 exactly; a lifted body throws a wider blob');
+  const bloopHover = CREATURES.find((c) => c.id === 'floater').hover;
+  const bloopFade = shadowFade(bloopHover.height);
+  assert(bloopFade > 0.5 && bloopFade < 0.8, `Bloop at rest hover height fades to ${bloopFade.toFixed(4)} (faint, PRESENT — the grounding read survives altitude)`);
+
+  // The color walk: the trails fade-by-color mechanism turned vertical.
+  assert(shadowColor(0).every((v, i) => v === rawSh(SHADOW_COLOR)[i]), 'a grounded blob is exactly SHADOW_COLOR (raw channels — the parity rule)');
+  const midCol = shadowColor(SHADOW_FADE_H);
+  assert(midCol.every((v, i) => Math.abs(v - (rawSh(SHADOW_COLOR)[i] + rawSh(GC2)[i]) / 2) < 1e-12), 'at the half-fade altitude the blob is the exact midpoint mix toward GROUND_COLOR');
+
+  // The layering contract: shadows live UNDER the prints.
+  assert(SHADOW_Y > 0 && SHADOW_Y < TY, 'SHADOW_Y sits above the stage and BELOW TRAIL_Y: prints read on top of shadows');
+  assert(SHADOW_SCALE > 0 && SHADOW_SCALE <= 1, 'the inset scale is a fraction: contact darkness concentrates under mass');
+}
+
 // ---- C1 creature I/O: the executable authoring rules + the round trip ----
 // validate.js is the AUTHORING RULES as one pure function — the import
 // gate, this suite, and the C2 generator's grader are the SAME module,

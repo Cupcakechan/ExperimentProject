@@ -246,3 +246,16 @@ export const INK_DEPTH_THRESHOLD = 0.02; // relative depth step that inks: step/
 // threshold can quiet them without killing wanted lines — class-based
 // fading can. 1.0 = uniform ink (the exact pre-pass look, the revert).
 export const INK_INTERIOR = 0.45;
+
+// CONTACT SHADOWS (research build 1): one soft blob decal per actor —
+// the grounding read the unlit creatures lack. Analytic (no render
+// target; the SS9 depth-RT mechanism stays banked): the blob is the
+// rest solids' XZ extent, and ONE altitude law drives spread + a
+// color-fade toward GROUND_COLOR (the trails mechanism turned
+// vertical) — a hop reads "left the ground" mid-arc, a hover creature
+// keeps a faint wide blob. depthWrite OFF = ink-blind by construction.
+export const SHADOW_COLOR = 0x0e1116; // darker than TRAIL_COLOR: the anchor outranks the whisper (prints stay readable INSIDE a shadow)
+export const SHADOW_Y = 0.001; // above the stage, BELOW TRAIL_Y 0.002 — prints layer on top of shadows
+export const SHADOW_SCALE = 0.9; // inset vs the raw extent: contact darkness concentrates under mass, not at the silhouette's outermost tip
+export const SHADOW_SPREAD = 0.35; // extra size per world unit of altitude (a lifted body throws a wider, softer blob; mild — the fade carries the story)
+export const SHADOW_FADE_H = 0.25; // the HALF-FADE altitude: fade = h/(h + this). Hop peak 0.24 ~ half-faded at the apex; Bloop's 0.55 hover keeps a ~1/3-strength blob

@@ -30,6 +30,7 @@ import { exportCreature, parseCreatureJSON } from './data/creatureIO.js';
 import { generateCreature, GENERATE_MAX_ATTEMPTS } from './data/generate.js';
 import { createWorld } from './render/world.js';
 import { createTrails } from './render/trails.js';
+import { createShadows } from './render/shadows.js';
 import {
   BLEND_K,
   BACKGROUND_COLOR,
@@ -78,6 +79,7 @@ controls.enableDamping = true;
 // world.js carries the contract), seeded hills and props beyond it.
 createWorld(scene);
 const trails = createTrails(scene); // footprint decals: stamped by locomotion, faded by time
+const shadows = createShadows(scene); // contact blobs (research build 1): the grounding read, one per actor
 
 // --- the actors: every creature, alive at once ---
 // C1: actor construction is a FUNCTION now — the authored cast and
@@ -289,6 +291,8 @@ renderer.setAnimationLoop(() => {
     // if the field reads as leaning OUT of turns, flip this one sign.
     actor.rig.rotation.x = actor.lean;
   }
+
+  shadows.update(actors); // every rig's DISPLAYED pose is final for the frame — one pass over the field
 
   controls.update(); // required every frame when damping is on
   trails.update(tAnim); // age prints on the anim clock (pause freezes trails with everything else)
