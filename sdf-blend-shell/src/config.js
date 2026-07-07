@@ -129,7 +129,7 @@ export const ROAM_HARD_RADIUS = 4.0;
 // old disc's look survives seamlessly). LOOK pass A: pastel mint (the
 // reference's day key) — trails, shadows, and the terrain band all fade
 // toward THIS constant, so the whole ground family re-keys from one line.
-export const GROUND_COLOR = 0xd2ecdc;
+export const GROUND_COLOR = 0xc6e7d2; // feel round: one saturation step (was 0xd2ecdc — read white between the dots even unfogged)
 
 // C3 TERRARIUM. The load-bearing value is WORLD_FLAT_RADIUS: terrain
 // height is EXACTLY 0 inside it, and it must exceed the roam hard clamp
@@ -156,7 +156,7 @@ export const ACTOR_CAP = 24; // populate/generate/import all respect it (perf: o
 // no textures, no transparency. Grounded creatures only.
 export const TRAIL_CAP = 240; // ring size: a crowded stage recycles faster (a lever, not a flaw)
 export const TRAIL_LIFETIME = 9; // seconds from strike to seamless vanish
-export const TRAIL_COLOR = 0xc3e0cd; // print-dark, LOW contrast (the first-round lesson holds: an imprint whispers) — re-keyed to the mint stage, fades to GROUND_COLOR exactly
+export const TRAIL_COLOR = 0xb4d9c2; // print-dark, LOW contrast (the first-round lesson holds: an imprint whispers) — re-keyed to the mint stage, fades to GROUND_COLOR exactly
 export const TRAIL_Y = 0.002; // above the stage: ~50x below the ink threshold, no line
 export const TRAIL_SLIDE_SPACING = 0.35; // slug drag-dab interval (world units)
 
@@ -256,7 +256,7 @@ export const INK_INTERIOR = 0.45;
 // color-fade toward GROUND_COLOR (the trails mechanism turned
 // vertical) — a hop reads "left the ground" mid-arc, a hover creature
 // keeps a faint wide blob. depthWrite OFF = ink-blind by construction.
-export const SHADOW_COLOR = 0xa3c4b1; // darker than TRAIL_COLOR: the anchor outranks the whisper (prints stay readable INSIDE a shadow) — re-keyed gray-green for the mint stage
+export const SHADOW_COLOR = 0x93bda4; // darker than TRAIL_COLOR: the anchor outranks the whisper (prints stay readable INSIDE a shadow) — re-keyed gray-green for the mint stage
 export const SHADOW_Y = 0.001; // above the stage, BELOW TRAIL_Y 0.002 — prints layer on top of shadows
 export const SHADOW_SCALE = 0.9; // inset vs the raw extent: contact darkness concentrates under mass, not at the silhouette's outermost tip
 export const SHADOW_SPREAD = 0.35; // extra size per world unit of altitude (a lifted body throws a wider, softer blob; mild — the fade carries the story)
@@ -271,9 +271,9 @@ export const SHADOW_FADE_H = 0.25; // the HALF-FADE altitude: fade = h/(h + this
 // subject; the shading model (bands, ambient, specular) is PASS B's.
 export const SKY_TOP = 0x87c8ec; // zenith blue (sampled from the reference key)
 export const SKY_HORIZON = 0xeef6f4; // the pale band the world fades into — also the fog color and the fallback clear
-export const FOG_NEAR = 7; // camera-relative: the creature zone (camera sits ~10 out, orbiting) barely grazes it; the ring and rim fade properly
-export const FOG_FAR = 18; // full fade just past the far rim at typical orbit distance
-export const GROUND_DOT_COLOR = 0xb7dec6; // a step deeper than the floor: pattern, not obstacle
+export const FOG_NEAR = 13; // camera-relative — MEASURED at the default orbit (camera ~10.3 from center): the shipped 7 fogged the field CENTER 30% and the pine ring 87% toward near-white (the white-out report); 13 puts the play area at 0%
+export const FOG_FAR = 24; // far pine ring lands ~32% faded: aerial softening only where it belongs
+export const GROUND_DOT_COLOR = 0xa6d6b9; // a step deeper than the floor: pattern, not obstacle
 export const WORLD_DOT_COUNT = 150; // seeded, own stream (never reshuffles the props)
 export const WORLD_DOT_MIN_S = 0.14; // dot diameter range, world units —
 export const WORLD_DOT_MAX_S = 0.42; // varied enough to read hand-placed
