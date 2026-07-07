@@ -29,6 +29,7 @@ import { createBlink } from './blink.js';
 import { exportCreature, parseCreatureJSON } from './data/creatureIO.js';
 import { generateCreature, GENERATE_MAX_ATTEMPTS } from './data/generate.js';
 import { createWorld } from './render/world.js';
+import { createTrails } from './render/trails.js';
 import {
   BLEND_K,
   BACKGROUND_COLOR,
@@ -76,6 +77,7 @@ controls.enableDamping = true;
 // GROUND_COLOR inside the roam clamp (the feet-dip trick survives —
 // world.js carries the contract), seeded hills and props beyond it.
 createWorld(scene);
+const trails = createTrails(scene); // footprint decals: stamped by locomotion, faded by time
 
 // --- the actors: every creature, alive at once ---
 // C1: actor construction is a FUNCTION now — the authored cast and
@@ -221,6 +223,7 @@ renderer.setAnimationLoop(() => {
     // material alone (the write paths all take a materials LIST, so the
     // single-element array is the whole change).
     updateAnim(actor.material, tAnim, actor.anims);
+    trails.trackActor(actor, tAnim); // pure polling AFTER locomotion: fresh plants, landings, drag
 
     // Blink (A4): eye decals submerge into their host on a deterministic,
     // phase-staggered schedule — absolute from rest, so a non-blinking
@@ -288,5 +291,6 @@ renderer.setAnimationLoop(() => {
   }
 
   controls.update(); // required every frame when damping is on
+  trails.update(tAnim); // age prints on the anim clock (pause freezes trails with everything else)
   inkPass.render(scene, camera); // scene -> target, then the fullscreen ink pass -> canvas
 });

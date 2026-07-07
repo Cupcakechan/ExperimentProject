@@ -1475,6 +1475,37 @@ for (const creature of CREATURES) {
   assert(new Set(angles.map((x) => x.toFixed(3))).size >= 3, 'by t=30 the tendrils are genuinely out of step (the beat-note survives the split)');
 }
 
+// ---- Footprint trails: stamp sources + the fade (the banked technique) ----
+// trailMode is the pure classifier main polls with; fadeColor's endpoints
+// ARE the seamless-vanish guarantee. The plant detector is proven on a
+// real gait sim with the exact polling main uses.
+{
+  const { trailMode, fadeColor } = await import('./src/render/trails.js');
+  const { TRAIL_COLOR, TRAIL_LIFETIME, TRAIL_CAP, GROUND_COLOR: GC } = await import('./src/config.js');
+  assert(trailMode(CREATURES.find((c) => c.id === 'critter')) === 'step', 'walkers stamp per FOOTFALL');
+  assert(trailMode(CREATURES.find((c) => c.id === 'hopper')) === 'hop', 'hoppers stamp on LANDING');
+  assert(trailMode(CREATURES.find((c) => c.id === 'snail')) === 'slide', 'slugs leave a DRAG line (they do not step)');
+  assert(trailMode(CREATURES.find((c) => c.id === 'floater')) === null && trailMode(CREATURES.find((c) => c.id === 'flyer')) === null, 'hover creatures leave NOTHING (they never touch the ground)');
+  const rawc = (hex) => [((hex >> 16) & 255) / 255, ((hex >> 8) & 255) / 255, (hex & 255) / 255];
+  assert(fadeColor(0, TRAIL_LIFETIME).every((v, i) => v === rawc(TRAIL_COLOR)[i]), 'a fresh print is exactly TRAIL_COLOR (raw channels — the parity rule)');
+  assert(fadeColor(TRAIL_LIFETIME, TRAIL_LIFETIME).every((v, i) => v === rawc(GC)[i]), 'an expired print is exactly GROUND_COLOR — prints vanish seamlessly, never pop');
+  assert(TRAIL_CAP > 0 && TRAIL_LIFETIME > 0, 'trail config is sane');
+  const critter = CREATURES.find((c) => c.id === 'critter');
+  const g = createGait(critter);
+  const matG = createBlendMaterial(critter.prims, critter.inflate, critter.step?.knees);
+  let plants = 0;
+  const prev = g.feet.map((f) => f.swingT < 0);
+  for (let t = 0; t < 6; t += 1 / 60) {
+    g.update(1 / 60, { x: -t * 0.4, y: 0, z: 0, heading: Math.PI }, [matG]);
+    g.feet.forEach((f, i) => {
+      const planted = f.swingT < 0;
+      if (planted && !prev[i]) plants++;
+      prev[i] = planted;
+    });
+  }
+  assert(plants >= 4, `the plant detector sees real footfalls over a 6s walk (${plants} >= 4 — the exact polling main uses)`);
+}
+
 // ---- C1 creature I/O: the executable authoring rules + the round trip ----
 // validate.js is the AUTHORING RULES as one pure function — the import
 // gate, this suite, and the C2 generator's grader are the SAME module,

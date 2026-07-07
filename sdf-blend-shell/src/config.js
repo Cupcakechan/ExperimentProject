@@ -145,6 +145,15 @@ export const WORLD_GRASS_COUNT = 90;
 export const WORLD_PROP_MIN_R = 4.4; // props strictly outside creature space — no collision question exists
 export const ACTOR_CAP = 24; // populate/generate/import all respect it (perf: one draw + heavy fragment work per actor)
 
+// Footprint trails (the banked sand-tracks technique): an instanced
+// ring buffer of ground decals fading BY COLOR into GROUND_COLOR —
+// no textures, no transparency. Grounded creatures only.
+export const TRAIL_CAP = 240; // ring size: a crowded stage recycles faster (a lever, not a flaw)
+export const TRAIL_LIFETIME = 9; // seconds from strike to seamless vanish
+export const TRAIL_COLOR = 0x101318; // print-dark; fades to GROUND_COLOR exactly
+export const TRAIL_Y = 0.002; // above the stage: ~50x below the ink threshold, no line
+export const TRAIL_SLIDE_SPACING = 0.35; // slug drag-dab interval (world units)
+
 // Reactive gait (stage 3). A planted foot steps when its HOME (rest spot
 // carried by the body) drifts more than STEP_TRIGGER away; the swing takes
 // STEP_TIME seconds, arcs STEP_LIFT high, and lands STEP_LEAD_TIME of body
