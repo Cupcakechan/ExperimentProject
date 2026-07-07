@@ -1749,7 +1749,7 @@ for (const creature of CREATURES) {
 // data, like a creature.
 {
   const { terrainHeight, propPlacements, buildTerrainGeometry, bandColor } = await import('./src/render/world.js');
-  const { WORLD_SEED, WORLD_RADIUS, WORLD_FLAT_RADIUS: FLAT, WORLD_HILL_HEIGHT, WORLD_PROP_MIN_R, ROAM_HARD_RADIUS: HARD, WORLD_PINE_COUNT, WORLD_PINE_MIN_H, WORLD_PINE_MAX_H, WORLD_PINE_SPACING } = await import('./src/config.js');
+  const { WORLD_SEED, WORLD_RADIUS, WORLD_FLAT_RADIUS: FLAT, WORLD_HILL_HEIGHT, WORLD_PROP_MIN_R, ROAM_HARD_RADIUS: HARD, WORLD_PINE_COUNT, WORLD_PINE_MIN_H, WORLD_PINE_MAX_H, WORLD_PINE_SPACING, GROUND_COLOR: GC3 } = await import('./src/config.js');
 
   let flatOk = true;
   for (let ri = 0; ri <= 20; ri++) {
@@ -1793,7 +1793,41 @@ for (const creature of CREATURES) {
   }
   assert(meshOk && geo.getAttribute('color') !== undefined, 'the terrain mesh mirrors terrainHeight exactly and carries band colors');
   const low = bandColor(0);
-  assert(low[0] === ((0x1b1f24 >> 16) & 255) / 255 && low[1] === ((0x1b1f24 >> 8) & 255) / 255, 'the flat band is EXACTLY GROUND_COLOR (the old disc look survives seamlessly, raw channels)');
+  const gRaw = [((GC3 >> 16) & 255) / 255, ((GC3 >> 8) & 255) / 255, (GC3 & 255) / 255];
+  assert(low.every((v, i) => v === gRaw[i]), 'the flat band is EXACTLY GROUND_COLOR (probe refined at pass A: the invariant was always the CONSTANT, never the old hex — raw channels)');
+}
+
+// ---- LOOK pass A: the stage re-key (sky, fog, dots — the pure laws) ----
+// skyColor is anchored at both ends (the horizon end IS the fog color,
+// so ground and sky meet seamlessly by construction); the dot lane is
+// its own seeded stream, so its determinism and the prop streams' are
+// independent by design, not by append-discipline.
+{
+  const { skyColor, dotPlacements } = await import('./src/render/world.js');
+  const { SKY_TOP, SKY_HORIZON, FOG_NEAR, FOG_FAR, WORLD_DOT_COUNT, WORLD_DOT_MIN_S, WORLD_DOT_MAX_S, DOT_Y, SHADOW_Y: SHY2, WORLD_FLAT_RADIUS: FLAT3, WORLD_SEED: WS2 } = await import('./src/config.js');
+  const rawLk = (hex) => [((hex >> 16) & 255) / 255, ((hex >> 8) & 255) / 255, (hex & 255) / 255];
+
+  assert(skyColor(0).every((v, i) => v === rawLk(SKY_HORIZON)[i]), 'skyColor(0) is exactly SKY_HORIZON (raw channels — and the fog fades into the SAME constant: ground meets sky seamlessly)');
+  assert(skyColor(1).every((v, i) => v === rawLk(SKY_TOP)[i]), 'skyColor(1) is exactly SKY_TOP (the zenith anchor)');
+  assert(skyColor(-2).every((v, i) => v === rawLk(SKY_HORIZON)[i]), 'skyColor clamps below: the lower hemisphere is all horizon (any orbit angle is safe)');
+  let skyMono = true;
+  for (let t = 0; t < 1; t += 0.1) {
+    const a = skyColor(t);
+    const b = skyColor(t + 0.1);
+    // The blue channel falls horizon -> zenith in this key; each step must move toward the top, never back.
+    if ((b[2] - a[2]) * (rawLk(SKY_TOP)[2] - rawLk(SKY_HORIZON)[2]) < -1e-12) skyMono = false;
+  }
+  assert(skyMono, 'the sky gradient walks monotonically horizon -> zenith (no bands doubling back)');
+
+  const dd = dotPlacements(WS2);
+  assert(dd.length === WORLD_DOT_COUNT, `the floor carries exactly WORLD_DOT_COUNT dots (${dd.length})`);
+  assert(JSON.stringify(dotPlacements(WS2)) === JSON.stringify(dd), 'dot placement is deterministic (same seed, same floor)');
+  assert(JSON.stringify(dotPlacements(WS2 + 1)) !== JSON.stringify(dd), 'a different seed patterns a different floor');
+  assert(dd.every((d) => { const r = Math.hypot(d.x, d.z); return r >= 0.4 - 1e-9 && r <= FLAT3 - 0.2 + 1e-9; }), 'every dot lies in the FLAT region (a horizontal quad on a slope would clip into it)');
+  assert(dd.every((d) => d.s >= WORLD_DOT_MIN_S && d.s <= WORLD_DOT_MAX_S), 'every dot size sits inside the authored range');
+
+  assert(DOT_Y > 0 && DOT_Y < SHY2, 'the layer ladder holds: dots UNDER shadows (and shadows under prints, asserted above) — the floor pattern never covers a read');
+  assert(FOG_NEAR > 0 && FOG_NEAR < FOG_FAR, 'fog planes are sane (near before far)');
 }
 
 // ---- R1 ink pass (screen-space, depth-only): the module contract ----

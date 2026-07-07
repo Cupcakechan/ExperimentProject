@@ -46,7 +46,17 @@ import {
   WORLD_PINE_MIN_H,
   WORLD_PINE_MAX_H,
   WORLD_PINE_SPACING,
+  SKY_TOP,
+  SKY_HORIZON,
+  FOG_NEAR,
+  FOG_FAR,
+  GROUND_DOT_COLOR,
+  WORLD_DOT_COUNT,
+  WORLD_DOT_MIN_S,
+  WORLD_DOT_MAX_S,
+  DOT_Y,
 } from '../config.js';
+import { makeBlobAlpha } from './trails.js'; // ONE blob artwork serves prints, shadows, and now the floor dots
 
 // --- seeded value noise (pure, suite-anchored) ---
 function hash2(ix, iz, seed) {
@@ -112,6 +122,37 @@ export function bandColor(h) {
   return mix3(moss, rock, smooth01(0.5, 0.78, h01));
 }
 
+// LOOK pass A — the sky gradient (pure, suite-anchored at both ends):
+// t = 0 is the horizon (pale — the same color the fog fades into, so
+// ground and sky meet seamlessly), t = 1 is the zenith blue. Raw
+// channels (the R1 parity rule). smooth01 eases the band like the
+// terrain colors do.
+export function skyColor(t) {
+  const c = Math.min(Math.max(t, 0), 1);
+  return mix3(raw(SKY_HORIZON), raw(SKY_TOP), smooth01(0, 1, c));
+}
+
+// LOOK pass A — soft floor dots (the reference's airbrushed ground
+// pattern). Pure and on its OWN seed lane: dot-count changes can never
+// reshuffle rocks/grass/pines (the prop-determinism rule, held by
+// separation instead of append-discipline). FLAT REGION ONLY: the dots
+// are horizontal quads, and a horizontal quad on a slope clips into it
+// — so they stop at the flat rim, where the moss band takes over the
+// texture read. Dots may cover creature space: they are flat ink-blind
+// decals a half-millimeter above the stage, not 3D obstacles, so the
+// prop border's reason (collision) does not apply.
+export function dotPlacements(seed = WORLD_SEED) {
+  const rng = mulberry32((Math.imul(seed | 0, 0x9e3779b9) ^ 0x2545f491) >>> 0);
+  const range = (lo, hi) => lo + (hi - lo) * rng();
+  const out = [];
+  for (let i = 0; i < WORLD_DOT_COUNT; i++) {
+    const th = range(0, Math.PI * 2);
+    const r = 0.4 + Math.sqrt(rng()) * (WORLD_FLAT_RADIUS - 0.6); // sqrt: even areal density
+    out.push({ x: Math.cos(th) * r, z: Math.sin(th) * r, s: range(WORLD_DOT_MIN_S, WORLD_DOT_MAX_S) });
+  }
+  return out;
+}
+
 // Polar terrain grid: rings x sectors, displaced by terrainHeight.
 // A polar grid (not a plane) keeps the world edge a clean CIRCLE and
 // puts vertex density where the camera lives.
@@ -167,10 +208,10 @@ function mergeBaked(parts) {
 // crown cones, each part baked in its OWN two-tone (bark vs needles),
 // merged into one geometry, instanced per class. Template ~1.35 tall.
 function buildPineGeometry() {
-  const BARK_D = 0x241d18;
-  const BARK_L = 0x3a2f24;
-  const NEEDLE_D = 0x18261f; // deeper green than the grass tufts, so pines READ as their own class
-  const NEEDLE_L = 0x2e5040;
+  const BARK_D = 0x9a8474; // LOOK pass A: soft warm bark
+  const BARK_L = 0xc2ac9a;
+  const NEEDLE_D = 0x5da884; // still deeper green than the grass tufts, so pines READ as their own class
+  const NEEDLE_L = 0x8fd0ac;
   const trunk = bakeTopLight(new THREE.CylinderGeometry(0.05, 0.075, 0.4, 6).translate(0, 0.2, 0), BARK_D, BARK_L);
   const c1 = bakeTopLight(new THREE.ConeGeometry(0.42, 0.55, 7).translate(0, 0.55, 0), NEEDLE_D, NEEDLE_L);
   const c2 = bakeTopLight(new THREE.ConeGeometry(0.3, 0.5, 7).translate(0, 0.85, 0), NEEDLE_D, NEEDLE_L);
@@ -256,10 +297,66 @@ export function createWorld(scene) {
   const terrain = new THREE.Mesh(buildTerrainGeometry(WORLD_SEED), new THREE.MeshBasicMaterial({ vertexColors: true }));
   scene.add(terrain);
 
+  // LOOK pass A — the sky dome: a vertex-gradient sphere seen from
+  // inside (BackSide), fog OFF (fog would flatten the gradient to the
+  // horizon color). The dome is depth-continuous, so the ink pass draws
+  // nothing ON it; the world rim keeps its silhouette line against it,
+  // the same relative-step class it had against the old flat clear.
+  const skyGeo = new THREE.SphereGeometry(40, 24, 16);
+  {
+    const p = skyGeo.getAttribute('position');
+    const cols = [];
+    for (let i = 0; i < p.count; i++) {
+      cols.push(...skyColor(p.getY(i) / 40)); // horizon at y <= 0, zenith at the top (skyColor clamps)
+    }
+    skyGeo.setAttribute('color', new THREE.Float32BufferAttribute(cols, 3));
+  }
+  scene.add(new THREE.Mesh(skyGeo, new THREE.MeshBasicMaterial({ vertexColors: true, side: THREE.BackSide, fog: false })));
+
+  // LOOK pass A — distance fog: ground and props fade INTO the horizon
+  // color (aerial perspective, the reference's soft distance). The
+  // creatures' ShaderMaterial has no fog chunks (fog-immune by
+  // construction); trails/shadows/dots fog WITH the ground they sit on,
+  // so contrast compresses consistently at distance. Raw fog color
+  // (the R1 parity rule).
+  scene.fog = new THREE.Fog(new THREE.Color().setHex(SKY_HORIZON, THREE.LinearSRGBColorSpace), FOG_NEAR, FOG_FAR);
+
+  // LOOK pass A — the floor dots: one InstancedMesh of soft blob quads
+  // at DOT_Y, renderOrder BELOW shadows (-1) and prints (0) — a floor
+  // pattern everything else layers over. depthWrite OFF: the ink pass
+  // is blind to them by construction (the trails rule).
+  const dots = dotPlacements(WORLD_SEED);
+  const dotTex = new THREE.DataTexture(makeBlobAlpha(64), 64, 64, THREE.RGBAFormat);
+  dotTex.needsUpdate = true;
+  dotTex.magFilter = THREE.LinearFilter;
+  dotTex.minFilter = THREE.LinearFilter;
+  const dotMesh = new THREE.InstancedMesh(
+    new THREE.PlaneGeometry(1, 1).rotateX(-Math.PI / 2),
+    new THREE.MeshBasicMaterial({
+      map: dotTex,
+      transparent: true,
+      depthWrite: false,
+      color: new THREE.Color().setHex(GROUND_DOT_COLOR, THREE.LinearSRGBColorSpace),
+    }),
+    dots.length
+  );
+  dotMesh.frustumCulled = false; // instances place at runtime (the trails rule)
+  dotMesh.renderOrder = -2;
+  {
+    const m = new THREE.Matrix4();
+    dots.forEach((d, i) => {
+      m.makeScale(d.s, 1, d.s);
+      m.setPosition(d.x, DOT_Y, d.z);
+      dotMesh.setMatrixAt(i, m);
+    });
+  }
+  dotMesh.instanceMatrix.needsUpdate = true;
+  scene.add(dotMesh);
+
   const { rocks, grass, pines } = propPlacements(WORLD_SEED);
-  const rockGeo = bakeTopLight(new THREE.IcosahedronGeometry(1, 0), 0x22252b, 0x3c414b);
+  const rockGeo = bakeTopLight(new THREE.IcosahedronGeometry(1, 0), 0xaab8b3, 0xd8e2dd); // LOOK pass A: pale stone
   const rockMesh = new THREE.InstancedMesh(rockGeo, new THREE.MeshBasicMaterial({ vertexColors: true }), rocks.length);
-  const grassGeo = bakeTopLight(new THREE.ConeGeometry(1, 1, 5), 0x1d3226, 0x2c4a38);
+  const grassGeo = bakeTopLight(new THREE.ConeGeometry(1, 1, 5), 0x8fcaa4, 0xbfe6ca); // LOOK pass A: mint tufts
   grassGeo.translate(0, 0.5, 0); // cone base on the ground, not its midpoint
   const grassMesh = new THREE.InstancedMesh(grassGeo, new THREE.MeshBasicMaterial({ vertexColors: true }), grass.length);
 

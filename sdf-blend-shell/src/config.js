@@ -38,7 +38,7 @@ export const COLOR_POW = 2.0;
 // (The wave animation is now per-creature data — see creatures.js anim.)
 
 // Scene / camera
-export const BACKGROUND_COLOR = 0x14161a;
+export const BACKGROUND_COLOR = 0xeef6f4; // LOOK pass A: pale horizon — the sky dome covers it; this is the fallback clear (resize frames)
 export const CAMERA_FOV = 50;
 export const CAMERA_START = [-4.4, 3.6, 8.6]; // x, y, z — same angle, distance scaled to the expanded field
 export const ORBIT_TARGET = [0, 0.45, 0]; // center of the field
@@ -126,8 +126,10 @@ export const ROAM_SPAWN_RADIUS = 1.9;
 export const ROAM_HARD_RADIUS = 4.0;
 
 // The stage floor color (the terrarium's inner flat band uses it, so the
-// old disc's look survives seamlessly).
-export const GROUND_COLOR = 0x1b1f24;
+// old disc's look survives seamlessly). LOOK pass A: pastel mint (the
+// reference's day key) — trails, shadows, and the terrain band all fade
+// toward THIS constant, so the whole ground family re-keys from one line.
+export const GROUND_COLOR = 0xd2ecdc;
 
 // C3 TERRARIUM. The load-bearing value is WORLD_FLAT_RADIUS: terrain
 // height is EXACTLY 0 inside it, and it must exceed the roam hard clamp
@@ -138,8 +140,8 @@ export const WORLD_SEED = 1; // the world is data too: one seed, one world
 export const WORLD_RADIUS = 9;
 export const WORLD_FLAT_RADIUS = 4.2; // > ROAM_HARD_RADIUS 4 (replaces GROUND_RADIUS 4.6)
 export const WORLD_HILL_HEIGHT = 0.55; // gentle: tall enough to silhouette, low enough to keep the cast the skyline
-export const WORLD_COLOR_MOSS = 0x24352c; // height bands (palette discipline): GROUND_COLOR -> moss -> rock
-export const WORLD_COLOR_ROCK = 0x343941;
+export const WORLD_COLOR_MOSS = 0xb2ddc0; // height bands (palette discipline): GROUND_COLOR -> moss -> rock — LOOK pass A: pastel family, moss a step deeper than the floor
+export const WORLD_COLOR_ROCK = 0xc9d6cf; // pale sage crest: aerial-perspective light, the fog finishes the fade
 export const WORLD_ROCK_COUNT = 26;
 export const WORLD_GRASS_COUNT = 90;
 export const WORLD_PROP_MIN_R = 4.4; // props strictly outside creature space — no collision question exists
@@ -154,7 +156,7 @@ export const ACTOR_CAP = 24; // populate/generate/import all respect it (perf: o
 // no textures, no transparency. Grounded creatures only.
 export const TRAIL_CAP = 240; // ring size: a crowded stage recycles faster (a lever, not a flaw)
 export const TRAIL_LIFETIME = 9; // seconds from strike to seamless vanish
-export const TRAIL_COLOR = 0x14171c; // print-dark, LOW contrast (softened after the first browser round — an imprint whispers); fades to GROUND_COLOR exactly
+export const TRAIL_COLOR = 0xc3e0cd; // print-dark, LOW contrast (the first-round lesson holds: an imprint whispers) — re-keyed to the mint stage, fades to GROUND_COLOR exactly
 export const TRAIL_Y = 0.002; // above the stage: ~50x below the ink threshold, no line
 export const TRAIL_SLIDE_SPACING = 0.35; // slug drag-dab interval (world units)
 
@@ -254,8 +256,25 @@ export const INK_INTERIOR = 0.45;
 // color-fade toward GROUND_COLOR (the trails mechanism turned
 // vertical) — a hop reads "left the ground" mid-arc, a hover creature
 // keeps a faint wide blob. depthWrite OFF = ink-blind by construction.
-export const SHADOW_COLOR = 0x0e1116; // darker than TRAIL_COLOR: the anchor outranks the whisper (prints stay readable INSIDE a shadow)
+export const SHADOW_COLOR = 0xa3c4b1; // darker than TRAIL_COLOR: the anchor outranks the whisper (prints stay readable INSIDE a shadow) — re-keyed gray-green for the mint stage
 export const SHADOW_Y = 0.001; // above the stage, BELOW TRAIL_Y 0.002 — prints layer on top of shadows
 export const SHADOW_SCALE = 0.9; // inset vs the raw extent: contact darkness concentrates under mass, not at the silhouette's outermost tip
 export const SHADOW_SPREAD = 0.35; // extra size per world unit of altitude (a lifted body throws a wider, softer blob; mild — the fade carries the story)
 export const SHADOW_FADE_H = 0.25; // the HALF-FADE altitude: fade = h/(h + this). Hop peak 0.24 ~ half-faded at the apex; Bloop's 0.55 hover keeps a ~1/3-strength blob
+
+// LOOK TRACK pass A — the stage re-key (reference: the original post's
+// pastel day). The sky is a vertex-gradient dome (horizon -> zenith);
+// distance fog fades the ground and props INTO the horizon color
+// (aerial perspective — creatures are ShaderMaterial, fog-IMMUNE by
+// construction, and live inside the fog's near plane anyway); soft
+// blob dots pattern the flat floor. Ink weight/color is PASS C's
+// subject; the shading model (bands, ambient, specular) is PASS B's.
+export const SKY_TOP = 0x87c8ec; // zenith blue (sampled from the reference key)
+export const SKY_HORIZON = 0xeef6f4; // the pale band the world fades into — also the fog color and the fallback clear
+export const FOG_NEAR = 7; // camera-relative: the creature zone (camera sits ~10 out, orbiting) barely grazes it; the ring and rim fade properly
+export const FOG_FAR = 18; // full fade just past the far rim at typical orbit distance
+export const GROUND_DOT_COLOR = 0xb7dec6; // a step deeper than the floor: pattern, not obstacle
+export const WORLD_DOT_COUNT = 150; // seeded, own stream (never reshuffles the props)
+export const WORLD_DOT_MIN_S = 0.14; // dot diameter range, world units —
+export const WORLD_DOT_MAX_S = 0.42; // varied enough to read hand-placed
+export const DOT_Y = 0.0005; // the floor-pattern layer: UNDER shadows (0.001) and prints (0.002)
