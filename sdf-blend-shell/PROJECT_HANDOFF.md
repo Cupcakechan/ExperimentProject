@@ -1,9 +1,12 @@
 # PROJECT_HANDOFF — SDF Blend-Shell Experiment
 
-_Last updated: 2026-07-07 (SESSION CLOSE. Everything below is confirmed
-in-browser AND pushed. Suite: 1149 probes ALL PASS at HEAD. The build
-queue is EMPTY — next is the HARVEST SESSION, then the research builds;
-see "Next steps," which is the section this document exists for.)_
+_Last updated: 2026-07-07 (HARVEST COMPLETE. The creature-forge content
+skill — SKILL.md + reference/ of 11 modules byte-pinned at HEAD ad6ed1d —
+is delivered, and Daniel's dev-method session has integrated the process
+additions (LESSONS 17/18/20 routed there; 19 lives in creature-forge).
+Suite: 1149 probes ALL PASS at HEAD. Next is the RESEARCH-BUILD track —
+see "Next steps," which also carries ONE standing instruction about
+LESSONS.md.)_
 
 ## What this is — and the PURPOSE (clarified 2026-07-07)
 The "SDF blend-shell" character technique: capsule/sphere prims whose
@@ -12,23 +15,26 @@ toon-shaded, outlined by a screen-space depth-ink pass, animated by
 data. **Daniel's stated end goal: a set of SKILLS that let a future
 Claude build good-looking game creatures fast — "design a flying
 creature" should resolve in minutes because this project already
-measured what works.** This repo is the laboratory that produced that
-knowledge; the suite is what makes the knowledge trustworthy (every
-claim traces to a probe).
+measured what works. The first skill now EXISTS: creature-forge
+(delivered 2026-07-07); this repo remains the laboratory, and each
+research build feeds a recipe back into it.** The suite is what makes
+the knowledge trustworthy (every claim traces to a probe).
 
-**Stack:** Three.js pinned 0.170.0 (CDN import map — note: NO
-`three/addons` mapping; hand-build or extend the map deliberately), no
-bundler, VS Code Live Server, Windows/Node-only (no Python). **Repo:**
-https://github.com/Cupcakechan/ExperimentProject, subfolder
-`sdf-blend-shell/`. Container clones read-only for Claude; **Daniel
-pushes, Claude pulls** — the standing gate every round: `git fetch` +
-`reset --hard origin/main`, byte-diff any delivered files vs HEAD
-(normalize CRLF via `tr -d '\r'`; trailing-newline diffs are noise),
-`node test_suite.mjs`, and treat the PROBE COUNT as the certification
-number. Deliveries are FULL files staged in `/mnt/user-data/outputs/`.
-Method: Daniel's General Instructions (userPreferences) + the
-dev-method skill; options round -> Daniel picks -> one tested pass per
-commit; feel reports get mechanism + ONE lever.
+**Stack:** Three.js pinned 0.170.0 (CDN import map pinning BOTH `three`
+and `three/addons/` to 0.170.0 — addons in use:
+BufferGeometryUtils.mergeGeometries in buildShell, OrbitControls in
+main; extend the map deliberately and keep the two pins on the SAME
+version), no bundler, VS Code Live Server, Windows/Node-only (no
+Python). **Repo:** https://github.com/Cupcakechan/ExperimentProject,
+subfolder `sdf-blend-shell/`. Container clones read-only for Claude;
+**Daniel pushes, Claude pulls** — the standing gate every round:
+`git fetch` + `reset --hard origin/main`, byte-diff any delivered files
+vs HEAD (normalize CRLF via `tr -d '\r'`; trailing-newline diffs are
+noise), `node test_suite.mjs`, and treat the PROBE COUNT as the
+certification number. Deliveries are FULL files staged in
+`/mnt/user-data/outputs/`. Method: Daniel's General Instructions
+(userPreferences) + the dev-method skill; options round -> Daniel picks
+-> one tested pass per commit; feel reports get mechanism + ONE lever.
 
 ## Current state — all tracks COMPLETE
 - **R-track** (rendering): R0 stale-cache diagnosis; R1 screen-space
@@ -67,6 +73,15 @@ commit; feel reports get mechanism + ONE lever.
   conifer, instanced) with terrain-AWARE mid-slope scatter
   (band 0.1-0.45, pairwise spacing 2.2, scale 1.6-2.4 — sized for the
   ring-distance read).
+- **HARVEST (2026-07-07)**: creature-forge content skill delivered —
+  SKILL.md (architecture, authoring rules, measured-boundaries table,
+  artifact taxonomy, feel levers, locomotion vocabulary, 8 archetype
+  recipes) + `reference/` carrying validate / generate / creatures /
+  blendMaterial / inkPass / anim / gait / hop / world / trails /
+  config, all byte-verified at ad6ed1d. Process-additions note
+  (LESSONS 17/18/20) integrated into dev-method by Daniel's dev-method
+  session. When a future pass changes one of the 11 carried modules,
+  FLAG the skill refresh — each research build feeds a recipe back.
 - **Cast (8, in registry order = actor index order — APPEND ONLY, seeds
   and phases key off index):** Critter, Hopper, Longneck, Pudge,
   Shelby (id 'snail'), Skitter, Bloop (id 'floater'), Whirr (id
@@ -118,48 +133,40 @@ Executable form: `validate.js`. Proof: the suite. Highlights —
   generator-fidelity passes (the cast is the reference).
 
 ## Next steps (in order — this is the plan of record)
-1. **HARVEST SESSION (next; run in a FRESH session).** Deliverable: the
-   **creature-forge content skill** — a folder of downloadable files:
-   `SKILL.md` (sections: architecture overview; the authoring rules;
-   archetype recipes; the measured-boundaries table; the artifact
-   taxonomy — what fails, why, which fix class; feel levers; locomotion
-   vocabulary: gait/knees, hop, hover, spin, sway-bend) plus
-   `reference/` carrying the known-good modules from this repo
-   (validate.js, generate.js, blendMaterial.js, inkPass.js, anim.js,
-   gait.js, hop.js, world.js, trails.js, creatures.js as the worked
-   cast). Sources: this handoff + LESSONS.md + RESEARCH_TECHNIQUE.md +
-   the repo itself. **IMPORTANT: produce skill CONTENT only.** Daniel
-   has a separate "special Claude" that integrates skills into his
-   dev-method — do NOT attempt that integration. Also produce for that
-   special Claude a short "process additions" note distilling LESSONS
-   17, 18, and 20 (certified provenance; edit-script discipline;
-   probe-invariant refinement) — those belong in dev-method, not
-   creature-forge.
-2. **Research builds (after the harvest; each feeds a recipe back into
-   the skill):**
-   - **CONTACT-SHADOW** first — one pass; mechanism verified in
-     RESEARCH SS9 (depth to a small RT, two-pass blur, shown under the
-     subject); the grounding read the unlit creatures lack; fits the
-     flat stage exactly.
-   - **EXPORT-BAKE track** second — multi-pass; the bridge to "creatures
-     leave the tool" (GLTF/OBJ/STL/USDZ exporters verified present).
-     Honest complexity recorded: the suite's CPU vertex-pipeline mirror
-     makes baking snapped SHELL geometry cheap, but donor shells
-     overlap (poor asset topology) and eyes/mouths are painted
-     PER-PIXEL in the fragment shader (decals need their own answer:
-     flattened decal geometry, dense vertex colors, or a texture bake).
-     **Strongly coupled to un-banking R4 Surface Nets** — meshing the
-     field directly yields the clean watertight mesh export wants. Open
-     the track with an options round: R4-first vs bake-first.
-   - Banked beyond that: PICKING (ID-texture GPU picking — the only
-     selection that works for shader-moved vertices), GPGPU flocking,
-     contact ambience — RESEARCH SS9 Tiers B/C.
+0. **STANDING INSTRUCTION (Daniel, 2026-07-07): the NEXT LESSONS.md
+   update must BEGIN with a harvest marker** — a top-of-file note
+   stating that every entry dated <= 2026-07-07 (all 20) has been
+   included downstream: process lessons (17, 18, 20) into dev-method,
+   content lessons (including 19, the displayed-read rule) into
+   creature-forge. Fold it into the next natural LESSONS.md edit; do
+   NOT run a dedicated pass for it.
+1. **CONTACT-SHADOW** (opened 2026-07-07 with an options round:
+   analytic blob decals in the trails idiom vs one shared depth-RT
+   pass vs a per-actor RT port of the SS9 mechanism — recommendation
+   on record: blobs; the banked RT mechanism in RESEARCH SS9 stays
+   available if the browser disagrees). The grounding read the unlit
+   creatures lack; fits the flat stage exactly. One pass once picked.
+2. **EXPORT-BAKE track** second — multi-pass; the bridge to "creatures
+   leave the tool" (GLTF/OBJ/STL/USDZ exporters verified present).
+   Honest complexity recorded: the suite's CPU vertex-pipeline mirror
+   makes baking snapped SHELL geometry cheap, but donor shells
+   overlap (poor asset topology) and eyes/mouths are painted
+   PER-PIXEL in the fragment shader (decals need their own answer:
+   flattened decal geometry, dense vertex colors, or a texture bake).
+   **Strongly coupled to un-banking R4 Surface Nets** — meshing the
+   field directly yields the clean watertight mesh export wants. Open
+   the track with an options round: R4-first vs bake-first.
+3. Banked beyond that: PICKING (ID-texture GPU picking — the only
+   selection that works for shader-moved vertices), GPGPU flocking,
+   contact ambience — RESEARCH SS9 Tiers B/C.
 
 ## Gotchas (live)
 - No backticks inside GLSL template literals — and edit-script
   replacement text has the SAME rule (LESSON 18).
-- The import map has NO `three/addons`: hand-build geometry (world.js
-  does) or extend index.html deliberately.
+- The import map pins `three` AND `three/addons/` to 0.170.0 (addons
+  in use: BufferGeometryUtils, OrbitControls). Extend it deliberately
+  and keep both pins on the SAME version; world.js hand-builds its
+  geometry by choice, not necessity.
 - Modules must import headless (the suite imports everything under a
   DOM stub): no canvas/DOM at module top level — trails.js uses a
   pure-math DataTexture for exactly this reason.
