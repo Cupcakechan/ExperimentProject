@@ -422,3 +422,74 @@
   multi-prim joints — interior geometry is not neutral, it parks in
   transition bands; (3) turn authoring boundaries into executable
   probes at the moment they're discovered.
+
+## 2026-07-07 — stale state wore three disguises in one session (certify before judging)
+- What broke / what happened: a morning "regression" (knee seams back +
+  Longneck's eyes missing) was a stale browser cache; an R1.1 "strokes
+  still visible" verdict was judged against a stale shader (suite count
+  867 vs 872 exposed it); and one delivered suite file was silently
+  dropped during a re-file.
+- Root cause: verdicts were formed on renders whose PROVENANCE was
+  unproven — nothing bound "what I'm looking at" to "what was delivered."
+- Verification gap it exposed: no ritual connected the serving folder,
+  the repo HEAD, and the delivered bytes.
+- Plug shipped: THE STANDING GATE, every round — `git fetch` +
+  `reset --hard origin/main`; byte-diff delivered files vs HEAD with
+  line endings normalized (`tr -d '\r'` — one push differed only by a
+  dropped trailing newline, harmless, and the gate proved it); run
+  `node test_suite.mjs` and treat the PROBE COUNT as the certification
+  number. No browser verdict counts without the count + Ctrl+F5 first.
+- Route: dev-method (process) — "no verdict without certified provenance."
+
+## 2026-07-07 — the GLSL-backtick lesson repeated in tooling (edit scripts are code too)
+- What broke / what happened: a Node heredoc edit script died at PARSE
+  time — replacement text contained a template literal whose backticks
+  terminated the outer literal; separately, a refined probe shipped with
+  a wrong variable name (longLen vs longestLen) and crashed the suite.
+- Root cause: generated edit scripts are programs with the same failure
+  modes as shipped code, written with less care.
+- Verification gap it exposed: a parse-dead script applies ZERO edits,
+  yet independently chained commands after it still run — "style
+  appended" printed while the main edits never happened.
+- Plug shipped: escape inner backticks in all replacement text;
+  unique-anchor replacements that THROW on 0 or 2+ matches; after any
+  script, verify the END STATE in the file (grep + node --check + the
+  suite), never the script's exit code alone.
+- Route: dev-method (process) — folds into "scripted edits must verify
+  their landing zone."
+
+## 2026-07-07 — author the DISPLAYED read, not the authored value
+- What broke / what happened, three ways: generated mouths authored at
+  cast proportions displayed as eye-swallowing blobs on the inflate
+  archetype (decal footprints balloon with peak dilate); ring pines at
+  "creature scale" read as shrubs (a foreground creature out-subtends a
+  distant prop); footprint quads authored as "small dark marks" read as
+  torn paper (a hard-edged rectangle has no imprint read at ANY size).
+- Root cause: values were authored in registry units but judged after
+  TRANSFORMS — inflation compensation, perspective, edge rendering. The
+  transform gap is the bug.
+- Plug shipped: the constructors encode the transform — mouth r =
+  host-proportional MINUS peak dilate (floored at 10%); pines scaled for
+  the ring-distance read (2.1-4.1 world, ~1.7x the tallest creature
+  after the perspective penalty); prints stamped through a per-pixel
+  soft-alpha blob (makeBlobAlpha, suite-anchored). Each value carries
+  its reasoning in a comment.
+- Route: creature-forge (content skill) — the displayed-read authoring
+  rule plus these three worked examples.
+
+## 2026-07-07 — probes encode assumptions; refine the invariant, don't delete the probe
+- What broke / what happened: three good probes failed as capabilities
+  grew — the anim pivot invariant ("'a' never moves") broke when pivots
+  became authorable (a propeller's hub is its blade midpoint); the
+  interior-rings count (">= 3") broke when tendril segments halved (the
+  builder keeps ring SPACING constant, not count); the terrain flatness
+  probe ("exactly 0 at the rim") broke on hypot rounding (a rim point
+  measures FLAT + 1e-16).
+- Root cause: each probe asserted a PROXY that coincided with the real
+  invariant only under old assumptions.
+- Plug shipped: each re-expressed at the invariant's real meaning — the
+  FIXED POINT (pivot ?? a) never moves; donor-ring SPACING <= 0.1; flat
+  through the rim with a measured 1e-9 slack hardened IN THE CODE (the
+  contract lives where the contract is, never a softened probe).
+- Route: dev-method (process) — when a new feature breaks an old probe,
+  find what the probe MEANT before touching it.

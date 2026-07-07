@@ -1,305 +1,172 @@
 # PROJECT_HANDOFF — SDF Blend-Shell Experiment
 
-_Last updated: 2026-07-05 (SESSION CLOSE. Knee-seam acts 1-3 delivered but
-browser shows REGRESSION: seams persist + longneck's eyes MISSING — treat
-acts 2-3 as UNCONFIRMED. Deep-research dive DONE -> RESEARCH_TECHNIQUE.md
-in repo root: the seam family is STRUCTURAL to inverted-hull outlining;
-the forward plan is the R-TRACK below, starting with R0 state-sync/eye
-diagnosis. Do NOT keep patching the ink system.)_
+_Last updated: 2026-07-07 (SESSION CLOSE. Everything below is confirmed
+in-browser AND pushed. Suite: 1149 probes ALL PASS at HEAD. The build
+queue is EMPTY — next is the HARVEST SESSION, then the research builds;
+see "Next steps," which is the section this document exists for.)_
 
-## What this is
-The "SDF blend-shell" character technique (capsule/sphere prims whose mesh
-vertices snap onto the combined smooth-min SDF in a vertex shader) — **end
-goal: a game-creation tool; the harvest into a dev-method SKILL is Daniel's
-call on timing** (natural checkpoint flagged: A-track completion). Harvest
-sources: this handoff, LESSONS.md (12 entries), REFERENCE_FOGLEMAN.md,
-creatures.js authoring rules, the suite's measured tables.
+## What this is — and the PURPOSE (clarified 2026-07-07)
+The "SDF blend-shell" character technique: capsule/sphere prims whose
+mesh vertices snap onto the combined smooth-min SDF in a vertex shader,
+toon-shaded, outlined by a screen-space depth-ink pass, animated by
+data. **Daniel's stated end goal: a set of SKILLS that let a future
+Claude build good-looking game creatures fast — "design a flying
+creature" should resolve in minutes because this project already
+measured what works.** This repo is the laboratory that produced that
+knowledge; the suite is what makes the knowledge trustworthy (every
+claim traces to a probe).
 
-**Stack:** Three.js pinned 0.170.0 (CDN import map, no bundler), VS Code
-Live Server, Windows/Node-only. **Repo:**
+**Stack:** Three.js pinned 0.170.0 (CDN import map — note: NO
+`three/addons` mapping; hand-build or extend the map deliberately), no
+bundler, VS Code Live Server, Windows/Node-only (no Python). **Repo:**
 https://github.com/Cupcakechan/ExperimentProject, subfolder
-`sdf-blend-shell\` (git runs from the container root).
+`sdf-blend-shell/`. Container clones read-only for Claude; **Daniel
+pushes, Claude pulls** — the standing gate every round: `git fetch` +
+`reset --hard origin/main`, byte-diff any delivered files vs HEAD
+(normalize CRLF via `tr -d '\r'`; trailing-newline diffs are noise),
+`node test_suite.mjs`, and treat the PROBE COUNT as the certification
+number. Deliveries are FULL files staged in `/mnt/user-data/outputs/`.
+Method: Daniel's General Instructions (userPreferences) + the
+dev-method skill; options round -> Daniel picks -> one tested pass per
+commit; feel reports get mechanism + ONE lever.
 
-## The locked roadmap (Daniel-approved order)
-A1 hop ✅ -> A2 breathing ✅ (+ idle rests ✅) -> A3.1 step-bob+lean ✅ ->
-A3.2 squash-stretch ✅ -> A4 stage 1 (debts, resolved by MEASUREMENT) ✅
--> **A4 STAGE 2 blink + jaw-drop (DELIVERED, unconfirmed)** -> A5
-two-segment knees -> C-track: JSON import/export, SEEDED CREATURE
-GENERATOR (suite-graded), terrarium; B-track breathers: slice viewer,
-Pass-5 morphing. REFERENCE-CREATURE QUEUE (from the original post's
-screenshots): floater (hover locomotion mini-pass), propeller flyer
-(continuous-spin anim mode + hover); six-legs + protruding ball eyes
-DONE (Skitter).
+## Current state — all tracks COMPLETE
+- **R-track** (rendering): R0 stale-cache diagnosis; R1 screen-space
+  depth-ink (MSAA target + depth texture, replaces the inverted hull);
+  R1.1 second-difference detector (kills grazing false cuts); R2 cubic
+  C2 smin (union only; inflation ~2/3 of quadratic); R3 mouths off the
+  field (paint decals — ZERO negatives in the cast, the k-validity
+  swallowing class CLOSED); R-SIMPLIFY (hull material, its probes, and
+  the fold detector retired; skin machinery kept — its z-fight subject
+  predates the hull). Limb-read feel pass: two-tier ink,
+  INK_INTERIOR 0.45 fades interior contours, silhouettes full.
+- **C-track** (tooling): C1 JSON import/export — `validate.js` is the
+  authoring rules as ONE pure executable function (import gate + suite
+  parity + generator grader are the same module); envelope round trip
+  preserves unmanaged fields. C2 seeded generator — archetype TABLE,
+  measured boundaries as CONSTRUCTION rules, deterministic retry
+  stream. C3 terrarium — polar noise terrain EXACTLY flat inside
+  WORLD_FLAT_RADIUS 4.2 (> roam hard clamp 4; the locomotion plane is
+  law), banded vertex colors, instanced rocks/grass, populate button,
+  ACTOR_CAP 24.
+- **Reference queue**: hover locomotion (+ Bloop the floater), spin
+  anim mode with authored pivot (+ Whirr the propeller flyer). Anim
+  generalized to an ENTRIES ARRAY (single object = array-of-one);
+  tendril sway = two-segment amplitude-delta BEND (flex on pure data —
+  joint divergence < half the thinner radius, an elbow never a tear).
+- **Generator fidelity**: mouths proportional to host MINUS peak dilate
+  (displayed-read rule) and placed below the eyes; slug + six-legger
+  MOUTHLESS (cast parity, Daniel's call); knee fidelity — cast-range
+  bends 0.055-0.075, Z-fold splay, deeper hip insets. 8 archetypes,
+  120-seed sweep 100% valid, ~1.05 attempts avg.
+- **World content**: footprint trails (`trails.js` — instanced ground
+  decals fading BY COLOR into GROUND_COLOR, per-pixel soft blob stamp
+  via pure-math DataTexture, depthWrite OFF so the ink pass is blind by
+  construction; stamped from REAL footfalls / hop landings / slug drag;
+  hover creatures stamp nothing); pine prop (hand-merged two-tone
+  conifer, instanced) with terrain-AWARE mid-slope scatter
+  (band 0.1-0.45, pairwise spacing 2.2, scale 1.6-2.4 — sized for the
+  ring-distance read).
+- **Cast (8, in registry order = actor index order — APPEND ONLY, seeds
+  and phases key off index):** Critter, Hopper, Longneck, Pudge,
+  Shelby (id 'snail'), Skitter, Bloop (id 'floater'), Whirr (id
+  'flyer').
 
-## Current state (confirmed + pushed unless noted)
-- Fogleman harvest Passes 1-4 (field inspector w/ measured ceilings +
-  ASCII failure dumps; per-prim absolute k; per-creature dilate; two-phase
-  negative prims), field expansion (~1.6x, count-spaced spawns), FIVE
-  creatures (Critter, Hopper, Longneck, Pudge = inflate 0.04 + carve,
-  Shelby = absolute-k shell + no anim/step by design), pause ([P]/Space,
-  camera stays live), the four-defect MOUTH SAGA closed (capsule slits,
-  composite carve color, ink-ignores-carves, dilate-shifted edge).
-- A1 HOP: src/hop.js — PAUSE->CROUCH->AIR->LAND, DRIFT-TRIGGERED off the
-  logical roam point (the LOGICAL/DISPLAYED SPLIT: roam untouched as the
-  continuous mover others steer around; displayed body bursts between
-  points on its path — avg speed self-regulates, MEASURED 6.97 vs 7.00
-  over 20s, 13 hops). Feet owned by the hop through the same anchors/
-  aim-stretch/setPrimTransform lockstep; continuous arc hopArcY (launches
-  from -dip, peak = height exactly). Hop beats gait in main when both
-  exist. hopper: `hop: {}` (all config defaults, per-field overridable).
-- A2 BREATHING: pure breathInflate in anim.js (0.5*(1-cos): rest identity
-  at t=0, inhale to inflate+amplitude); main writes BOTH draws' uInflate
-  (phase = bobPhase). Adopters: pudge 0.02@1.6, hopper 0.012@2.2, snail
-  0.012@0.9; critter/longneck deliberately still (contrast + the field-
-  neutral control group). **The inspector audits breathing creatures at
-  BREATH PEAK** (it caught pudge at 0.1221 vs the 0.122 ceiling on its
-  first run — margin eaten exactly by the amplitude). All consumers
-  follow by construction (burial shift, carve edge, outline, decals).
-- IDLE RESTS: roam.js idleSpeedMul — deterministic schedule on the
-  (seed-offset) wander clock; smoothstep shoulders; EXACTLY 0 on the
-  plateau (suite: position bit-identical for a full second, walking
-  resumes, heading keeps drifting = looking around). Wander turn
-  attenuated while idle; boundary/separation steering + push FULL
-  strength. Per-creature `idle` overrides (snail rests 4.5s/11s).
-  Drift-triggered gait/hop stop automatically — zero changes there.
-  Also: free bob removed from non-gait creatures (Shelby hovered 0.035
-  over a 0.012 breath — drowned 3:1).
-- A3.1 FEEL: src/feel.js pure helpers — stridePulse (step-synced body
-  lift; sin^2 after the micro-jump report — zero-slope endpoints),
-  leanTarget + approach + headingDelta (banked turns: roll about LOCAL X,
-  creatures face -X; rig rotation.order YXZ; wrap-safe smoothed omega;
-  clamp against steering spikes). Free bob RETIRED (BOB_* deleted;
-  bobPhase survives as the breath decorrelator). Lean sign confirmed in
-  browser.
-- A3.2 SQUASH-STRETCH + BOB SUSPENSION:
-  (1) squashEndpoints in feel.js — anisotropic squash/stretch via
-  ENDPOINT splits (X = wider/flatter, Y = taller), r untouched, no new
-  uniform, NO shader change: uPrimMat stays identity and the vertex SNAP
-  absorbs the deformed field (the technique's thesis). **The uR-channel
-  framing was retracted: per-prim radius is isotropic — shrinking r
-  reads as deflating, not squashing.** Hop drives it: CROUCH loads a
-  squash (dip's ease), AIR stretch follows |vertical speed| (zero at
-  apex exactly), LAND impact squash easing out; the CROUCH->AIR and
-  AIR->LAND flips are DELIBERATE one-frame shape pops (cartoon
-  anticipation/impact). Absolute-from-rest writes each frame; suite sim
-  verifies squash/stretch live + BIT-EXACT rest restoration; deformed
-  mouth endpoints stay submerged both extremes (-0.083/-0.035 — safe
-  direction). Sphere prims only (a capsule's own segment would be
-  overwritten); hop.squashPrim ?? 'body', graceful -1 if absent.
-  (2) The bob "convulsing" fix: sin^2 was insufficient — discrete
-  full-range humps at irregular drift-triggered cadence still twitch;
-  the body is a MASS: actor.lift = approach(lift, target, LIFT_SMOOTH
-  5.0, dt) — the suspension. Lever: lower = heavier.
-- SKITTER (the reference six-legger, PURE DATA — zero engine code):
-  15 prims -> MAX_PRIMS 12->16; TRIPOD gait groups [[0,3,4],[1,2,5]]
-  (leg-count-is-data proven at 2/4/6); thin kCap'd pointy legs (r 0.055,
-  kCap 0.04); green-tipped antennae; PROTRUDING BALL EYES = solid white
-  eyeballs (r 0.085, kCap 0.03, pure white after the eye tune — the
-  fixed-width ink ring reads huge on small balls) + 'iris_*' decals
-  hosted ON the eyeballs (nearest-solid hosting; the iris_ name dodges
-  the pupil/sclera layering probe by design). Suite graded it COLD:
-  120 steps, drift 0.297, 6-actor field closest 1.291. First FULLY
-  AUTHORED-BLEND creature: inflation identical at both k (0.0097 —
-  every close pair capped, slider-immune by design; the growth probe is
-  now conditional on slider-governed pairs).
-- A4 STAGE 1 (debts, resolved by MEASUREMENT — no shader surgery):
-  (1) capped-measured carve compensation KILLED by probe (floods pudge
-  at k=0.6: threshold 0.12 on a 0.26 head); (2) the high-k mouth fade
-  closed as a MEASURED DESIGN BOUNDARY — at extreme k the union deficit
-  (~0.15+) EXCEEDS the carve r (0.068): the mouth GEOMETRY is swallowed;
-  no color model paints dissolved geometry (authoring rule: mouth r
-  comfortably above the site's expected inflation); (3) the decal-rework
-  debt DISSOLVED (the balloon was on the never-shipped decal-mouth;
-  shipped decals sound — rule: decals on low-inflation sites); (4) FOLD
-  DETECTOR shipped as a permanent probe: full ink-pipeline mirror over
-  indexed triangles at every carve — it discovered 7 pre-existing
-  BENIGN folds at hopper's body-foot junction (the offset surface
-  pinches at any concave junction; slivers nest in the join's dark
-  crevice) -> the probe CLASSIFIES: OPEN-SKIN folds asserted ZERO,
-  junction-crease folds reported as INFO. Perf scare resolved: system/
-  driver state, not the app (memory flat, snipping-tool lag was
-  system-wide; restart fixed it — zero code changed).
-- A4 STAGE 2: (1) BLINK, decal-driven:
-  src/blink.js — eye decals SUBMERGE into their host (depth 2r + edge,
-  direction = toward the closest point on the nearest solid — capsule
-  hosts need the segment point, snail stalks); the 'lid' is the skin
-  returning, zero shader change; deterministic schedule (BLINK_PERIOD
-  4.2 / BLINK_TIME 0.18, sine close-open, per-actor phase stagger);
-  absolute-from-rest via setPrimTransform, both draws. All six
-  creatures blink (skitter's irises submerge into the solid eyeballs =
-  a beat of blank white ball — browser judges). (2) JAW-DROP: hopper's
-  carve opens through the AIR arc — sin(pi*u), widest at the apex
-  (where stretch is zero: the reads trade off) — as a ROTATION about
-  the body center (0.22 rad; constant depth, the corner-run-off guard)
-  + 0.012 outward push; hand-computed apex midpoint y 0.3806 MEASURED
-  EXACTLY in the sim; endpoints stay >= 0.005 submerged every frame
-  (suite invariant); hop.mouthPrim ?? 'mouth', graceful -1.
-- A4 STAGE 2.1 — CAST BALL-EYES + BLINK v2 (**awaiting browser
-  confirm**): all six creatures now wear the reference ball eyes (solid
-  white sphere rooted 0.015-0.02 in the host, kCap 0.03, iris_* decal
-  ON the eyeball); sclera_*/pupil_* decal eyes deleted registry-wide
-  (the layered-decal probe now guards a legacy pattern). Snail got tiny
-  stalk-tip balls (r 0.05) — PROVISIONAL, revert to dots if they read
-  worse. blink.js v2: SOLID prims blink too (a retracting eyeball is
-  buried and the vertex tuck hides it — the lid via existing
-  machinery); submerge target = nearest solid EXCLUDING self and other
-  blink-listed prims (an iris retargets the body behind its departing
-  eyeball — else a dark dot pokes the closed lid); depth = hostSd + 2r
-  + PAINT_EDGE lands every eye EXACTLY 2r+edge under its lid (hopper
-  hand-anchors: eyeball closed at 0.220 from the body center, iris at
-  0.370 — both measured exact). 727 probes ALL PASS FIRST RUN; all
-  INFL ceilings held (kCap'd eyeballs add ~nothing; pudge 0.1219 vs
-  0.122); fold scans 0 open-skin (crease counts grew — the bboxes now
-  contain eyeball junctions, benign class).
-- PUDGE GOGGLES FIX — the BALL-EYE DILATE BOUNDARY (browser-caught,
-  probe-killed solid-iris attempt, see LESSONS 13): a constant dilate
-  compresses small-feature contrast toward 1, so ball eyes are valid
-  only where peak dilate <= ~r/3 (suite-enforced); pudge (0.06 peak)
-  sits past it and is REVERTED to his proven flat sclera+pupil decals
-  (both balloon together — the painted read). Skitter great, blink v2
-  cast-wide confirmed. 742 probes ALL PASS.
-- A5 TWO-SEGMENT KNEES (**awaiting browser confirm**), Option 2 — the
-  true walkers: critter + longneck legs split thigh+shin (shin keeps
-  the old leg id: feet/groups/anim/blink all id-stable), knee solved
-  by two-bone IK per frame. DESIGN: no pole field — the bend direction
-  is the REST pose's knee offset off the hip-foot line (authored
-  intent; suite requires >= 0.02 and rest reach < ~97% of L1+L2).
-  gait.js: solveKnee + segmentMatrix (pure, hand-anchored: the shin
-  needs both ends placed, so segmentMatrix = aimStretch + carry);
-  DUAL-MODE dispatch — feet with a step.knees entry get the reach
-  clamp (KNEE_STRAIGHT_FRAC 0.995 / KNEE_MIN_GAP 1.05, pin slips
-  beyond) + IK; feet without keep the proven aim-stretch (hopper by
-  design; SKITTER by CAPACITY: 6 knees = 21 > MAX_PRIMS 16, documented
-  boundary). Walk-sim invariants at float epsilon: knee joint never
-  separates (2.3e-16), NEITHER segment stretches (2.8e-16 — bend
-  replaced stretch, the feature's claim), knee articulates (cos range
-  1.09). INFL ceilings re-MEASURED (the knee crotch is a new uncapped
-  pair): critter 0.083/0.26 -> 0.115/0.33, longneck 0.114/0.317 ->
-  0.14/0.38. Longneck now 16/16 prims — zero headroom. 809 probes ALL
-  PASS. Taste lever if knees read melty at high slider: kCap ~0.1 on
-  the shins.
-- KNEE-SEAM FIX (**awaiting browser confirm**): browser-caught black
-  seam ring at every knee; MEASURED root cause = thigh/shin MUTUAL
-  BURIAL (841 tucked verts + 600-vert transition rim per knee) atop a
-  near-pinch concave crease (radius 0.0399 vs OUTLINE_WIDTH 0.035).
-  Fix: LIMB GROUPS — uLimb[MAX_PRIMS] derived automatically from
-  step.knees; same-limb prims skip each other in the burial loop (one
-  continuous surface: coincident fragments shade identically — the
-  skin-fold-invisibility reasoning). Body-limb roots unchanged. Fold
-  detector now scans KNEE regions permanently (0 open-skin at every
-  knee; crease baselines recorded). Possible residual: a THIN crease
-  accent at deep bends (pinch margin 14%) — reads as toon knee
-  language; levers if not: OUTLINE_WIDTH down or shallower bend.
-  831 probes ALL PASS. See LESSONS 14.
-- KNEE-SEAM ACT TWO (**awaiting browser confirm**, LESSONS 15): the
-  limb-group fix made the seam MORE visible — hypothesis wrong. POSED
-  measurement (the rest-only fold detector's blind spot): visible-zone
-  folds identical exemption on/off; the slash = the INK CUSPING at deep
-  folds (84 deg mid-swing), driven by STEP_LIFT 0.09 compressing the
-  hip-foot distance to 69% of rest — no two-bone split survives that.
-  Fix (Option 1, Daniel's pick): step.lift 0.05 data override for the
-  kneed walkers (one gait line) + the reference look for free — deeper
-  authored bends (0.07/0.06, reach 0.92-0.95, the knee reads in the
-  silhouette) and HOOF-DARK shins (critter 0x2a8a67, longneck 0x9c6b2a
-  — 'feet' at zero prim cost; capacity forbids foot prims). MEASURED:
-  deepest fold 96/100 deg, ZERO frames under 90 (was 84 deg / 43
-  frames). New guard: max knee cos < 0 through every simulated walk.
-  Limb groups KEPT (measured: halves partial-tuck shells). 833 probes
-  ALL PASS. Escalation if a faint line survives the browser: ink-only
-  k floor (Option 2, designed, kCap-respecting).
-- KNEE-SEAM ACT THREE (**awaiting browser confirm**, LESSONS 16): the
-  ring was never the knee crease — it wraps each leg at the BODY-EXIT
-  line: the burial transition rim, QUADRUPLED by the interior knee
-  caps (provenance-measured: 13 ring verts pre-A5 -> 51 post, 80% cap
-  fans at a joint buried in the belly). Fix: CAPLESS KNEE ENDS —
-  buildShellGeometry(prims, knees): thigh loses its b cap, shin its a
-  cap (auto-derived, no shader change, less geometry). MEASURED: ring
-  16 (floor ~13). Suite: no-cap-verts-beyond-knee assert per kneed
-  prim + the validity boundary EXECUTABLE (knee stays inside the body
-  every walk frame; measured -0.019/-0.018 worst) + the fold detector
-  and generic geometry probes mirror the capless render path. 851
-  probes ALL PASS.
-- BROWSER RESULT (2026-07-05): REGRESSION — seams still clearly
-  visible AND longneck's eyes are MISSING entirely. Acts 2-3 are
-  therefore UNCONFIRMED; the missing eyes are new-defect territory
-  (prime suspect: mixed file versions across the many per-act
-  deliveries — R0 diagnoses from Daniel's actual files).
-- DEEP-RESEARCH DIVE (2026-07-05, Daniel-initiated): full report
-  distilled into RESEARCH_TECHNIQUE.md (repo root). Headlines: the
-  Reddit technique is a STACK we already built (primitives + smin +
-  SDF-gradient normals + toon), not a trick; the seam family is
-  STRUCTURAL to inverted-hull outlining at concave creases (industry
-  answer: screen-space depth+normal outlines); feature swallowing is
-  structural to non-local polynomial smin (answers: cubic C2 smin +
-  Spore's features-as-attached-parts model); creature-anatomy rules
-  captured for the harvest. The three knee-seam acts were each locally
-  correct but were patching an unwinnable system — hence the R-track.
-- Suite: 727 probes ALL PASS. Sections: 0 imports, 1 creature invariants
-  + measured sims (walk, hop w/ deformation, field w/ idle) + carve rules
-  (midpoint dent/pierce, SUBMERSION, decal clearance, donors), 2 field
-  inspector (operator anchors, measured INFL_CEILING / CARVE_BOUNDS at
-  breath peak, ASCII dump on failure).
+## Architecture map (one line each)
+- `src/main.js` — scene, spawnActor (the single door: cast + imports +
+  generated), locomotion branch (hover > hop > gait), trails hooks.
+- `src/config.js` — every tunable, commented with its why. SOURCE OF
+  TRUTH for constants; read it rather than trusting this doc's memory.
+- `src/anim.js` — entries-array anim: wave | spin, pivot ?? prim.a,
+  absolute-from-rest (pause-safe by law).
+- `src/gait.js` (feet/knees; `feet` exposed), `src/hop.js` (state
+  machine; `current()` exposed), `src/blink.js`, `src/roam.js`,
+  `src/feel.js`.
+- `src/render/buildShell.js` (donor meshes, capless knees),
+  `blendMaterial.js` (the heart: snap vertex shader + toon frag; carve
+  vocabulary live), `inkPass.js` (screen-space depth ink, two-tier),
+  `world.js` (terrain + props; `terrainHeight`/`propPlacements` pure),
+  `trails.js` (footprints; `trailMode`/`fadeColor`/`makeBlobAlpha`
+  pure).
+- `src/data/creatures.js` (the cast + authoring rules comments),
+  `validate.js` (THE RULES, executable; exports sdPrim),
+  `creatureIO.js` (envelope round trip), `generate.js` (archetype
+  table; exports mulberry32).
+- `src/ui/controls.js` — slider + I/O row (export/import/seed/
+  generate/populate).
+- `test_suite.mjs` — 1149 probes; sections: registry -> per-creature ->
+  sims -> hover/spin/sway -> trails -> C1/C2/world -> ink.
+- Docs: this file, `LESSONS.md` (20 entries), `RESEARCH_TECHNIQUE.md`
+  (SS1-9; SS8 = adopted/banked external finds, SS9 = the three.js repo
+  triage with the repeatable blobless-clone access method).
 
-## Architecture pointers (delta)
-- src/feel.js — pure presentation helpers (stridePulse, leanTarget,
-  approach, headingDelta, squashEndpoints). main.js consumes; hop.js
-  consumes squashEndpoints.
-- src/hop.js — the state machine + feet + squash-stretch + jaw-drop.
-- src/blink.js — decal-submersion blinking (deterministic, per-actor phase).
-- roam.js — createRoam(seed, total, idle); idleSpeedMul exported.
-- anim.js — + breathInflate.
-- config.js — + HOP_*, IDLE_*, STRIDE_LIFT/LEAN_*/LIFT_SMOOTH,
-  SQUASH_AMOUNT/STRETCH_AMOUNT, BLINK_PERIOD/BLINK_TIME,
-  MOUTH_OPEN_ANGLE/MOUTH_OPEN_PUSH, MAX_PRIMS 16; BOB_* deleted.
-- Resources: fogleman/sdf (harvested); GLSL Noises gist
-  (patriciogonzalezvivo) bookmarked for a possible texture pass;
-  awesome-threejs list reviewed — otherwise low direct value (React-
-  ecosystem heavy).
+## The measured boundaries (the skill-critical digest)
+Executable form: `validate.js`. Proof: the suite. Highlights —
+- Decal band: every paint endpoint at -r < sd(host) < 0.
+- Ball-eye dilate boundary: peak (inflate + breath amp) <= eyeball r/3,
+  else author FLAT sclera+pupil decals (Pudge's rule; the generator
+  CHOOSES by it).
+- Knee contract: thigh.b === shin.a exactly; rest pole >= 0.02 off the
+  hip-foot line; reach < KNEE_STRAIGHT_FRAC - 0.015; knee INSIDE some
+  other solid by >= 0.01 at rest (capless validity).
+- Breath peak < thinnest solid r (ballooning boundary).
+- Mouths: paint capsule slits, r = host.r x 0.17-0.26 MINUS peak dilate
+  (floor 0.1 x host.r), strictly below the eyes. k-validity is CLOSED —
+  decals ride the inflated skin at any k.
+- INFL ceilings: MEASURED per creature + 0.02 margin (suite table).
+- The displayed-read rule and cast-parity principle: LESSONS 19 + the
+  generator-fidelity passes (the cast is the reference).
 
-## Gotchas (project-specific, additions)
-- All prior gotchas hold (no GLSL backticks; measured ceilings never
-  loosened blind; carve rules; instruments must sample what the GPU
-  samples; k/4 is wrong).
-- Deformation/animation writes are ABSOLUTE FROM REST every frame — the
-  suite asserts bit-exact rest restoration; never accumulate.
-- Constant surface offsets compensate with constants (dilate/breath ->
-  uInflate-shifted thresholds); measured offsets with measurements
-  (decals -> dSkin). Mismatching the natures balloons or blurs.
-- The rig's forward axis is LOCAL X (creatures face -X); rotation.order
-  YXZ for banking.
-- Scripted edits: exact anchors from the CURRENT file; verify the end
-  state in-file (a silent no-op shipped a ReferenceError this arc —
-  caught by the suite run, per the GI rule).
+## Next steps (in order — this is the plan of record)
+1. **HARVEST SESSION (next; run in a FRESH session).** Deliverable: the
+   **creature-forge content skill** — a folder of downloadable files:
+   `SKILL.md` (sections: architecture overview; the authoring rules;
+   archetype recipes; the measured-boundaries table; the artifact
+   taxonomy — what fails, why, which fix class; feel levers; locomotion
+   vocabulary: gait/knees, hop, hover, spin, sway-bend) plus
+   `reference/` carrying the known-good modules from this repo
+   (validate.js, generate.js, blendMaterial.js, inkPass.js, anim.js,
+   gait.js, hop.js, world.js, trails.js, creatures.js as the worked
+   cast). Sources: this handoff + LESSONS.md + RESEARCH_TECHNIQUE.md +
+   the repo itself. **IMPORTANT: produce skill CONTENT only.** Daniel
+   has a separate "special Claude" that integrates skills into his
+   dev-method — do NOT attempt that integration. Also produce for that
+   special Claude a short "process additions" note distilling LESSONS
+   17, 18, and 20 (certified provenance; edit-script discipline;
+   probe-invariant refinement) — those belong in dev-method, not
+   creature-forge.
+2. **Research builds (after the harvest; each feeds a recipe back into
+   the skill):**
+   - **CONTACT-SHADOW** first — one pass; mechanism verified in
+     RESEARCH SS9 (depth to a small RT, two-pass blur, shown under the
+     subject); the grounding read the unlit creatures lack; fits the
+     flat stage exactly.
+   - **EXPORT-BAKE track** second — multi-pass; the bridge to "creatures
+     leave the tool" (GLTF/OBJ/STL/USDZ exporters verified present).
+     Honest complexity recorded: the suite's CPU vertex-pipeline mirror
+     makes baking snapped SHELL geometry cheap, but donor shells
+     overlap (poor asset topology) and eyes/mouths are painted
+     PER-PIXEL in the fragment shader (decals need their own answer:
+     flattened decal geometry, dense vertex colors, or a texture bake).
+     **Strongly coupled to un-banking R4 Surface Nets** — meshing the
+     field directly yields the clean watertight mesh export wants. Open
+     the track with an options round: R4-first vs bake-first.
+   - Banked beyond that: PICKING (ID-texture GPU picking — the only
+     selection that works for shader-moved vertices), GPGPU flocking,
+     contact ambience — RESEARCH SS9 Tiers B/C.
 
-## Open items — THE R-TRACK (post-research forward plan; see
-## RESEARCH_TECHNIQUE.md for the full reasoning)
-0. **R0 — STATE SYNC + EYE REGRESSION (FIRST, blocks everything):**
-   browser shows longneck with NO eyes and persistent black leg
-   bands after the act-3 files. Suspect mixed file versions across
-   deliveries (files arrive across two machines). Need from Daniel's
-   machine: src/blink.js, src/data/creatures.js, and the final line of
-   `node test_suite.mjs` (container state: 851 ALL PASS). Diagnose from
-   evidence (debugging protocol); do not build on the broken base.
-1. **R1 — SCREEN-SPACE OUTLINE** (the big unlock, own pass): replace
-   the inverted-hull ink with a post-process depth+normal edge detect
-   (EffectComposer via three/addons, CDN-importable). Deletes the seam
-   artifact FAMILY structurally; afterwards the tuck / limb-group /
-   capless machinery becomes candidate for REMOVAL (simplification
-   pass). Options round on ink-line weight/threshold values.
-2. **R2 — CUBIC C2 SMIN** (one FIELD_GLSL function swap; formula in
-   RESEARCH_TECHNIQUE.md §2b): smoother toon bands at blends, bounded
-   inflation; re-measure ALL INFL ceilings after.
-3. **R3 — MOUTHS OFF THE FIELD** (Spore rigblock model): features are
-   attached parts, never carved into the field — ends the k-validity
-   swallowing class. Ball eyes already follow this model (validated).
-4. **R4 (banked):** Surface Nets meshing, only if residuals survive
-   R1-R3.
-5. THEN the old queues resume on the stabilized base: A-track completion
-   confirm -> the flagged SKILL-HARVEST checkpoint (Daniel's timing;
-   LESSONS.md now 16 entries + RESEARCH_TECHNIQUE.md are the source
-   material) -> C-track (JSON import/export, seeded generator,
-   terrarium — worldgen repo notes banked in RESEARCH_TECHNIQUE.md §6)
-   or B-track breathers (slice viewer, Pass-5 morphing). Reference
-   queue: floater (hover mini-pass), propeller flyer (continuous-spin
-   anim + hover). Walker stride squash: deferred by design.
-
+## Gotchas (live)
+- No backticks inside GLSL template literals — and edit-script
+  replacement text has the SAME rule (LESSON 18).
+- The import map has NO `three/addons`: hand-build geometry (world.js
+  does) or extend index.html deliberately.
+- Modules must import headless (the suite imports everything under a
+  DOM stub): no canvas/DOM at module top level — trails.js uses a
+  pure-math DataTexture for exactly this reason.
+- Prop placement determinism: pines draw AFTER rocks/grass in the seed
+  stream — new prop classes must APPEND or earlier placements reshuffle.
+- three.js examples on master target r18x and are drifting to
+  WebGPU/TSL (219 of 594) — pattern reference only; verify any API
+  against r170.
+- Reddit is unreachable from Claude's tools (blocked + often
+  unindexed); Daniel pastes content when it matters.
