@@ -1850,6 +1850,38 @@ for (const creature of CREATURES) {
   assert(mB.fragmentShader.includes('smoothstep(0.0, uContactAOH, worldPos.y)') && mB.fragmentShader.includes('* groundAO'), 'the fragment darkens color AND gloss toward y = 0 (no glint survives inside the contact)');
 }
 
+// ---- FLOOR-PAINT contract (the ghost-legs fix): decals in the OPAQUE pass ----
+// The defect: transparent-pass decals draw AFTER creatures with a depth
+// test, so a decal point in FRONT of a foot legitimately blends OVER the
+// creature's lower pixels (the shadow's front lobe reaches past the feet
+// BY CONSTRUCTION — band = front reach x tan(camera pitch)). The
+// contract: every floor decal is opaque-pass alpha (CustomBlending is
+// honored with transparent:false — r170 setMaterial, source-verified)
+// on a renderOrder ladder BELOW zero, so creatures drawn later
+// OVERWRITE floor paint wherever they are nearer.
+{
+  const T = await import('three');
+  const { createTrails: mkTrails } = await import('./src/render/trails.js');
+  const { createShadows: mkShadows } = await import('./src/render/shadows.js');
+  const { createWorld: mkWorld } = await import('./src/render/world.js');
+  const paintOk = (mesh) => mesh.material.transparent === false && mesh.material.blending === T.CustomBlending && mesh.material.blendSrc === T.SrcAlphaFactor && mesh.material.blendDst === T.OneMinusSrcAlphaFactor && mesh.material.depthWrite === false;
+  const s1 = new T.Scene();
+  mkTrails(s1);
+  const printMesh = s1.children[0];
+  assert(paintOk(printMesh) && printMesh.renderOrder === -1, 'prints are opaque-pass floor paint at renderOrder -1 (never drawn over a body again)');
+  const s2 = new T.Scene();
+  mkShadows(s2);
+  const shadowMesh = s2.children[0];
+  assert(paintOk(shadowMesh) && shadowMesh.renderOrder === -2, 'shadows are opaque-pass floor paint at -2 (the front lobe cannot tint the legs)');
+  const s3 = new T.Scene();
+  mkWorld(s3);
+  const floor = s3.children.find((c) => c.renderOrder === -10);
+  assert(floor !== undefined && floor.material.vertexColors === true, 'the terrain draws FIRST (renderOrder -10): the canvas the paint lands on');
+  const dotMesh = s3.children.find((c) => c.isInstancedMesh && c.renderOrder < 0);
+  assert(dotMesh !== undefined && paintOk(dotMesh) && dotMesh.renderOrder === -3, 'dots are opaque-pass floor paint at -3');
+  assert(floor.renderOrder < dotMesh.renderOrder && dotMesh.renderOrder < shadowMesh.renderOrder && shadowMesh.renderOrder < printMesh.renderOrder && printMesh.renderOrder < 0, 'the LIVE ladder holds: terrain -> dots -> shadows -> prints -> everything else at 0');
+}
+
 // ---- R1 ink pass (screen-space, depth-only): the module contract ----
 // The pass itself needs a GPU; what Node anchors instead: the depth
 // linearization math (the GLSL mirrors linearizeDepth — same formula by

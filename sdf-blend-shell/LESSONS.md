@@ -523,3 +523,37 @@
   R1.1 grazing-noise class).
 - Route: creature-forge (artifact-taxonomy row: contact reads — the
   depth-ink family's known blind spot and its fix class) + project fix.
+
+## 2026-07-07 — ghost legs: floor decals painted OVER the creatures (act two of the contact read)
+- What broke / what happened: the contact-AO fix shipped and verified —
+  and the feet still read see-through, now with prints VISIBLE "through"
+  the legs (Daniel's report + screenshot). Fix-shipped-symptom-persists:
+  the hypothesis, not the application, was wrong (the project's second
+  instance of the black-domes rule). The prints were not behind the
+  legs — they were drawn ON TOP of them.
+- Root cause: every floor decal (shadow blob, prints, dots) was a
+  TRANSPARENT-pass quad with a depth test — the transparent pass renders
+  AFTER the opaque creatures, so a decal point IN FRONT of a foot
+  legitimately passes and blends over the creature's lower pixels. The
+  shadow's front lobe reaches past the feet BY CONSTRUCTION, so at low
+  camera pitch it tinted the whole lower leg (band = front reach x
+  tan(pitch), ~0.3-0.5 at the report's angle). Present since the shadow
+  pass; the dark stage hid the tint, the pastel key exposed it. The
+  B.1 ink-death mechanism was real but the MINOR term.
+- Verification gap it exposed: no probe expressed the LAYER CONTRACT
+  ("floor paint never covers a body") — the y-offset probes checked
+  stacking WITHIN the floor family, never floor-vs-creature.
+- Plug shipped: the FLOOR-PAINT contract — all three decal layers leave
+  the transparent pass (transparent: false + CustomBlending with the
+  normal alpha equation, honored on opaque-pass materials: r170
+  WebGLState.setMaterial only disables blending for NormalBlending +
+  transparent:false, source-verified) and render on a ladder between
+  the terrain (renderOrder -10) and everything at 0 (dots -3, shadows
+  -2, prints -1): creatures drawn later OVERWRITE floor paint wherever
+  nearer. Suite: behavior probes on the constructed meshes + the LIVE
+  renderOrder ladder. The contact AO stays — independently correct
+  (the dead-ink band is real; the reference's feet ARE dark).
+- Route: creature-forge (the contact-read taxonomy row gains act two:
+  decal passes vs bodies — floor paint belongs in the opaque pass) +
+  dev-method candidate (when a VERIFIED fix does not move the symptom,
+  re-derive the mechanism from the NEWEST clue, not the old model).

@@ -295,6 +295,7 @@ function bakeTopLight(geo, darkHex, lightHex) {
 // correct here, unlike the snap-shader creatures.
 export function createWorld(scene) {
   const terrain = new THREE.Mesh(buildTerrainGeometry(WORLD_SEED), new THREE.MeshBasicMaterial({ vertexColors: true }));
+  terrain.renderOrder = -10; // the floor draws FIRST: it is the canvas the floor-paint layers (dots/shadows/prints) land on
   scene.add(terrain);
 
   // LOOK pass A — the sky dome: a vertex-gradient sphere seen from
@@ -332,16 +333,21 @@ export function createWorld(scene) {
   dotTex.minFilter = THREE.LinearFilter;
   const dotMesh = new THREE.InstancedMesh(
     new THREE.PlaneGeometry(1, 1).rotateX(-Math.PI / 2),
+    // FLOOR-PAINT contract (the ghost-legs fix): opaque-pass alpha —
+    // see trails.js for the source-verified mechanism.
     new THREE.MeshBasicMaterial({
       map: dotTex,
-      transparent: true,
       depthWrite: false,
+      blending: THREE.CustomBlending,
+      blendEquation: THREE.AddEquation,
+      blendSrc: THREE.SrcAlphaFactor,
+      blendDst: THREE.OneMinusSrcAlphaFactor,
       color: new THREE.Color().setHex(GROUND_DOT_COLOR, THREE.LinearSRGBColorSpace),
     }),
     dots.length
   );
   dotMesh.frustumCulled = false; // instances place at runtime (the trails rule)
-  dotMesh.renderOrder = -2;
+  dotMesh.renderOrder = -3; // the bottom floor-paint layer: over the terrain (-10), under shadows (-2) and prints (-1)
   {
     const m = new THREE.Matrix4();
     dots.forEach((d, i) => {

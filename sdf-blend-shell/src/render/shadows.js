@@ -122,11 +122,24 @@ export function createShadows(scene) {
   tex.minFilter = THREE.LinearFilter;
   const mesh = new THREE.InstancedMesh(
     geo,
-    new THREE.MeshBasicMaterial({ map: tex, transparent: true, depthWrite: false }),
+    // FLOOR-PAINT contract (the ghost-legs fix): opaque-pass alpha via
+    // CustomBlending (source-verified honored with transparent:false) —
+    // the shadow's front lobe extends past the feet BY CONSTRUCTION,
+    // and as a transparent-pass quad it blended OVER the lower legs at
+    // low camera pitch (band = front reach x tan(pitch)). In the opaque
+    // pass at renderOrder -2, creatures drawn later overwrite it.
+    new THREE.MeshBasicMaterial({
+      map: tex,
+      depthWrite: false,
+      blending: THREE.CustomBlending,
+      blendEquation: THREE.AddEquation,
+      blendSrc: THREE.SrcAlphaFactor,
+      blendDst: THREE.OneMinusSrcAlphaFactor,
+    }),
     ACTOR_CAP
   );
   mesh.frustumCulled = false; // instances place at runtime (the trails rule)
-  mesh.renderOrder = -1; // shadows draw BEFORE prints: a footprint inside a shadow stays visible
+  mesh.renderOrder = -2; // floor paint: over dots (-3), under prints (-1) — a footprint inside a shadow stays visible
   const _zero = new THREE.Matrix4().makeScale(0, 0, 0);
   const _m = new THREE.Matrix4();
   const _q = new THREE.Quaternion();
