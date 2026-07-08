@@ -25,7 +25,7 @@
 // ============================================================
 
 import * as THREE from 'three';
-import { BLEND_K, SNAP_ITERS, MAX_PRIMS, SHELL_COLOR, COLOR_SOFT, COLOR_POW, TUCK_DEPTH, BURY_EPS, BURY_BAND, PAINT_EDGE, SHADE_AMBIENT, SPEC_POWER, SPEC_STRENGTH, CONTACT_AO, CONTACT_AO_H } from '../config.js';
+import { BLEND_K, SNAP_ITERS, MAX_PRIMS, SHELL_COLOR, COLOR_SOFT, COLOR_POW, TUCK_DEPTH, BURY_EPS, BURY_BAND, PAINT_EDGE, SHADE_AMBIENT, SPEC_POWER, SPEC_STRENGTH, CONTACT_AO, CONTACT_AO_H, EYE_CATCH_POW, EYE_CATCH_STRENGTH } from '../config.js';
 
 // NOTE: three.js auto-prepends 'position', the matrices, and precision
 // headers to ShaderMaterial shaders (never redeclare those) — but CUSTOM
@@ -45,6 +45,7 @@ uniform float uKCap[MAX_PRIMS]; // per-prim blend-radius ceiling (thin-part tric
 uniform float uKPrim[MAX_PRIMS]; // ABSOLUTE per-prim blend radius; <= 0.0 = unset (follow the slider)
 uniform float uInflate; // whole-creature dilate (plumpness): the skin sits this far OUTSIDE the raw field; 0 = none
 uniform float uNeg[MAX_PRIMS]; // 0 = solid; 1 = CARVE (host color lines the bowl); 2 = carve with authored interior color
+uniform float uEye[MAX_PRIMS]; // 1.0 = eyeball prim (white solid sphere): gets the catchlight
 uniform float uPaintEdge; // decal edge softness, world units
 uniform int uCount;
 uniform float uK;
@@ -294,6 +295,8 @@ uniform float uSpecPow; // gloss tightness
 uniform float uSpecStrength; // gloss intensity (0 = matte revert)
 uniform float uContactAO; // pass B.1: contact darkening at y = 0 (the dead-ink band's replacement)
 uniform float uContactAOH; // pass B.1: the fade band height
+uniform float uCatchPow; // eye catchlight sharpness
+uniform float uCatchStrength; // eye catchlight brightness
 
 varying vec3 vPos;
 
@@ -334,6 +337,23 @@ void main() {
   float groundAO = mix(1.0 - uContactAO, 1.0, smoothstep(0.0, uContactAOH, worldPos.y));
 
   vec3 col = (blendColor(vPos) * shade + vec3(spec)) * groundAO;
+
+  // EYE CATCHLIGHT (flat-eyes fix): a sharp bright specular restricted to
+  // eyeball prims (white solid spheres) — the glossy wet shine the flat
+  // dark irises lacked. Reuses the body's world normal + half-vector; the
+  // high power makes a small dot. Gated to the eyeball SHELL so it never
+  // lands on the body, and added AFTER groundAO so the shine stays bright.
+  // (Loop bound is the constant MAX_PRIMS -> unrolled, like blendColor, so
+  // the uniform-array indexing is legal in the fragment stage.)
+  float onEye = 0.0;
+  for (int i = 0; i < MAX_PRIMS; i++) {
+    if (i < uCount && uEye[i] > 0.5) {
+      float shellDist = abs(length(vPos - uA[i]) - (uR[i] + uInflate));
+      onEye = max(onEye, 1.0 - smoothstep(0.15 * uR[i], 0.40 * uR[i], shellDist));
+    }
+  }
+  col += vec3(pow(max(dot(n, halfDir), 0.0), uCatchPow) * uCatchStrength * onEye);
+
   gl_FragColor = vec4(col, 1.0);
 }
 `;
@@ -370,6 +390,7 @@ function buildUniforms(prims, inflate, knees) {
   const uKCap = [];
   const uKPrim = [];
   const uNeg = [];
+  const uEye = [];
   for (let i = 0; i < MAX_PRIMS; i++) {
     const prim = prims[i];
     uA.push(new THREE.Vector3(...(prim ? prim.a : [0, 0, 0])));
@@ -390,6 +411,9 @@ function buildUniforms(prims, inflate, knees) {
     // color lines the bowl — the SHELL_COLOR fallback above must NOT tint
     // it, hence the encoding); 2 = carve WITH an authored interior color.
     uNeg.push(prim && prim.negative ? (prim.color != null ? 2.0 : 1.0) : 0.0);
+    // eyeballs are white solid spheres (verified unique across the cast) ->
+    // the catchlight target. Absent/other prims = 0, so the shine is theirs alone.
+    uEye.push(prim && prim.type === 'sphere' && !prim.paint && !prim.negative && prim.color === 0xffffff ? 1.0 : 0.0);
   }
   return {
     uA: { value: uA },
@@ -400,6 +424,7 @@ function buildUniforms(prims, inflate, knees) {
     uKCap: { value: uKCap },
     uKPrim: { value: uKPrim },
     uNeg: { value: uNeg },
+    uEye: { value: uEye },
     uCount: { value: Math.min(prims.length, MAX_PRIMS) },
     uK: { value: BLEND_K },
     uColorSoft: { value: COLOR_SOFT },
@@ -428,6 +453,8 @@ function buildUniforms(prims, inflate, knees) {
     uSpecStrength: { value: SPEC_STRENGTH },
     uContactAO: { value: CONTACT_AO },
     uContactAOH: { value: CONTACT_AO_H },
+    uCatchPow: { value: EYE_CATCH_POW },
+    uCatchStrength: { value: EYE_CATCH_STRENGTH },
   };
 }
 

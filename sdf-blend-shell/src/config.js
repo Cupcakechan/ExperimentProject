@@ -305,3 +305,9 @@ export const SPEC_STRENGTH = 0.35; // highlight intensity — the vinyl gloss (0
 // threshold tuning (lower thresholds re-admit the R1.1 noise class).
 export const CONTACT_AO = 0.45; // darkening at y = 0: color (and gloss) drop to 1 - this at the contact
 export const CONTACT_AO_H = 0.14; // the fade band: full darkening at the floor, none above this height
+
+// EYE CATCHLIGHT (flat-eyes fix): a sharp bright specular restricted to
+// eyeball prims (white solid spheres) — the glossy wet shine the flat dark
+// irises lacked. Live uniforms, so both dial without a recompile.
+export const EYE_CATCH_POW = 160; // sharpness: higher = a smaller, tighter shine dot
+export const EYE_CATCH_STRENGTH = 0.85; // brightness of the shine (0 = off, ~1 = white)

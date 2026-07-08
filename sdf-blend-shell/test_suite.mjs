@@ -1907,6 +1907,19 @@ for (const creature of CREATURES) {
   assert(mB.uniforms.uContactAO.value === CONTACT_AO && CONTACT_AO > 0 && CONTACT_AO < 1, 'contact occlusion rides a live uniform (pass B.1: the dead-ink band at ground contact gets a shading answer, never a threshold one)');
   assert(mB.uniforms.uContactAOH.value === CONTACT_AO_H && CONTACT_AO_H > 0, 'the contact fade band is live');
   assert(mB.fragmentShader.includes('smoothstep(0.0, uContactAOH, worldPos.y)') && mB.fragmentShader.includes('* groundAO'), 'the fragment darkens color AND gloss toward y = 0 (no glint survives inside the contact)');
+  // EYE CATCHLIGHT (flat-eyes fix): a sharp bright specular gated to eyeball
+  // prims (white solid spheres) — the glossy wet shine. It must land on eyes
+  // ONLY, and the levers must be live.
+  {
+    const eyeC = CREATURES.find((c) => c.id === 'critter');
+    const mEye = createBlendMaterial(eyeC.prims, eyeC.inflate);
+    const eyeIdx = eyeC.prims.map((pr, i) => [pr, i]).filter(([pr]) => /eyeball/.test(pr.id)).map(([, i]) => i);
+    assert(eyeIdx.length === 2, 'critter has two eyeballs for the catchlight');
+    assert(eyeIdx.every((i) => mEye.uniforms.uEye.value[i] === 1.0), 'eyeball prims carry uEye = 1 (white solid spheres — the catchlight target)');
+    assert(eyeC.prims.every((pr, i) => /eyeball/.test(pr.id) || mEye.uniforms.uEye.value[i] === 0.0), 'no NON-eyeball prim carries uEye (the shine never lands on the body)');
+    assert(mEye.uniforms.uCatchPow.value > 1 && mEye.uniforms.uCatchStrength.value > 0, 'the catchlight power + strength are LIVE uniforms (dial without a recompile)');
+    assert(mEye.fragmentShader.includes('uEye[i]') && mEye.fragmentShader.includes('uCatchStrength'), 'the fragment adds a sharp specular gated to eyeball prims (the wet-eye catchlight)');
+  }
 }
 
 // ---- FLOOR DECALS: transparent pass + the terrain regression guard ----
