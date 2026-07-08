@@ -454,4 +454,39 @@ export const CREATURES = [
       { id: 'iris_r', type: 'sphere', a: [-0.316, 0.497, -0.126], r: 0.036, color: 0x2b2030, paint: true },
     ],
   },
+  {
+    id: 'strider',
+    // Forward-leaning BIPED WALKER (append-only cast addition). Two kneed
+    // legs with alternating step groups [[0],[1]] — at most one foot
+    // airborne, so one is always planted: a WALK, not the hopper's hop.
+    // Digitigrade legs (short thigh, knee tucked UP into the body so the
+    // CAPLESS knee stays covered, long shin to the foot) give the raptor-
+    // like striding read. Reuses the proven knee IK, ball eyes + kCap, and
+    // the catchlight. Faces -X. MEASURED: knee fold interior 106deg (clear
+    // of the ink cusp), knee cover -0.043 through the whole walk.
+    step: {
+      feet: ['leg_l', 'leg_r'],
+      groups: [[0], [1]], // alternating: at most one foot airborne = a walk
+      knees: { leg_l: 'thigh_l', leg_r: 'thigh_r' },
+      lift: 0.025, // gentle fold, clear of the depth-ink cusp (as critter/longneck)
+    },
+    blink: { eyes: ['eyeball_l', 'eyeball_r', 'iris_l', 'iris_r'] },
+    prims: [
+      { id: 'body', type: 'capsule', a: [0.1, 0.62, 0], b: [-0.28, 1.0, 0], r: 0.3, color: 0x3fa89a },
+      { id: 'neck', type: 'capsule', a: [-0.28, 1.0, 0], b: [-0.44, 1.1, 0], r: 0.12, color: 0x54bdaf },
+      { id: 'head', type: 'sphere', a: [-0.58, 1.18, 0], r: 0.26, color: 0x54bdaf },
+      // Digitigrade legs: thigh.b === leg.a EXACTLY (shared knee), forward
+      // pole, knee tucked into the body (the capless-knee validity boundary).
+      { id: 'thigh_l', type: 'capsule', a: [0.1, 0.6, 0.16], b: [0.0, 0.46, 0.17], r: 0.12, color: 0x2e8478 },
+      { id: 'leg_l', type: 'capsule', a: [0.0, 0.46, 0.17], b: [0.12, 0.06, 0.17], r: 0.11, color: 0x256e63 },
+      { id: 'thigh_r', type: 'capsule', a: [0.1, 0.6, -0.16], b: [0.0, 0.46, -0.17], r: 0.12, color: 0x2e8478 },
+      { id: 'leg_r', type: 'capsule', a: [0.0, 0.46, -0.17], b: [0.12, 0.06, -0.17], r: 0.11, color: 0x256e63 },
+      { id: 'tail', type: 'capsule', a: [0.16, 0.72, 0], b: [0.56, 0.6, 0], r: 0.1, color: 0x54bdaf },
+      // Ball eyes rooted -0.045 in the head front; kCap 0.03 keeps the two distinct.
+      { id: 'eyeball_l', type: 'sphere', a: [-0.74, 1.24, 0.13], r: 0.1, kCap: 0.03, color: 0xffffff },
+      { id: 'eyeball_r', type: 'sphere', a: [-0.74, 1.24, -0.13], r: 0.1, kCap: 0.03, color: 0xffffff },
+      { id: 'iris_l', type: 'sphere', a: [-0.82, 1.27, 0.16], r: 0.045, paint: true, color: 0x1c2a28 },
+      { id: 'iris_r', type: 'sphere', a: [-0.82, 1.27, -0.16], r: 0.045, paint: true, color: 0x1c2a28 },
+    ],
+  },
 ];

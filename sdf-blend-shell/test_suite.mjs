@@ -383,6 +383,7 @@ const hopper = CREATURES.find((c) => c.id === 'hopper');
 const longneck = CREATURES.find((c) => c.id === 'longneck');
 const pudge = CREATURES.find((c) => c.id === 'pudge');
 const snail = CREATURES.find((c) => c.id === 'snail');
+const strider = CREATURES.find((c) => c.id === 'strider');
 assert(critter && hopper && longneck && pudge && snail, 'gallery holds critter, hopper, longneck, pudge, snail');
 function paintSd(creature, paintId, hostId) {
   const paint = creature.prims.find((p) => p.id === paintId);
@@ -752,6 +753,22 @@ for (const creature of CREATURES) {
   }
 }
 assert(createGait({ prims: [] }) === null, 'creatures without step data get no gait (graceful null)');
+
+// The BIPED WALK class (strider): a forward-leaning two-legged WALKER —
+// distinct from the quadruped trot ([[0,3],[1,2]]) and the hopper's
+// SYNCHRONIZED two-foot hop. Its legs must ALTERNATE (each foot its own
+// group) so ONE FOOT IS ALWAYS PLANTED: the defining walk invariant. The
+// generic sim above asserts <= 1 GROUP airborne, which a both-feet group
+// [[0,1]] would ALSO pass while being a two-foot hop — so the alternation
+// (two single-foot groups) is asserted explicitly here.
+{
+  assert(strider.step.feet.length === 2, `[strider] is a biped (2 feet, got ${strider.step.feet.length})`);
+  assert(
+    strider.step.groups.length === 2 && strider.step.groups.every((g) => g.length === 1),
+    '[strider] legs ALTERNATE — two single-foot groups, so one foot is always planted (a WALK, not a two-foot hop)',
+  );
+  assert(!strider.hop, '[strider] WALKS — it carries no hop block (the gait, not the hopper class)');
+}
 
 // ---- Hop (roadmap A1): arc math, state machine, and a measured 20s hop ----
 const { createHop, hopArcY } = await import('./src/hop.js');
@@ -1234,6 +1251,7 @@ const INFL_CEILING = {
   skitter: { 0.25: 0.03, 0.6: 0.03 }, // fully authored blends: MEASURED 0.0064 at BOTH k after R2 (every close pair capped)
   floater: { 0.25: 0.038, 0.6: 0.038 }, // Bloop: MEASURED 0.0172 at BOTH k (tendril kCaps govern every close pair — slider-immune like Skitter)
   flyer: { 0.25: 0.037, 0.6: 0.037 }, // Whirr: MEASURED 0.0163 at BOTH k (mast/prop kCaps govern — slider-immune)
+  strider: { 0.25: 0.094, 0.6: 0.235 }, // BIPED: hip crotch compounds (body+thigh+shin converge), the same benign rounding as critter/longneck — MEASURED 0.0740/0.2151, +0.02 margin
 };
 // Carved creatures: MEASURED bounds (+0.02 margin) for the generalized
 // invariants. hardBand = how far the smooth contour may sit inside the
