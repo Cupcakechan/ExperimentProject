@@ -62,7 +62,11 @@ export const PAINT_EDGE = 0.02;
 
 // The ink line color — read by the R1 screen-space ink pass. (The hull
 // draw's world-unit OUTLINE_WIDTH retired with the hull at R-SIMPLIFY.)
-export const OUTLINE_COLOR = 0x0d0f12;
+// LOOK pass C: near-black 0x0d0f12 retired — pure black ON pastel is the
+// "uncolored coloring book" read. A dark warm green-gray BELONGS to the
+// stage palette (deep pine 0x5da884's shadow register) while keeping
+// line contrast everywhere (G 58 vs ground G 231, vs pine G 168).
+export const OUTLINE_COLOR = 0x2e3a33;
 
 // Burial ramp width (world units of depth): the tuck fades IN over this
 // band instead of switching on at BURY_EPS. Binary tucking made 0.055-tall
@@ -239,7 +243,7 @@ export const KNEE_MIN_GAP = 1.05;
 // depth-continuous, so the concave-crease seam family (knee rings,
 // body-exit slashes) cannot ink — deleted by construction, not by tuning.
 // OUTLINE_COLOR still supplies the line color.
-export const INK_PX = 6.0; // line weight in CSS pixels (the old 0.035-world hull reads ~7 px at the default camera — near parity; screen-constant, so it no longer thickens on zoom)
+export const INK_PX = 4.0; // LOOK pass C: 6 read ~2% of a creature's height at 1080p — chunky; the reference's lines sit ~1-1.5%. Screen-constant as before; live uniform, one-value feel lever
 export const INK_DEPTH_THRESHOLD = 0.02; // relative depth step that inks: step/nearest > this (lower = more interior lines + ground-noise risk; higher = silhouettes only)
 // Limb-read feel pass: INTERIOR lines (creature-depth on both sides —
 // leg-over-leg crescents, belly-overhang lines, eye rings) render at this
@@ -247,7 +251,7 @@ export const INK_DEPTH_THRESHOLD = 0.02; // relative depth step that inks: step/
 // full black. The clustered leg contours are REAL occlusion edges, so no
 // threshold can quiet them without killing wanted lines — class-based
 // fading can. 1.0 = uniform ink (the exact pre-pass look, the revert).
-export const INK_INTERIOR = 0.45;
+export const INK_INTERIOR = 0.35; // LOOK pass C: interior contours one step quieter — limb self-lines whisper, separation edges keep FULL strength (the two-tier law unchanged)
 
 // CONTACT SHADOWS (research build 1): one soft blob decal per actor —
 // the grounding read the unlit creatures lack. Analytic (no render
