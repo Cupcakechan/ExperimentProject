@@ -313,8 +313,10 @@ void main() {
   // "scary goggles"), so shade the flat sclera AS a ball — reconstruct a
   // sphere normal from the eye decal's center + radius. The eye then reads
   // bright-center to dark-edge, and the body gloss lands a highlight on it:
-  // round AND shiny, no geometry, no merge. headN stays the true normal so
-  // a second eye never reads the first's bulge.
+  // round AND shiny, no geometry, no merge. The whole ball read is in the
+  // EDGES tilting away, so the impostor holds FULL strength across the eye
+  // and fades only just PAST the sclera boundary. headN stays the true
+  // normal so a second eye never reads the first's bulge.
   vec3 nLocal = sdfNormal(vPos);
   vec3 headN = nLocal;
   for (int i = 0; i < MAX_PRIMS; i++) {
@@ -325,7 +327,7 @@ void main() {
       float t = clamp(rho / uR[i], 0.0, 1.0);
       vec3 lateral = rho > 1e-5 ? tangent / rho : vec3(0.0);
       vec3 sphereN = normalize(headN * sqrt(max(1.0 - t * t, 0.0)) + lateral * t);
-      float gate = 1.0 - smoothstep(0.80, 1.05, rho / uR[i]); // within the eye decal only
+      float gate = 1.0 - smoothstep(1.0, 1.2, rho / uR[i]); // FULL across the eye, fade only past the rim
       nLocal = mix(nLocal, sphereN, gate);
     }
   }

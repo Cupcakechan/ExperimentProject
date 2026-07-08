@@ -398,8 +398,8 @@ assert(Math.abs(paintSd(hopper, 'eyeball_l', 'body') - -0.0196) < 3e-3, 'hopper 
 assert(Math.abs(paintSd(longneck, 'eyeball_l', 'head') - -0.0153) < 3e-3, 'longneck eyeball_l rooted -0.0153 in the head (hand-computed)');
 assert(Math.abs(paintSd(pudge, 'sclera_l', 'head') - -0.0181) < 1e-3, 'pudge sclera_l sd vs head = -0.0181 (hand-computed — FLAT eyes: the ball-eye dilate boundary)');
 // IMPOSTOR-SPHERE eyes (flat-eye roundness): pudge's flat sclera decals are
-// shaded AS balls (a reconstructed sphere normal), since real ball eyes
-// would merge at 0.22 apart. The ball-eyed cast must NOT use it.
+// shaded AS balls (a reconstructed sphere normal at FULL strength across the
+// eye), since real ball eyes would merge at 0.22 apart. Ball-eyed cast opts out.
 {
   const mP = createBlendMaterial(pudge.prims, pudge.inflate);
   const sIdx = pudge.prims.map((pr, i) => [pr, i]).filter(([pr]) => /sclera/.test(pr.id)).map(([, i]) => i);
