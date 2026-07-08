@@ -1,0 +1,137 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>DIAGNOSTIC 3 — does the terrain render? (throwaway, do not commit)</title>
+  <style>
+    body { margin: 0; font: 13px/1.5 monospace; background: #111; color: #eee; }
+    #facts { position: fixed; top: 8px; left: 8px; background: rgba(0,0,0,0.88); padding: 10px 14px; z-index: 10; white-space: pre; }
+    canvas { display: block; }
+  </style>
+  <script type="importmap">
+    {
+      "imports": {
+        "three": "https://cdn.jsdelivr.net/npm/three@0.170.0/build/three.module.js",
+        "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.170.0/examples/jsm/"
+      }
+    }
+  </script>
+</head>
+<body>
+  <div id="facts">loading…</div>
+  <script type="module">
+    // ============================================================
+    // THE DECISIVE TERRAIN TEST.
+    // Two things, no ambiguous guards:
+    //   (1) An AUTO facts panel — did we find the terrain? what are
+    //       its real properties? how many triangles does the GPU
+    //       actually draw this frame? (no keypress, always live)
+    //   (2) [8] SOLO TERRAIN — hides sky, dots, shadows, props, and
+    //       the creature. ONLY the terrain remains.
+    //         mint disc on screen  -> terrain RENDERS; something was
+    //                                 covering it (overdraw).
+    //         white/empty screen   -> terrain does NOT render; the
+    //                                 mesh itself is the problem.
+    // ============================================================
+    import * as THREE from 'three';
+    import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+    import { CREATURES } from './src/data/creatures.js';
+    import { buildShellGeometry } from './src/render/buildShell.js';
+    import { createBlendMaterial } from './src/render/blendMaterial.js';
+    import { createInkPass } from './src/render/inkPass.js';
+    import { createWorld } from './src/render/world.js';
+    import { createShadows } from './src/render/shadows.js';
+    import { createTrails } from './src/render/trails.js';
+    import { BACKGROUND_COLOR, CAMERA_FOV, CAMERA_START, ORBIT_TARGET } from './src/config.js';
+
+    const renderer = new THREE.WebGLRenderer({ antialias: false });
+    renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+    renderer.setSize(window.innerWidth, window.innerHeight);
+    document.body.appendChild(renderer.domElement);
+
+    const scene = new THREE.Scene();
+    scene.background = new THREE.Color().setHex(BACKGROUND_COLOR, THREE.LinearSRGBColorSpace);
+    const camera = new THREE.PerspectiveCamera(CAMERA_FOV, window.innerWidth / window.innerHeight, 0.1, 100);
+    camera.position.set(...CAMERA_START);
+    const controls = new OrbitControls(camera, renderer.domElement);
+    controls.target.set(...ORBIT_TARGET);
+
+    createWorld(scene);
+    createTrails(scene);
+    const shadows = createShadows(scene);
+
+    const critter = CREATURES.find((c) => c.id === 'critter');
+    const rig = new THREE.Group();
+    const shell = new THREE.Mesh(
+      buildShellGeometry(critter.prims, critter.step?.knees),
+      createBlendMaterial(critter.prims, critter.inflate, critter.step?.knees)
+    );
+    shell.frustumCulled = false;
+    rig.add(shell);
+    scene.add(rig);
+    const actor = { creature: critter, rig };
+
+    const inkPass = createInkPass(renderer, camera);
+
+    // Robust terrain selector: the ONLY plain (non-instanced) mesh whose
+    // material is front-facing. The sky is BackSide; props are instanced;
+    // the creature is inside a Group. (Independent of renderOrder, so a
+    // renderOrder bug can't hide it from the selector.)
+    const terrain = scene.children.find(
+      (c) => c.isMesh && !c.isInstancedMesh && c.material && c.material.side !== THREE.BackSide
+    );
+    if (terrain && terrain.geometry) terrain.geometry.computeBoundingSphere();
+
+    // Everything that ISN'T the terrain — for solo mode.
+    const nonTerrain = scene.children.filter((c) => c !== terrain);
+    let solo = false;
+
+    window.addEventListener('keydown', (e) => {
+      if (e.key === '8') {
+        solo = !solo;
+        nonTerrain.forEach((c) => { c.visible = !solo; });
+      }
+    });
+
+    function factsText() {
+      const info = renderer.info.render;
+      let t = 'TERRAIN TEST  —  press [8] to SOLO the terrain (hide everything else)\n\n';
+      if (!terrain) {
+        t += 'terrain: NOT FOUND by the selector (!)\n';
+      } else {
+        const g = terrain.geometry;
+        const tris = g.index ? g.index.count / 3 : (g.getAttribute('position').count / 3);
+        const bs = g.boundingSphere;
+        const p = terrain.position;
+        t += 'terrain: FOUND\n';
+        t += '  renderOrder : ' + terrain.renderOrder + '\n';
+        t += '  visible     : ' + terrain.visible + '\n';
+        t += '  vertexColors: ' + terrain.material.vertexColors + '\n';
+        t += '  side        : ' + terrain.material.side + '  (0 = FrontSide)\n';
+        t += '  triangles   : ' + tris + '\n';
+        t += '  bsphere R   : ' + (bs ? bs.radius.toFixed(2) : '—') + '  center ' +
+             (bs ? '(' + bs.center.x.toFixed(1) + ',' + bs.center.y.toFixed(1) + ',' + bs.center.z.toFixed(1) + ')' : '—') + '\n';
+        t += '  position    : (' + p.x.toFixed(1) + ',' + p.y.toFixed(1) + ',' + p.z.toFixed(1) + ')\n';
+      }
+      t += '\nGPU this frame:  draw calls ' + info.calls + '   triangles ' + info.triangles + '\n';
+      t += 'SOLO terrain: ' + (solo ? 'ON — only terrain should be on screen' : 'off') + '\n';
+      t += '\nSend one screenshot with [8] ON. Mint disc = renders; white = does not.';
+      return t;
+    }
+
+    renderer.setAnimationLoop(() => {
+      controls.update();
+      if (!solo) shadows.update([actor]);
+      inkPass.render(scene, camera);
+      document.getElementById('facts').textContent = factsText();
+    });
+
+    window.addEventListener('resize', () => {
+      camera.aspect = window.innerWidth / window.innerHeight;
+      camera.updateProjectionMatrix();
+      renderer.setSize(window.innerWidth, window.innerHeight);
+      inkPass.setSize(window.innerWidth, window.innerHeight);
+    });
+  </script>
+</body>
+</html>
