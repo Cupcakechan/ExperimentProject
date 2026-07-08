@@ -472,7 +472,7 @@ export const CREATURES = [
     },
     blink: { eyes: ['eyeball_l', 'eyeball_r', 'iris_l', 'iris_r'] },
     prims: [
-      { id: 'body', type: 'capsule', a: [0.1, 0.62, 0], b: [-0.28, 1.0, 0], r: 0.3, color: 0x3fa89a },
+      { id: 'body', type: 'capsule', a: [0.1, 0.62, 0], b: [-0.28, 1.0, 0], r: 0.34, color: 0x3fa89a },
       { id: 'neck', type: 'capsule', a: [-0.28, 1.0, 0], b: [-0.44, 1.1, 0], r: 0.12, color: 0x54bdaf },
       { id: 'head', type: 'sphere', a: [-0.58, 1.18, 0], r: 0.26, color: 0x54bdaf },
       // Digitigrade legs: thigh.b === leg.a EXACTLY (shared knee), forward
