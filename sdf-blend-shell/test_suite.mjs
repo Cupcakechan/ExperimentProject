@@ -397,7 +397,18 @@ assert(Math.abs(paintSd(critter, 'eyeball_l', 'head') - -0.0195) < 3e-3, 'critte
 assert(Math.abs(paintSd(hopper, 'eyeball_l', 'body') - -0.0196) < 3e-3, 'hopper eyeball_l rooted -0.0196 in the body (hand-computed)');
 assert(Math.abs(paintSd(longneck, 'eyeball_l', 'head') - -0.0153) < 3e-3, 'longneck eyeball_l rooted -0.0153 in the head (hand-computed)');
 assert(Math.abs(paintSd(pudge, 'sclera_l', 'head') - -0.0181) < 1e-3, 'pudge sclera_l sd vs head = -0.0181 (hand-computed — FLAT eyes: the ball-eye dilate boundary)');
-assert(pudge.prims.filter((p) => p.id.startsWith('catch_') && p.paint && p.color === 0xffffff).length === 2 && pudge.prims.findIndex((p) => p.id === 'catch_l') > pudge.prims.findIndex((p) => p.id === 'pupil_l'), 'pudge flat eyes carry a WHITE catchlight decal per pupil, composited AFTER the pupils (the flat-eye shine — ball eyes would need a grotesque r>=0.18 at its 0.06 peak)');
+// IMPOSTOR-SPHERE eyes (flat-eye roundness): pudge's flat sclera decals are
+// shaded AS balls (a reconstructed sphere normal), since real ball eyes
+// would merge at 0.22 apart. The ball-eyed cast must NOT use it.
+{
+  const mP = createBlendMaterial(pudge.prims, pudge.inflate);
+  const sIdx = pudge.prims.map((pr, i) => [pr, i]).filter(([pr]) => /sclera/.test(pr.id)).map(([, i]) => i);
+  assert(sIdx.length === 2 && sIdx.every((i) => mP.uniforms.uEyeSphere.value[i] === 1.0), 'pudge sclera decals carry uEyeSphere = 1 (shaded AS balls — the flat-eye roundness)');
+  assert(pudge.prims.every((pr, i) => /sclera/.test(pr.id) || mP.uniforms.uEyeSphere.value[i] === 0.0), 'only the sclera decals are impostor eye spheres (never the pupil, body, or limbs)');
+  assert(mP.fragmentShader.includes('uEyeSphere[i]') && mP.fragmentShader.includes('sphereN'), 'the fragment reconstructs a sphere normal for flagged flat eye decals (impostor shading — round without geometry)');
+  const mC = createBlendMaterial(critter.prims, critter.inflate);
+  assert(critter.prims.every((pr, i) => mC.uniforms.uEyeSphere.value[i] === 0.0), 'the ball-eyed cast uses NO impostor (their eyes are real eyeball spheres)');
+}
 assert(Math.abs(paintSd(snail, 'eyeball_l', 'antenna_l') - -0.0151) < 3e-3, 'snail eyeball_l rooted -0.0151 in the stalk tip (hand-computed, capsule end-cap host)');
 // Every eyeball must POKE (protrude past its host) and every iris must
 // poke ITS eyeball — the generic paint probes cover irises; this covers
