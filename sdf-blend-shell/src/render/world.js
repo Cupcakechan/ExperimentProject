@@ -213,15 +213,24 @@ function mergeBaked(parts) {
 // The pine (the banked LAAS pattern, our idiom): trunk + three stacked
 // crown cones, each part baked in its OWN two-tone (bark vs needles),
 // merged into one geometry, instanced per class. Template ~1.35 tall.
+// Shared scene light direction (matches the creature shader's lightDir):
+// upper-front-right. Used to bake DIRECTIONAL shading into props.
+export const SUN = (() => { const v = [0.6, 1.0, 0.5]; const l = Math.hypot(...v); return [v[0] / l, v[1] / l, v[2] / l]; })();
+
 function buildPineGeometry() {
   const BARK_D = 0x9a8474; // LOOK pass A: soft warm bark
   const BARK_L = 0xc2ac9a;
   const NEEDLE_D = 0x5da884; // still deeper green than the grass tufts, so pines READ as their own class
   const NEEDLE_L = 0x8fd0ac;
   const trunk = bakeTopLight(new THREE.CylinderGeometry(0.05, 0.075, 0.4, 6).translate(0, 0.2, 0), BARK_D, BARK_L);
-  const c1 = bakeTopLight(new THREE.ConeGeometry(0.42, 0.55, 7).translate(0, 0.55, 0), NEEDLE_D, NEEDLE_L);
-  const c2 = bakeTopLight(new THREE.ConeGeometry(0.3, 0.5, 7).translate(0, 0.85, 0), NEEDLE_D, NEEDLE_L);
-  const c3 = bakeTopLight(new THREE.ConeGeometry(0.2, 0.45, 7).translate(0, 1.12, 0), NEEDLE_D, NEEDLE_L);
+  // LOOK pass (trees): the needle cones are DIRECTIONALLY lit (SUN) so each
+  // reads as a 3D cone with a light side and a shadow side, not a flat
+  // top-lit triangle. Baked in local space, so a tree's light side rotates
+  // with its per-instance rotation — standard for low-poly foliage, and
+  // the size variety keeps it from looking aligned. Trunk stays top-light.
+  const c1 = bakeTopLight(new THREE.ConeGeometry(0.42, 0.55, 7).translate(0, 0.55, 0), NEEDLE_D, NEEDLE_L, SUN);
+  const c2 = bakeTopLight(new THREE.ConeGeometry(0.3, 0.5, 7).translate(0, 0.85, 0), NEEDLE_D, NEEDLE_L, SUN);
+  const c3 = bakeTopLight(new THREE.ConeGeometry(0.2, 0.45, 7).translate(0, 1.12, 0), NEEDLE_D, NEEDLE_L, SUN);
   return mergeBaked([trunk, c1, c2, c3]);
 }
 
@@ -281,7 +290,12 @@ export function propPlacements(seed = WORLD_SEED) {
 // materials show no facets, so relief is painted in — mix(dark, light)
 // by the LOCAL +Y normal. Instances rotate about Y only, so the baked
 // light stays overhead for every instance.
-function bakeTopLight(geo, darkHex, lightHex) {
+// lightDir (optional, normalized [x,y,z]): DIRECTIONAL shading — tone
+// follows dot(normal, light), so facets facing the light brighten and
+// facets facing away darken (a lit 3D read: a light side and a shadow
+// side). Omitted -> the original top-light (tone by height alone), kept
+// for rocks/grass so this stays a trees-only change.
+export function bakeTopLight(geo, darkHex, lightHex, lightDir = null) {
   const g = geo.toNonIndexed(); // per-face verts: faceted two-tone, the low-poly read
   g.computeVertexNormals();
   const n = g.getAttribute('normal');
@@ -289,7 +303,10 @@ function bakeTopLight(geo, darkHex, lightHex) {
   const light = raw(lightHex);
   const colors = [];
   for (let i = 0; i < n.count; i++) {
-    const t = Math.min(Math.max(n.getY(i) * 0.5 + 0.5, 0), 1);
+    const d = lightDir
+      ? n.getX(i) * lightDir[0] + n.getY(i) * lightDir[1] + n.getZ(i) * lightDir[2]
+      : n.getY(i);
+    const t = Math.min(Math.max(d * 0.5 + 0.5, 0), 1);
     colors.push(...mix3(dark, light, t * t));
   }
   g.setAttribute('color', new THREE.Float32BufferAttribute(colors, 3));

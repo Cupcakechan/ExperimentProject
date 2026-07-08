@@ -1748,7 +1748,7 @@ for (const creature of CREATURES) {
 // obey the same border. Everything is seed-deterministic: a world is
 // data, like a creature.
 {
-  const { terrainHeight, propPlacements, buildTerrainGeometry, bandColor } = await import('./src/render/world.js');
+  const { terrainHeight, propPlacements, buildTerrainGeometry, bandColor, bakeTopLight, SUN } = await import('./src/render/world.js');
   const { WORLD_SEED, WORLD_RADIUS, WORLD_FLAT_RADIUS: FLAT, WORLD_HILL_HEIGHT, WORLD_PROP_MIN_R, ROAM_HARD_RADIUS: HARD, WORLD_PINE_COUNT, WORLD_PINE_MIN_H, WORLD_PINE_MAX_H, WORLD_PINE_SPACING, GROUND_COLOR: GC3 } = await import('./src/config.js');
 
   let flatOk = true;
@@ -1813,6 +1813,32 @@ for (const creature of CREATURES) {
     if (Math.abs(pos.getY(i) - terrainHeight(pos.getX(i), pos.getZ(i), WORLD_SEED)) > 1e-6) meshOk = false;
   }
   assert(meshOk && geo.getAttribute('color') !== undefined, 'the terrain mesh mirrors terrainHeight exactly and carries band colors');
+  // DIRECTIONAL pine shading (trees look pass): baking a cone with SUN gives
+  // its facets a LIGHT side and a SHADOW side — the old top-light (no
+  // lightDir) gave every side facet the same tone, the flat-triangle read.
+  {
+    const lit = bakeTopLight(new THREE.ConeGeometry(0.4, 0.5, 16), 0x224422, 0x88cc88, SUN);
+    const nAttr = lit.getAttribute('normal'), cAttr = lit.getAttribute('color');
+    const shl = Math.hypot(SUN[0], SUN[2]); // horizontal sun magnitude
+    let toward = -9, away = 9;
+    for (let i = 0; i < nAttr.count; i++) {
+      if (Math.abs(nAttr.getY(i)) > 0.9) continue; // side facets only (exclude the base cap)
+      const horiz = (nAttr.getX(i) * SUN[0] + nAttr.getZ(i) * SUN[2]) / shl; // -1 away .. +1 toward the sun
+      if (horiz > 0.6) toward = Math.max(toward, cAttr.getY(i));
+      if (horiz < -0.6) away = Math.min(away, cAttr.getY(i));
+    }
+    assert(toward > away + 0.05, `pine facets facing the SUN are brighter than those facing away (${toward.toFixed(2)} > ${away.toFixed(2)} + 0.05) — directional shading, a light side and a shadow side, not a flat top-light`);
+    const flat = bakeTopLight(new THREE.ConeGeometry(0.4, 0.5, 16), 0x224422, 0x88cc88); // no lightDir = the old top-light
+    let fT = -9, fA = 9;
+    const fn = flat.getAttribute('normal'), fc = flat.getAttribute('color');
+    for (let i = 0; i < fn.count; i++) {
+      if (Math.abs(fn.getY(i)) > 0.9) continue;
+      const horiz = (fn.getX(i) * SUN[0] + fn.getZ(i) * SUN[2]) / shl;
+      if (horiz > 0.6) fT = Math.max(fT, fc.getY(i));
+      if (horiz < -0.6) fA = Math.min(fA, fc.getY(i));
+    }
+    assert(Math.abs(fT - fA) < 1e-9, 'the old top-light bake gives sun-facing and away-facing side facets the IDENTICAL tone (the flat read this pass fixes)');
+  }
   const low = bandColor(0);
   const gRaw = [((GC3 >> 16) & 255) / 255, ((GC3 >> 8) & 255) / 255, (GC3 & 255) / 255];
   assert(low.every((v, i) => v === gRaw[i]), 'the flat band is EXACTLY GROUND_COLOR (probe refined at pass A: the invariant was always the CONSTANT, never the old hex — raw channels)');
