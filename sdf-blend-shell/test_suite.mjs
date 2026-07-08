@@ -1880,6 +1880,9 @@ for (const creature of CREATURES) {
   const dotMesh = s3.children.find((c) => c.isInstancedMesh && c.renderOrder < 0);
   assert(dotMesh !== undefined && paintOk(dotMesh) && dotMesh.renderOrder === -3, 'dots are opaque-pass floor paint at -3');
   assert(floor.renderOrder < dotMesh.renderOrder && dotMesh.renderOrder < shadowMesh.renderOrder && shadowMesh.renderOrder < printMesh.renderOrder && printMesh.renderOrder < 0, 'the LIVE ladder holds: terrain -> dots -> shadows -> prints -> everything else at 0');
+  const skyMesh = s3.children.find((c) => c.isMesh && c.material.side === T.BackSide);
+  assert(skyMesh !== undefined && skyMesh.renderOrder === -100 && skyMesh.material.depthWrite === false && skyMesh.material.depthTest === false, 'the sky is depth-INERT background BY CONSTRUCTION: first (renderOrder -100), no depth write, no depth test — it can never contend with the world (the dome-covers-terrain incident)');
+  assert(skyMesh.renderOrder < floor.renderOrder, 'the ladder gains its true floor: the sky draws BELOW the terrain');
 }
 
 // ---- R1 ink pass (screen-space, depth-only): the module contract ----

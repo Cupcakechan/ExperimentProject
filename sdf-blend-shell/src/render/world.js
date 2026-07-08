@@ -298,11 +298,17 @@ export function createWorld(scene) {
   terrain.renderOrder = -10; // the floor draws FIRST: it is the canvas the floor-paint layers (dots/shadows/prints) land on
   scene.add(terrain);
 
-  // LOOK pass A — the sky dome: a vertex-gradient sphere seen from
-  // inside (BackSide), fog OFF (fog would flatten the gradient to the
-  // horizon color). The dome is depth-continuous, so the ink pass draws
-  // nothing ON it; the world rim keeps its silhouette line against it,
-  // the same relative-step class it had against the old flat clear.
+  // LOOK pass A sky — REBUILT after the dome-covers-terrain incident:
+  // the dome is now depth-INERT BY CONSTRUCTION. It draws FIRST
+  // (renderOrder -100, below the terrain's -10), writes NO depth and
+  // tests NO depth — a pure painted backdrop that everything after it
+  // simply paints over. The original dome relied on LOSING the depth
+  // test against the world; on the real stage it somehow WON those
+  // pixels (mechanism unexplained — every source-level read says it
+  // cannot; see LESSONS), so correctness now depends on painter's
+  // order alone, not on any depth model. Bonus: the sky leaves the
+  // depth texture at the cleared far plane, so the rim's ink
+  // silhouette behaves EXACTLY like the pre-dome flat-clear era.
   const skyGeo = new THREE.SphereGeometry(40, 24, 16);
   {
     const p = skyGeo.getAttribute('position');
@@ -312,7 +318,12 @@ export function createWorld(scene) {
     }
     skyGeo.setAttribute('color', new THREE.Float32BufferAttribute(cols, 3));
   }
-  scene.add(new THREE.Mesh(skyGeo, new THREE.MeshBasicMaterial({ vertexColors: true, side: THREE.BackSide, fog: false })));
+  const sky = new THREE.Mesh(
+    skyGeo,
+    new THREE.MeshBasicMaterial({ vertexColors: true, side: THREE.BackSide, fog: false, depthWrite: false, depthTest: false })
+  );
+  sky.renderOrder = -100; // the TRUE floor of the ladder: before the terrain, before everything
+  scene.add(sky);
 
   // LOOK pass A — distance fog: ground and props fade INTO the horizon
   // color (aerial perspective, the reference's soft distance). The

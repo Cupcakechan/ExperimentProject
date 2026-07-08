@@ -557,3 +557,41 @@
   decal passes vs bodies — floor paint belongs in the opaque pass) +
   dev-method candidate (when a VERIFIED fix does not move the symptom,
   re-derive the mechanism from the NEWEST clue, not the old model).
+
+## 2026-07-07 — the sky covered the world (act three; a fix must not depend on a twice-wrong model)
+- What broke / what happened: with the floor-paint ladder live, EVERY
+  negative-renderOrder object (terrain, dots, shadows, prints) vanished
+  — the "floor" was the sky dome's lower hemisphere (floating props
+  were the tell). Bisection instrument, one keypress: sky OFF -> ground
+  returns. The sky (renderOrder 0, interior wall 30-50 from camera) won
+  ground pixels against terrain depth 8-18.
+- Root cause, honestly: UNEXPLAINED at the mechanism level. Every
+  source-level read of the pinned r170 (list split, renderOrder-first
+  sort, setMaterial/setBlending, the OPAQUE define, background clear,
+  render flow) says the dome must LOSE that depth test — and a bare-
+  scene pixel test (diagnostic 1) confirmed negatives + the blend
+  config render correctly outside the real stage. The failure needed
+  the real stage (suspect space: the MSAA + depth-texture target and
+  driver-level early-z, unproven). Two fixes in this saga were built on
+  a source-verified model the GPU then contradicted.
+- Verification gap it exposed: the sky mesh was the ONLY unprobed actor
+  (pass A probed skyColor and the dots, never the dome's material
+  contract); and no probe could have seen this class anyway — it lives
+  in the driver, below everything the suite samples.
+- Plug shipped: the sky is now depth-INERT BY CONSTRUCTION — draws
+  FIRST (renderOrder -100), depthWrite:false, depthTest:false: a pure
+  painted backdrop that everything after paints over. Correctness now
+  rests on painter's order alone, with no depth contest to win or lose.
+  Suite: the dome's contract + the ladder extended to its true floor.
+  Bonus: the depth texture at sky pixels stays at the cleared far
+  plane, so the rim's ink silhouette is EXACTLY the pre-dome class.
+- Instrument notes (paid for tonight): (1) a readback can lie while the
+  frame tells the truth — diagnostic 1's readPixels returned all-black
+  for a frame that VISIBLY matched prediction; the visible render
+  outranks a broken probe. (2) A live-toggle bisection of the REAL
+  stage named the killer in one keypress after hours of source reading.
+- Route: dev-method candidate (when the source-verified model and the
+  GPU disagree TWICE, stop explaining and REBUILD the feature so
+  correctness does not depend on the model — by-construction beats
+  by-analysis) + creature-forge (skydome recipe: background domes are
+  depth-inert, first + no write + no test, never depth contenders).
