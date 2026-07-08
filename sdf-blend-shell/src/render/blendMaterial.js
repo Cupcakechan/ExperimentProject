@@ -46,7 +46,6 @@ uniform float uKPrim[MAX_PRIMS]; // ABSOLUTE per-prim blend radius; <= 0.0 = uns
 uniform float uInflate; // whole-creature dilate (plumpness): the skin sits this far OUTSIDE the raw field; 0 = none
 uniform float uNeg[MAX_PRIMS]; // 0 = solid; 1 = CARVE (host color lines the bowl); 2 = carve with authored interior color
 uniform float uEye[MAX_PRIMS]; // 1.0 = eyeball prim (white solid sphere): gets the catchlight
-uniform float uEyeSphere[MAX_PRIMS]; // 1.0 = FLAT eye decal shaded AS a ball (impostor sphere): center + radius reconstruct a sphere normal
 uniform float uPaintEdge; // decal edge softness, world units
 uniform int uCount;
 uniform float uK;
@@ -308,30 +307,7 @@ void main() {
   // The field lives in CREATURE space; the creature now roams, so rotate
   // the normal into WORLD space or the lighting turns with the body
   // (a sunset that follows you around).
-  // IMPOSTOR-SPHERE eyes (flat-eye fix): pudge's eyes can't be real balls
-  // (r>=0.18 by the dilate boundary, and at 0.22 apart they'd MERGE into
-  // "scary goggles"), so shade the flat sclera AS a ball — reconstruct a
-  // sphere normal from the eye decal's center + radius. The eye then reads
-  // bright-center to dark-edge, and the body gloss lands a highlight on it:
-  // round AND shiny, no geometry, no merge. The whole ball read is in the
-  // EDGES tilting away, so the impostor holds FULL strength across the eye
-  // and fades only just PAST the sclera boundary. headN stays the true
-  // normal so a second eye never reads the first's bulge.
-  vec3 nLocal = sdfNormal(vPos);
-  vec3 headN = nLocal;
-  for (int i = 0; i < MAX_PRIMS; i++) {
-    if (i < uCount && uEyeSphere[i] > 0.5) {
-      vec3 toP = vPos - uA[i];
-      vec3 tangent = toP - dot(toP, headN) * headN; // lateral offset from the eye center
-      float rho = length(tangent);
-      float t = clamp(rho / uR[i], 0.0, 1.0);
-      vec3 lateral = rho > 1e-5 ? tangent / rho : vec3(0.0);
-      vec3 sphereN = normalize(headN * sqrt(max(1.0 - t * t, 0.0)) + lateral * t);
-      float gate = 1.0 - smoothstep(1.0, 1.2, rho / uR[i]); // FULL across the eye, fade only past the rim
-      nLocal = mix(nLocal, sphereN, gate);
-    }
-  }
-  vec3 n = normalize(mat3(modelMatrix) * nLocal);
+  vec3 n = normalize(mat3(modelMatrix) * sdfNormal(vPos));
   vec3 lightDir = normalize(vec3(0.6, 1.0, 0.5));
 
   // LOOK pass B: the 3-band quantize RETIRED — the reference read is
@@ -415,7 +391,6 @@ function buildUniforms(prims, inflate, knees) {
   const uKPrim = [];
   const uNeg = [];
   const uEye = [];
-  const uEyeSphere = [];
   for (let i = 0; i < MAX_PRIMS; i++) {
     const prim = prims[i];
     uA.push(new THREE.Vector3(...(prim ? prim.a : [0, 0, 0])));
@@ -439,8 +414,6 @@ function buildUniforms(prims, inflate, knees) {
     // eyeballs are white solid spheres (verified unique across the cast) ->
     // the catchlight target. Absent/other prims = 0, so the shine is theirs alone.
     uEye.push(prim && prim.type === 'sphere' && !prim.paint && !prim.negative && prim.color === 0xffffff ? 1.0 : 0.0);
-    // impostor-sphere eyes: a decal flagged eye:true (pudge's flat sclera) is shaded as a ball.
-    uEyeSphere.push(prim && prim.eye ? 1.0 : 0.0);
   }
   return {
     uA: { value: uA },
@@ -452,7 +425,6 @@ function buildUniforms(prims, inflate, knees) {
     uKPrim: { value: uKPrim },
     uNeg: { value: uNeg },
     uEye: { value: uEye },
-    uEyeSphere: { value: uEyeSphere },
     uCount: { value: Math.min(prims.length, MAX_PRIMS) },
     uK: { value: BLEND_K },
     uColorSoft: { value: COLOR_SOFT },

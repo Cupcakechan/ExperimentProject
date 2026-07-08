@@ -239,10 +239,10 @@ export const CREATURES = [
     name: 'Pudge',
     // First user of INFLATE (Pass 3): same skeleton reads chubbier by one
     // number. 0.04 stays well under the thinnest solid r (tail 0.11).
-    inflate: 0.04,
-    // Deep, slow breath — the chubby creature breathes like one.
-    breath: { amplitude: 0.02, speed: 1.6 },
-    blink: { eyes: ['sclera_l', 'sclera_r', 'pupil_l', 'pupil_r'] },
+    inflate: 0.02, // trimmed from 0.04 (Option B): plump enough to read chubby, low enough that real ball eyes clear the dilate boundary (peak 0.03 <= r/3)
+    // Softer breath — still breathes, but the peak stays under the eye's dilate boundary.
+    breath: { amplitude: 0.01, speed: 1.6 },
+    blink: { eyes: ['eyeball_l', 'eyeball_r', 'iris_l', 'iris_r'] },
     anim: { primId: 'tail', axis: [0, 1, 0], amplitude: 0.5, speed: 3.0 },
     step: { feet: ['leg_fl', 'leg_fr', 'leg_bl', 'leg_br'], groups: [[0, 3], [1, 2]] },
     // 12 prims (the old MAX_PRIMS ceiling; capacity is 16 since Skitter).
@@ -261,18 +261,17 @@ export const CREATURES = [
       // corner). It paints on the face front — this cast's proven decal
       // territory (the flat eyes live here). kCap dropped.
       { id: 'mouth', type: 'capsule', a: [-0.73, 0.63, 0.05], b: [-0.73, 0.63, -0.05], r: 0.068, paint: true, color: 0x2d2438 },
-      // FLAT DECAL EYES, deliberately — the BALL-EYE DILATE BOUNDARY
-      // (browser-caught scary-goggles, then a probe-killed solid-iris
-      // fix): a constant dilate compresses every small-feature contrast
-      // toward 1 (dark/white = (i+d)/(w+d)); at pudge's 0.06 peak vs
-      // this eye scale NO ball-eye proportions survive, and a solid iris
-      // small enough violates the thinnest-solid rule. Flat sclera +
-      // pupil decals balloon TOGETHER and keep the painted-cute read —
-      // the proven pre-conversion authoring, restored.
-      { id: 'sclera_l', type: 'sphere', a: [-0.72, 0.8, 0.11], r: 0.075, color: 0xf2f4f6, paint: true, eye: true },
-      { id: 'sclera_r', type: 'sphere', a: [-0.72, 0.8, -0.11], r: 0.075, color: 0xf2f4f6, paint: true, eye: true },
-      { id: 'pupil_l', type: 'sphere', a: [-0.73, 0.804, 0.1155], r: 0.032, color: 0x1e2430, paint: true },
-      { id: 'pupil_r', type: 'sphere', a: [-0.73, 0.804, -0.1155], r: 0.032, color: 0x1e2430, paint: true },
+      // REAL BALL EYES (Option B): flat decals never read as 3D no matter
+      // the shading, so pudge trades some plumpness (inflate+breath peak
+      // 0.04+0.02 -> 0.02+0.01 = 0.03) to clear the dilate boundary and
+      // gets protruding eyeball spheres like the rest of the cast. kCap
+      // 0.03 (critter's value) keeps the two balls DISTINCT at 0.22 apart
+      // instead of merging into scary goggles. Measured: rooted -0.018,
+      // protrudes 0.082 past the skin, bridge field +0.021 (clear).
+      { id: 'eyeball_l', type: 'sphere', a: [-0.72, 0.8, 0.11], r: 0.10, kCap: 0.03, color: 0xffffff },
+      { id: 'eyeball_r', type: 'sphere', a: [-0.72, 0.8, -0.11], r: 0.10, kCap: 0.03, color: 0xffffff },
+      { id: 'iris_l', type: 'sphere', a: [-0.794, 0.830, 0.151], r: 0.045, color: 0x1e2430, paint: true },
+      { id: 'iris_r', type: 'sphere', a: [-0.794, 0.830, -0.151], r: 0.045, color: 0x1e2430, paint: true },
     ],
   },
   {
