@@ -251,7 +251,8 @@ export const INK_DEPTH_THRESHOLD = 0.02; // relative depth step that inks: step/
 // full black. The clustered leg contours are REAL occlusion edges, so no
 // threshold can quiet them without killing wanted lines — class-based
 // fading can. 1.0 = uniform ink (the exact pre-pass look, the revert).
-export const INK_INTERIOR = 0.15; // Option 1 (knee/junction cuts): interior contours faded hard — the concave crease at thin-limb junctions (thigh->body, rest knee) is structural to capsule-blend + depth-ink, so the FIX is to stop drawing it. Silhouettes keep FULL strength; eye rings are decals, unaffected. 0 = fully clean (but the sane-strength probe floors at >0). Toward the clean-toy reference
+export const INK_INTERIOR = 0.15; // interior-line strength: edges classified as INTERNAL (see INK_SILHOUETTE_GAP) fade to this. 1.0 = uniform ink (pre-fade). Eye rings are decals, unaffected
+export const INK_SILHOUETTE_GAP = 1.0; // world-depth units — the DEPTH-AWARE ink fix for junction "cuts." An edge is a BOLD outline only if it has MORE than this depth-gap behind it (far background); LESS (a nearby creature surface — merged creases, limb-into-body junctions) fades to INK_INTERIOR. True silhouettes bold, internal joints clean: the reference look. The old curvature-relative test could not tell a sharp merged crease from a silhouette. DIAL: junctions still cut -> RAISE; outer outlines too faint -> LOWER
 
 // CONTACT SHADOWS (research build 1): one soft blob decal per actor —
 // the grounding read the unlit creatures lack. Analytic (no render

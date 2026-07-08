@@ -26,7 +26,7 @@
 // ============================================================
 
 import * as THREE from 'three';
-import { OUTLINE_COLOR, INK_PX, INK_DEPTH_THRESHOLD, INK_INTERIOR } from '../config.js';
+import { OUTLINE_COLOR, INK_PX, INK_DEPTH_THRESHOLD, INK_INTERIOR, INK_SILHOUETTE_GAP } from '../config.js';
 
 // Pure (suite-anchored): perspective depth-buffer value [0..1] -> world
 // distance along the view ray. linearDepth() in INK_FRAG mirrors this —
@@ -53,6 +53,7 @@ uniform float uNear;
 uniform float uFar;
 uniform float uThreshold; // relative depth step that inks
 uniform float uInteriorInk; // interior-line strength; 1.0 = uniform ink (pre-fade look)
+uniform float uSilhouetteGap; // depth-aware fade: an edge with MORE world-depth gap behind it than this is a bold outline; LESS fades (internal junctions/creases)
 uniform vec3 uInkColor;
 
 varying vec2 vUv;
@@ -86,15 +87,21 @@ void main() {
   // the closer surface, and one threshold holds whether the edge sits 3
   // or 30 units deep. The 2x span makes the line edge soft (cheap AA).
   float dMin = min(dC, min(min(dL, dR), min(dB, dT)));
+  float dMax = max(dC, max(max(dL, dR), max(dB, dT)));
   float rel = g / dMin;
   float edge = smoothstep(uThreshold, uThreshold * 2.0, rel);
-  // Limb-read: classify by relative step size. INTERIOR contours (both
-  // sides creature-depth: leg-over-leg, belly overhang, eye rings) sit
-  // at 1-4x threshold; OUTER silhouettes (background ~1000x, ground and
-  // creature-vs-creature 10x+) far above. Interior lines fade to
-  // uInteriorInk; silhouettes keep full weight — the classic toon
-  // two-tier line, in one classification band (4x..12x threshold).
-  float outerness = smoothstep(uThreshold * 4.0, uThreshold * 12.0, rel);
+  // DEPTH-AWARE bold classification (the junction-cut fix). Whether a
+  // detected edge is a true OUTLINE or an internal junction depends on
+  // what sits BEHIND it: an outline has far background behind (a large
+  // depth gap); a merged crease or limb-into-body junction has another
+  // creature surface right behind (a tiny gap). The old test classified
+  // by curvature-relative-to-nearest, which cannot tell a sharp merged
+  // crease from a silhouette — so junctions inked BOLD (the "cuts").
+  // The gap tells them apart. Grazing ramps are already excluded
+  // upstream (~0 in the second difference), so this classifies only
+  // REAL edges. INTERNAL -> fade to uInteriorInk; OUTLINE -> full.
+  float behindGap = dMax - dMin; // world-depth units behind the edge
+  float outerness = smoothstep(uSilhouetteGap * 0.35, uSilhouetteGap, behindGap);
   edge *= mix(uInteriorInk, 1.0, outerness);
   vec3 col = texture2D(tColor, vUv).rgb;
   gl_FragColor = vec4(mix(col, uInkColor, edge), 1.0);
@@ -128,6 +135,7 @@ export function createInkPass(renderer, camera) {
     uFar: { value: camera.far },
     uThreshold: { value: INK_DEPTH_THRESHOLD },
     uInteriorInk: { value: INK_INTERIOR },
+    uSilhouetteGap: { value: INK_SILHOUETTE_GAP },
     // Same construction as the hull's uOutlineColor — identical ink color.
     uInkColor: { value: new THREE.Color(OUTLINE_COLOR) },
   };

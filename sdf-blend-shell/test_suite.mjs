@@ -1914,7 +1914,7 @@ for (const creature of CREATURES) {
 // material and the shader source, and the config levers' sanity.
 {
   const { linearizeDepth, INK_FRAG, INK_VERT } = await import('./src/render/inkPass.js');
-  const { INK_PX, INK_DEPTH_THRESHOLD, INK_INTERIOR } = await import('./src/config.js');
+  const { INK_PX, INK_DEPTH_THRESHOLD, INK_INTERIOR, INK_SILHOUETTE_GAP } = await import('./src/config.js');
   // Hand-computed anchors at the app's real planes (near 0.1, far 100):
   assert(Math.abs(linearizeDepth(0, 0.1, 100) - 0.1) < 1e-12, 'ink linearizeDepth(0) = near (hand-computed)');
   assert(Math.abs(linearizeDepth(1, 0.1, 100) - 100) < 1e-9, 'ink linearizeDepth(1) = far (hand-computed)');
@@ -1952,19 +1952,24 @@ for (const creature of CREATURES) {
     assert(INK_FRAG.includes('2.0 * dC'), 'ink fragment uses the SECOND-difference detector (the joint-cut regression guard)');
   }
 
-  // Limb-read fade (feel pass): JS mirror of the two-tier classification,
-  // hand-computed at the measured edge classes. Interior contours (the
-  // clustered limb lines, rel 1-4x threshold) ink at INK_INTERIOR;
-  // silhouettes (background ~1000x, ground/creature-vs-creature 10x+)
-  // keep full weight. INK_INTERIOR = 1.0 is the exact pre-pass look.
+  // Depth-AWARE bold classification (the junction-cut fix): JS mirror.
+  // Whether a detected edge is a bold OUTLINE or a faded internal line
+  // now depends on the DEPTH GAP behind it, NOT curvature-relative: an
+  // outline has far background behind (large gap); a merged crease or
+  // limb-into-body junction has a creature surface right behind (tiny
+  // gap). This is precisely what the old rel-test could not tell apart,
+  // so junctions inked bold — the reported "cuts."
   {
-    const T = INK_DEPTH_THRESHOLD;
+    const G = INK_SILHOUETTE_GAP;
     const ss = (a, b, x) => { const t = Math.min(Math.max((x - a) / (b - a), 0), 1); return t * t * (3 - 2 * t); };
-    const factor = (rel) => INK_INTERIOR + (1 - INK_INTERIOR) * ss(T * 4, T * 12, rel);
+    const boldFactor = (behindGap) => INK_INTERIOR + (1 - INK_INTERIOR) * ss(G * 0.35, G, behindGap);
     assert(INK_INTERIOR > 0 && INK_INTERIOR <= 1, 'INK_INTERIOR is a sane strength (0..1]; 1.0 = uniform ink, the revert');
-    assert(Math.abs(factor(T * 2) - INK_INTERIOR) < 1e-12, 'a limb-class contour (rel 2x threshold) inks at exactly INK_INTERIOR strength (the reported clutter, quieted)');
-    assert(factor(T * 25) === 1, 'a creature-vs-creature / ground edge (rel 25x) keeps FULL ink (separation lines stay bold)');
-    assert(factor(1000) === 1, 'a background silhouette keeps FULL ink');
+    assert(G > 0, 'INK_SILHOUETTE_GAP is a positive world-depth threshold');
+    assert(Math.abs(boldFactor(G * 0.2) - INK_INTERIOR) < 1e-12, 'an internal junction (tiny depth gap behind — leg merged into body) fades to INK_INTERIOR: the junction-cut fix');
+    assert(boldFactor(G * 2) === 1, 'a true outline (far background behind, gap past threshold) keeps FULL ink — silhouettes stay bold');
+    assert(boldFactor(1000) === 1, 'a creature-vs-sky silhouette keeps FULL ink');
+    assert(Math.abs(boldFactor(G * 0.675) - (INK_INTERIOR + (1 - INK_INTERIOR) * 0.5)) < 1e-9, 'the classification band midpoint is exactly halfway (smoothstep, hand-computed)');
+    assert(INK_FRAG.includes('dMax - dMin') && INK_FRAG.includes('uSilhouetteGap'), 'the fragment classifies by the DEPTH GAP behind the edge (far background = bold outline, nearby surface = faded junction)');
     assert(INK_FRAG.includes('mix(uInteriorInk, 1.0, outerness)'), 'ink fragment carries the two-tier fade (the limb-read regression guard)');
   }
 }
