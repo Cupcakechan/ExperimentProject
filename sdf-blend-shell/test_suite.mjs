@@ -747,7 +747,7 @@ for (const creature of CREATURES) {
     assert(kneeGapMax < 1e-6, `${tag} the knee joint NEVER separates (max gap ${kneeGapMax.toExponential(1)} — thigh and shin write one shared point)`);
     assert(segLenDevMax < 1e-6, `${tag} neither segment stretches through the whole walk (max deviation ${segLenDevMax.toExponential(1)} — bend replaced stretch)`);
     assert(kneeCosMax - kneeCosMin > 0.05, `${tag} the knee ARTICULATES (bend-cos range ${(kneeCosMax - kneeCosMin).toFixed(3)} > 0.05 — not a rigid L)`);
-    assert(kneeCosMax < 0.0, `${tag} the walk never folds a knee past 90 deg (max cos ${kneeCosMax.toFixed(3)} < 0 — MEASURED 96/100 deg at lift 0.05; deep folds cusp the ink: the knee-seam mechanism)`);
+    assert(kneeCosMax < -0.17, `${tag} the walk keeps the knee fold CLEAR of the ink cusp (max cos ${kneeCosMax.toFixed(3)} < -0.17 = interior > ~100deg; lift 0.025 gentles it to ~106-108deg — the old 0.05 folded to 96deg and cusped the ink, the "ripped knee")`);
     assert(kneeCoverMax < -0.01, `${tag} the knee stays INSIDE the body through the whole walk (max sd ${kneeCoverMax.toFixed(3)} < -0.01 — the capless-knee validity boundary, executable)`);
   }
 }

@@ -128,7 +128,7 @@ export const CREATURES = [
       // A5: two-segment legs — foot id -> thigh id. The foot prim is the
       // SHIN; the rest pose's knee offset authors the bend direction.
       knees: { leg_fl: 'thigh_fl', leg_fr: 'thigh_fr', leg_bl: 'thigh_bl', leg_br: 'thigh_br' },
-      lift: 0.05, // A5.1: lower step — deep lifts fold knees past the ink's crease limit
+      lift: 0.025, // A5.1: gentle step (Option 1). MEASURED: holds the knee fold at interior ~106deg. The old 0.05 folded to 96deg, which cusped the depth ink — the "ripped knee." Foot clearance is unaffected (lift drives fold, not clearance); articulation stays lively (range ~0.70)
     },
     blink: { eyes: ['eyeball_l', 'eyeball_r', 'iris_l', 'iris_r'] },
     prims: [
@@ -208,7 +208,7 @@ export const CREATURES = [
       // A5: two-segment legs — foot id -> thigh id. The foot prim is the
       // SHIN; the rest pose's knee offset authors the bend direction.
       knees: { leg_fl: 'thigh_fl', leg_fr: 'thigh_fr', leg_bl: 'thigh_bl', leg_br: 'thigh_br' },
-      lift: 0.05, // A5.1: lower step — see critter's note
+      lift: 0.025, // A5.1: gentle step — see critter's note (interior ~108deg, clear of the ink cusp)
     },
     blink: { eyes: ['eyeball_l', 'eyeball_r', 'iris_l', 'iris_r'] },
     prims: [
