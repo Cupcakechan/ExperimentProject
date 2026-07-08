@@ -1748,7 +1748,7 @@ for (const creature of CREATURES) {
 // obey the same border. Everything is seed-deterministic: a world is
 // data, like a creature.
 {
-  const { terrainHeight, propPlacements, buildTerrainGeometry, bandColor, bakeTopLight, SUN } = await import('./src/render/world.js');
+  const { terrainHeight, propPlacements, buildTerrainGeometry, bandColor, bakeTopLight, SUN, buildPineGeometry } = await import('./src/render/world.js');
   const { WORLD_SEED, WORLD_RADIUS, WORLD_FLAT_RADIUS: FLAT, WORLD_HILL_HEIGHT, WORLD_PROP_MIN_R, ROAM_HARD_RADIUS: HARD, WORLD_PINE_COUNT, WORLD_PINE_MIN_H, WORLD_PINE_MAX_H, WORLD_PINE_SPACING, GROUND_COLOR: GC3 } = await import('./src/config.js');
 
   let flatOk = true;
@@ -1838,6 +1838,18 @@ for (const creature of CREATURES) {
       if (horiz < -0.6) fA = Math.min(fA, fc.getY(i));
     }
     assert(Math.abs(fT - fA) < 1e-9, 'the old top-light bake gives sun-facing and away-facing side facets the IDENTICAL tone (the flat read this pass fixes)');
+  }
+
+  // Layered tiers (trees, Option 2): the pine is 5 stacked skirt tiers now,
+  // not 3 smooth cones — a bumpier, layered silhouette with dark undersides.
+  // Vertex count guards the tier count; the seeded jitter keeps it
+  // deterministic (the world stays reproducible).
+  {
+    const pine = buildPineGeometry();
+    const vcount = pine.getAttribute('position').count;
+    assert(vcount >= 250, `the pine has 5 skirt tiers (${vcount} verts >= 250 — the layered-conifer silhouette, up from 3 smooth cones)`);
+    const pine2 = buildPineGeometry();
+    assert(pine2.getAttribute('position').count === vcount && pine.getAttribute('position').getX(77) === pine2.getAttribute('position').getX(77), 'the pine geometry is deterministic (seeded jitter — same tree every build)');
   }
   const low = bandColor(0);
   const gRaw = [((GC3 >> 16) & 255) / 255, ((GC3 >> 8) & 255) / 255, (GC3 & 255) / 255];

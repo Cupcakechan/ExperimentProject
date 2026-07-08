@@ -217,21 +217,36 @@ function mergeBaked(parts) {
 // upper-front-right. Used to bake DIRECTIONAL shading into props.
 export const SUN = (() => { const v = [0.6, 1.0, 0.5]; const l = Math.hypot(...v); return [v[0] / l, v[1] / l, v[2] / l]; })();
 
-function buildPineGeometry() {
+export function buildPineGeometry() {
   const BARK_D = 0x9a8474; // LOOK pass A: soft warm bark
   const BARK_L = 0xc2ac9a;
   const NEEDLE_D = 0x5da884; // still deeper green than the grass tufts, so pines READ as their own class
   const NEEDLE_L = 0x8fd0ac;
   const trunk = bakeTopLight(new THREE.CylinderGeometry(0.05, 0.075, 0.4, 6).translate(0, 0.2, 0), BARK_D, BARK_L);
-  // LOOK pass (trees): the needle cones are DIRECTIONALLY lit (SUN) so each
-  // reads as a 3D cone with a light side and a shadow side, not a flat
-  // top-lit triangle. Baked in local space, so a tree's light side rotates
-  // with its per-instance rotation — standard for low-poly foliage, and
-  // the size variety keeps it from looking aligned. Trunk stays top-light.
-  const c1 = bakeTopLight(new THREE.ConeGeometry(0.42, 0.55, 7).translate(0, 0.55, 0), NEEDLE_D, NEEDLE_L, SUN);
-  const c2 = bakeTopLight(new THREE.ConeGeometry(0.3, 0.5, 7).translate(0, 0.85, 0), NEEDLE_D, NEEDLE_L, SUN);
-  const c3 = bakeTopLight(new THREE.ConeGeometry(0.2, 0.45, 7).translate(0, 1.12, 0), NEEDLE_D, NEEDLE_L, SUN);
-  return mergeBaked([trunk, c1, c2, c3]);
+  // LOOK pass (trees, Option 2): 5 stacked skirt tiers with per-tier
+  // radius + rotation jitter — a bumpier, layered-conifer silhouette in
+  // place of 3 smooth cones. Each skirt is DIRECTIONALLY lit (SUN), so its
+  // down-facing underside falls dark in the bake and reads as an inter-
+  // tier shadow. The BOTTOM tier keeps the old r=0.42 crown, so the pine-
+  // spacing invariant (crown r~1.0 at max scale) is unchanged. Jitter is
+  // DETERMINISTIC (fixed seed) so the world stays reproducible; the per-
+  // instance Y-rotation + size still vary trees, this bump pattern riding
+  // along.
+  const TIERS = 5;
+  let seed = 0x9e3779b9 >>> 0; // fixed -> the pine geometry is deterministic
+  const rnd = () => { seed = (Math.imul(seed, 1664525) + 1013904223) >>> 0; return seed / 4294967296; };
+  const cones = [];
+  for (let i = 0; i < TIERS; i++) {
+    const f = i / (TIERS - 1); // 0 bottom .. 1 top
+    const r = (0.42 * (1 - f) + 0.13 * f) + (rnd() - 0.5) * 0.05; // taper + radius jitter
+    const cy = 0.50 * (1 - f) + 1.16 * f; // rising skirt centers (tiers overlap)
+    const rot = rnd() * Math.PI * 2; // rotation offset -> facets don't stack vertically
+    cones.push(bakeTopLight(
+      new THREE.ConeGeometry(r, 0.50, 7).rotateY(rot).translate(0, cy, 0),
+      NEEDLE_D, NEEDLE_L, SUN,
+    ));
+  }
+  return mergeBaked([trunk, ...cones]);
 }
 
 // Prop placements (pure, suite-anchored): everything at r >= PROP_MIN_R,
