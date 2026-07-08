@@ -90,27 +90,18 @@ export function createTrails(scene) {
   tex.needsUpdate = true;
   tex.magFilter = THREE.LinearFilter;
   tex.minFilter = THREE.LinearFilter;
-  // FLOOR-PAINT contract (the ghost-legs fix): NOT transparent —
-  // CustomBlending with the normal alpha equation is honored on
-  // opaque-pass materials (r170 WebGLState.setMaterial: only
-  // NormalBlending + transparent:false disables blending;
-  // source-verified), so prints render IN THE OPAQUE PASS between the
-  // terrain (renderOrder -10) and everything at 0: creatures drawn
-  // later OVERWRITE print pixels wherever they are nearer — a print
-  // can never tint a body again (the transparent pass drew decals
-  // AFTER creatures, and any print in FRONT of a foot legitimately
-  // blended over its lower pixels at low camera pitch). NO depth
-  // write: the ink pass stays blind BY CONSTRUCTION, and overlapping
+  // TRANSPARENT-pass prints (reverted from the opaque floor-paint
+  // contract — that needed a negative-renderOrder terrain that would not
+  // render through the ink pass). Transparent + depthWrite:false: prints
+  // draw after all opaque, depth-tested (a foot in front occludes them),
+  // never entering the depth buffer, so the ink pass stays blind and
   // coplanar prints cannot z-fight.
   const mesh = new THREE.InstancedMesh(geo, new THREE.MeshBasicMaterial({
     map: tex,
+    transparent: true,
     depthWrite: false,
-    blending: THREE.CustomBlending,
-    blendEquation: THREE.AddEquation,
-    blendSrc: THREE.SrcAlphaFactor,
-    blendDst: THREE.OneMinusSrcAlphaFactor,
   }), TRAIL_CAP);
-  mesh.renderOrder = -1; // the top floor-paint layer: over dots (-3) and shadows (-2), under everything else
+  mesh.renderOrder = 0; // transparent decals sort among themselves: prints (0) over shadows (-1) over dots (-2)
   // Instances are placed at runtime across the stage; the geometry's own
   // bounds are a unit quad — default culling would drop them (the same
   // rule as the snap-shader creatures).

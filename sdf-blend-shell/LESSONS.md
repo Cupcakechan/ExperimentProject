@@ -595,3 +595,42 @@
   correctness does not depend on the model — by-construction beats
   by-analysis) + creature-forge (skydome recipe: background domes are
   depth-inert, first + no write + no test, never depth contenders).
+
+## 2026-07-08 — the floor-paint contract regressed the terrain to invisible (revert)
+- What broke / what happened: the ground read white for MANY rounds; the
+  decals (shadows/prints/dots) took every pigment change but the FLOOR
+  never did. A solo-terrain instrument settled it: the terrain mesh —
+  FOUND, visible, 8448 tris, good bounds, FrontSide, vertex-colored —
+  rendered NOTHING.
+- Root cause: the floor-paint contract put the terrain at renderOrder -10
+  so the decals could ladder beneath it. But an OPAQUE, depth-WRITING
+  object at a NEGATIVE renderOrder does not render through the ink pass's
+  MSAA + depth-texture target on the target GPU. Cross-check that named it:
+  the sky (-100) and the depthWrite:false decals (-3/-2/-1) render fine at
+  negative orders; the terrain, the lone opaque depth-writer below zero,
+  did not. The trigger is the COMBINATION (opaque + depthWrite + negative
+  renderOrder) — a fourth model-vs-GPU disagreement this stretch, left
+  unexplained at the GL level.
+- Why it hid so long: the missing terrain looks like a pale floor because
+  the depth-inert sky's near-white horizon shows through where the ground
+  should be. Two "ground too white" pigment passes were spent tuning a
+  floor that was not there.
+- Verification gap it exposed: no probe asserted the terrain RENDERS —
+  only its scene-graph properties (all of which were correct). The suite
+  cannot see a driver-level non-render; the instrument had to. A probe
+  that checks scene-graph state is NOT a probe that the thing renders.
+- Plug shipped: the floor-paint contract is REVERTED. Decals return to the
+  transparent pass (transparent + depthWrite:false, depth-tested, drawn
+  after opaque); the terrain returns to renderOrder 0 (renders like the
+  props, paints over the depth-inert sky). The contact-AO stays. A
+  REGRESSION GUARD probe now fails if the terrain is ever put back below
+  zero.
+- Cost re-opened: the ghost-legs artifact the contract was meant to fix (a
+  thin decal band at the foot-ground contact) may return; the contact-AO
+  masks the foot bottom. Re-queued as its OWN item, to be solved WITHOUT
+  touching the terrain's render path (polygonOffset or a decal-Y nudge,
+  not a renderOrder ladder).
+- Route: dev-method (negative renderOrder is safe ONLY for
+  non-depth-writing objects through a depth-texture post-process; and a
+  scene-graph probe is not a render probe) + creature-forge (floor-decal
+  recipe: transparent pass, never an opaque negative-renderOrder ladder).

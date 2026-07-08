@@ -294,8 +294,15 @@ function bakeTopLight(geo, darkHex, lightHex) {
 // Node-probeable). Static meshes, real CPU bounds — default culling is
 // correct here, unlike the snap-shader creatures.
 export function createWorld(scene) {
+  // TERRAIN — opaque, renderOrder 0 (the DEFAULT). It must NOT sit at a
+  // negative renderOrder: an opaque, depth-WRITING object below zero does
+  // not render through the ink pass's MSAA + depth-texture target on the
+  // target GPU (the white-ground incident — the sky at -100 and the
+  // depthWrite:false decals render fine at negative orders; the terrain,
+  // the lone opaque depth-writer below zero, did not; caught with a
+  // solo-terrain instrument). At 0 it draws like the props and paints
+  // over the depth-inert sky.
   const terrain = new THREE.Mesh(buildTerrainGeometry(WORLD_SEED), new THREE.MeshBasicMaterial({ vertexColors: true }));
-  terrain.renderOrder = -10; // the floor draws FIRST: it is the canvas the floor-paint layers (dots/shadows/prints) land on
   scene.add(terrain);
 
   // LOOK pass A sky — REBUILT after the dome-covers-terrain incident:
@@ -344,21 +351,20 @@ export function createWorld(scene) {
   dotTex.minFilter = THREE.LinearFilter;
   const dotMesh = new THREE.InstancedMesh(
     new THREE.PlaneGeometry(1, 1).rotateX(-Math.PI / 2),
-    // FLOOR-PAINT contract (the ghost-legs fix): opaque-pass alpha —
-    // see trails.js for the source-verified mechanism.
+    // TRANSPARENT-pass floor pattern (reverted from the opaque floor-
+    // paint contract, which needed a negative-renderOrder terrain that
+    // would not render). Transparent + depthWrite:false: draws after all
+    // opaque, depth-tested so hills occlude it, never writing depth.
     new THREE.MeshBasicMaterial({
       map: dotTex,
+      transparent: true,
       depthWrite: false,
-      blending: THREE.CustomBlending,
-      blendEquation: THREE.AddEquation,
-      blendSrc: THREE.SrcAlphaFactor,
-      blendDst: THREE.OneMinusSrcAlphaFactor,
       color: new THREE.Color().setHex(GROUND_DOT_COLOR, THREE.LinearSRGBColorSpace),
     }),
     dots.length
   );
   dotMesh.frustumCulled = false; // instances place at runtime (the trails rule)
-  dotMesh.renderOrder = -3; // the bottom floor-paint layer: over the terrain (-10), under shadows (-2) and prints (-1)
+  dotMesh.renderOrder = -2; // transparent decals sort among themselves: dots (-2) under shadows (-1) under prints (0)
   {
     const m = new THREE.Matrix4();
     dots.forEach((d, i) => {
