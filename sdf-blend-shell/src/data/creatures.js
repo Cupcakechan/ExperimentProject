@@ -242,7 +242,7 @@ export const CREATURES = [
     inflate: 0.04,
     // Deep, slow breath — the chubby creature breathes like one.
     breath: { amplitude: 0.02, speed: 1.6 },
-    blink: { eyes: ['sclera_l', 'sclera_r', 'pupil_l', 'pupil_r'] },
+    blink: { eyes: ['sclera_l', 'sclera_r', 'pupil_l', 'pupil_r', 'catch_l', 'catch_r'] },
     anim: { primId: 'tail', axis: [0, 1, 0], amplitude: 0.5, speed: 3.0 },
     step: { feet: ['leg_fl', 'leg_fr', 'leg_bl', 'leg_br'], groups: [[0, 3], [1, 2]] },
     // 12 prims (the old MAX_PRIMS ceiling; capacity is 16 since Skitter).
@@ -273,6 +273,13 @@ export const CREATURES = [
       { id: 'sclera_r', type: 'sphere', a: [-0.72, 0.8, -0.11], r: 0.075, color: 0xf2f4f6, paint: true },
       { id: 'pupil_l', type: 'sphere', a: [-0.73, 0.804, 0.1155], r: 0.032, color: 0x1e2430, paint: true },
       { id: 'pupil_r', type: 'sphere', a: [-0.73, 0.804, -0.1155], r: 0.032, color: 0x1e2430, paint: true },
+      // Flat-eye catchlight: a small WHITE decal on the upper pupil — the
+      // glossy shine the ball-eyed cast gets from the shader. Pudge stays
+      // flat-eyed (its inflate+breath peak 0.06 would need a grotesque
+      // r>=0.18 ball eye), so the shine is painted instead. Ordered AFTER
+      // the pupils -> composites on top (white over the dark pupil).
+      { id: 'catch_l', type: 'sphere', a: [-0.725, 0.818, 0.113], r: 0.014, color: 0xffffff, paint: true },
+      { id: 'catch_r', type: 'sphere', a: [-0.725, 0.818, -0.113], r: 0.014, color: 0xffffff, paint: true },
     ],
   },
   {

@@ -397,6 +397,7 @@ assert(Math.abs(paintSd(critter, 'eyeball_l', 'head') - -0.0195) < 3e-3, 'critte
 assert(Math.abs(paintSd(hopper, 'eyeball_l', 'body') - -0.0196) < 3e-3, 'hopper eyeball_l rooted -0.0196 in the body (hand-computed)');
 assert(Math.abs(paintSd(longneck, 'eyeball_l', 'head') - -0.0153) < 3e-3, 'longneck eyeball_l rooted -0.0153 in the head (hand-computed)');
 assert(Math.abs(paintSd(pudge, 'sclera_l', 'head') - -0.0181) < 1e-3, 'pudge sclera_l sd vs head = -0.0181 (hand-computed — FLAT eyes: the ball-eye dilate boundary)');
+assert(pudge.prims.filter((p) => p.id.startsWith('catch_') && p.paint && p.color === 0xffffff).length === 2 && pudge.prims.findIndex((p) => p.id === 'catch_l') > pudge.prims.findIndex((p) => p.id === 'pupil_l'), 'pudge flat eyes carry a WHITE catchlight decal per pupil, composited AFTER the pupils (the flat-eye shine — ball eyes would need a grotesque r>=0.18 at its 0.06 peak)');
 assert(Math.abs(paintSd(snail, 'eyeball_l', 'antenna_l') - -0.0151) < 3e-3, 'snail eyeball_l rooted -0.0151 in the stalk tip (hand-computed, capsule end-cap host)');
 // Every eyeball must POKE (protrude past its host) and every iris must
 // poke ITS eyeball — the generic paint probes cover irises; this covers
