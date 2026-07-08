@@ -251,7 +251,7 @@ export const INK_DEPTH_THRESHOLD = 0.02; // relative depth step that inks: step/
 // full black. The clustered leg contours are REAL occlusion edges, so no
 // threshold can quiet them without killing wanted lines — class-based
 // fading can. 1.0 = uniform ink (the exact pre-pass look, the revert).
-export const INK_INTERIOR = 0.35; // LOOK pass C: interior contours one step quieter — limb self-lines whisper, separation edges keep FULL strength (the two-tier law unchanged)
+export const INK_INTERIOR = 0.15; // Option 1 (knee/junction cuts): interior contours faded hard — the concave crease at thin-limb junctions (thigh->body, rest knee) is structural to capsule-blend + depth-ink, so the FIX is to stop drawing it. Silhouettes keep FULL strength; eye rings are decals, unaffected. 0 = fully clean (but the sane-strength probe floors at >0). Toward the clean-toy reference
 
 // CONTACT SHADOWS (research build 1): one soft blob decal per actor —
 // the grounding read the unlit creatures lack. Analytic (no render
