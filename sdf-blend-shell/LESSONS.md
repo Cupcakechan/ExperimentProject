@@ -634,3 +634,44 @@
   non-depth-writing objects through a depth-texture post-process; and a
   scene-graph probe is not a render probe) + creature-forge (floor-decal
   recipe: transparent pass, never an opaque negative-renderOrder ladder).
+
+## 2026-07-08 — the terrain was BACK-FACE CULLED the whole time (winding); every other ground theory was a red herring
+- What broke / what happened: the ground read white for a long run of
+  rounds. Deepening GROUND_COLOR did nothing; the decals (dots/shadows/
+  prints) were clearly mint while the ground stayed white — SAME pixels,
+  same light. Daniel's framing ("why are the footprints green but the
+  ground white — stop and think") was the key: the decals and the terrain
+  use different paths, so compare them.
+- Root cause: buildTerrainGeometry wound EVERY triangle to a DOWNWARD
+  normal (-y). Verified numerically: 8352 of 8352 non-degenerate faces
+  pointed down. With MeshBasicMaterial FrontSide + an overhead camera,
+  the whole mesh is back-face-culled — INVISIBLE. The "ground" seen for
+  the entire project was the background / sky dome showing THROUGH the
+  unrendered terrain (dark in the night-terrarium era, white once the
+  pale sky went in). The terrain never rendered, at ANY renderOrder.
+- The red herrings it spawned: (1) "ground too white" -> two pigment
+  passes tuning a mesh that wasn't drawing; (2) "dome covers the world"
+  -> the depth-inert sky rebuild (a real, separate improvement, but it
+  did not and could not reveal a culled terrain); (3) "opaque depth-
+  writer at negative renderOrder won't render through the ink pass" ->
+  the whole floor-paint contract + its revert. The terrain was invisible
+  at -10 AND at 0; renderOrder was never the variable. A solo-terrain
+  instrument even showed "white" and I read it as not-rendering without
+  isolating WHY (a near-white background hid that it was culling, not
+  mis-coloring).
+- Verification gap it exposed: no probe checked that the terrain FACES
+  THE CAMERA. Scene-graph probes (present, visible, vertexColors,
+  bounds) were all green on an invisible mesh. Winding / front-facing is
+  now a probe.
+- Plug shipped: the terrain winding is reversed (index order flipped);
+  verified every face now points +y. A REGRESSION GUARD probe fails if
+  any terrain triangle ever winds downward again.
+- The deep lesson: when a hand-built mesh does not appear, check
+  WINDING / face direction BEFORE color, material, renderOrder, or the
+  render pipeline — a culled mesh is scene-graph-perfect and simply
+  absent. And a "solo" instrument must run against a CONTRASTING
+  background, or a culled mesh and a same-colored one look identical.
+- Route: dev-method (the culled-mesh checklist item, and: a scene-graph
+  probe is not a render probe — assert face direction for hand-wound
+  geometry) + creature-forge (terrain/ground recipe: wind faces up, or
+  the overhead camera culls the floor).

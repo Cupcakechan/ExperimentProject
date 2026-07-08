@@ -177,7 +177,13 @@ export function buildTerrainGeometry(seed = WORLD_SEED) {
   for (let i = 0; i < RINGS; i++) {
     for (let j = 0; j < SECTORS; j++) {
       const a = i * row + j;
-      index.push(a, a + row, a + 1, a + 1, a + row, a + row + 1);
+      // Winding REVERSED so face normals point UP (+y). As first authored,
+      // every triangle wound to a downward normal, so the whole terrain was
+      // back-face-culled from the overhead camera — invisible. It was never
+      // the ground color or the renderOrder (both were red herrings across
+      // many rounds); the ground we saw was the background/sky through an
+      // unrendered mesh. Verified: this order makes flat-region normals +y.
+      index.push(a, a + 1, a + row, a + 1, a + row + 1, a + row);
     }
   }
   const geo = new THREE.BufferGeometry();

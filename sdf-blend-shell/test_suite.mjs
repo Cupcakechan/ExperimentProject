@@ -1773,6 +1773,27 @@ for (const creature of CREATURES) {
   assert(maxH > 0.15, `the hills exist (max sampled height ${maxH.toFixed(3)} > 0.15 — the ring is not inert)`);
   assert(minH >= 0 && maxH <= WORLD_HILL_HEIGHT + 1e-9, `hills stay in [0, ${WORLD_HILL_HEIGHT}] (no pits below the stage plane, ceiling held)`);
   assert(terrainHeight(6.2, 3.1, WORLD_SEED) === terrainHeight(6.2, 3.1, WORLD_SEED), 'terrain is deterministic (same inputs, same height)');
+  // REGRESSION GUARD (the invisible-terrain incident): every terrain
+  // triangle must wind to an UPWARD normal (+y). As first authored they
+  // all faced DOWN, so the overhead camera back-face-culled the entire
+  // mesh — the terrain was invisible for many rounds and the "ground" was
+  // the background/sky showing through it. Winding, not color, not
+  // renderOrder.
+  {
+    const g = buildTerrainGeometry(WORLD_SEED);
+    const pos = g.getAttribute('position'), idx = g.getIndex();
+    let up = 0, down = 0;
+    for (let n = 0; n < idx.count / 3; n++) {
+      const a = idx.getX(n * 3), b = idx.getX(n * 3 + 1), c = idx.getX(n * 3 + 2);
+      const P = (i) => [pos.getX(i), pos.getY(i), pos.getZ(i)];
+      const [p0, p1, p2] = [P(a), P(b), P(c)];
+      const e1 = [p1[0] - p0[0], p1[1] - p0[1], p1[2] - p0[2]];
+      const e2 = [p2[0] - p0[0], p2[1] - p0[1], p2[2] - p0[2]];
+      const ny = e1[2] * e2[0] - e1[0] * e2[2]; // y-component of e1 x e2
+      if (ny > 1e-9) up++; else if (ny < -1e-9) down++;
+    }
+    assert(down === 0 && up > 0, `every terrain triangle faces UP (+y): ${up} up / ${down} down — a downward winding back-face-culls the whole ground (the invisible-terrain incident)`);
+  }
   assert(terrainHeight(6.2, 3.1, WORLD_SEED) !== terrainHeight(6.2, 3.1, WORLD_SEED + 1), 'a different world seed is a different world');
 
   const props = propPlacements(WORLD_SEED);
