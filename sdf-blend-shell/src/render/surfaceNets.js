@@ -207,7 +207,12 @@ function creatureBounds(prims, inflate, pad) {
 // Build a watertight THREE.BufferGeometry for a creature's field.
 export function buildSurfaceNetsGeometry(prims, opts = {}) {
   const { cellSize = 0.015, padding = 0.06, inflate = 0, blendK = BLEND_K, flip = false } = opts;
-  const bounds = creatureBounds(prims, inflate, Math.max(padding, cellSize * 2));
+  // Padding must contain the smin INFLATION, which grows with k: at high
+  // blend the surface plumps past the raw prim box, and a fixed pad clips
+  // it into a hole at the box face (MEASURED: 0.03 past raw at k=0.25,
+  // 0.08 at k=0.45 — ~k*0.25). k*0.3 covers it with margin; the fixed
+  // floor still guards tiny-k and the cell-size minimum holds for fine grids.
+  const bounds = creatureBounds(prims, inflate, Math.max(padding, cellSize * 2, blendK * 0.3));
   const ns = [0, 1, 2].map((ax) =>
     Math.max(4, Math.ceil((bounds[1][ax] - bounds[0][ax]) / cellSize) + 1),
   );
