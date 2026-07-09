@@ -4,7 +4,8 @@
 // ONE-TIME LOCAL SETUP (only if node_modules is missing):
 //   npm install three@0.170.0
 //
-// Section 0: import every src/ module (except the boot entry main.js)
+// Section 0: import every src/ module (except browser entries — main.js
+// and proto-* prototype pages — which need a real canvas/WebGL context)
 //            so the browser is never the first parser to see the code.
 // Section 1: GENERALIZED creature invariants — every creature in the
 //            gallery must satisfy every rule — plus hand-computed
@@ -46,7 +47,7 @@ function walk(dir, out = []) {
   return out;
 }
 
-const modules = walk('src').filter((p) => !p.endsWith('main.js')); // main.js needs a real canvas
+const modules = walk('src').filter((p) => !p.endsWith('main.js') && !p.split('/').pop().startsWith('proto-')); // main.js + proto-* prototype entries need a real canvas
 for (const modPath of modules) {
   try {
     await import(pathToFileURL(modPath).href);

@@ -468,5 +468,32 @@ export function createBlendMaterial(prims, inflate, knees) {
   });
 }
 
+// Surface Nets skin (R4 slice): the mesh is ALREADY the isosurface
+// (surfaceNets.js meshed the field directly), so the vertex stage is
+// pass-through — no snap, no burial, no capless machinery, because a
+// watertight isosurface has no coincident donor layers to z-fight and no
+// seams to hide. The fragment stage is IDENTICAL to the shell's: it still
+// evaluates the field per pixel for the SDF-gradient normal and the
+// blended color, so the shading matches exactly.
+const SN_VERT = /* glsl */ `
+varying vec3 vPos;
+void main() {
+  // Geometry is baked in creature space (the authored coords), on the
+  // skin. Hand the fragment stage the surface point; it lifts to world
+  // through modelMatrix for lighting, exactly as the shell does.
+  vPos = position;
+  gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
+}
+`;
+
+export function createSurfaceNetsMaterial(prims, inflate) {
+  return new THREE.ShaderMaterial({
+    defines: { MAX_PRIMS, SNAP_ITERS },
+    uniforms: buildUniforms(prims, inflate),
+    vertexShader: SN_VERT,
+    fragmentShader: FRAG,
+  });
+}
+
 // (createOutlineMaterial retired at R-SIMPLIFY: the ink is inkPass.js
 // since R1. Pre-simplify versions live in git history.)
