@@ -47,7 +47,7 @@ function walk(dir, out = []) {
   return out;
 }
 
-const modules = walk('src').filter((p) => !p.endsWith('main.js') && !p.split('/').pop().startsWith('proto-')); // main.js + proto-* prototype entries need a real canvas
+const modules = walk('src').filter((p) => !p.endsWith('main.js') && !p.split('/').pop().startsWith('proto-') && !p.endsWith('Worker.js')); // main.js + proto-* pages + *Worker.js need a real canvas/worker context
 for (const modPath of modules) {
   try {
     await import(pathToFileURL(modPath).href);
