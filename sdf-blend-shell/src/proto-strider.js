@@ -101,7 +101,7 @@ const prims = strider.prims.flatMap((p) => {
 // it readable there. (chi==2 alone is NOT a weld detector: a full-
 // length weld is a lump, not a ring; the corridor-peak profile is the
 // real one.) Prim budget: 15/16.
-const ARM_UP_R = 0.065, ARM_FORE_R = 0.055, ARM_UP_K = 0.07, ARM_FORE_K = 0.06;
+const ARM_UP_R = 0.06, ARM_FORE_R = 0.055, ARM_UP_K = 0.05, ARM_FORE_K = 0.05; // elbow de-bulge (the knee treatment): halve the radius step + lower both fold k's
 const SHOULDER = [0.11, 1.16, 0.13]; // buried in the torso top (sd -0.05 at r 0.18)
 const ELBOW = [0.13, 0.84, 0.34];    // slightly back (+x), out (+z): the mild A-pose
 const HAND = [0.06, 0.56, 0.37];     // slightly forward, ends mid-thigh height
