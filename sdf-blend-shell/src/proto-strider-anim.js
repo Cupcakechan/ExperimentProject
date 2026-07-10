@@ -67,11 +67,11 @@ const HEAD = [0.02, 1.56, 0];
 const HEAD_R = 0.20;
 const EYE_ROOT = 0.045; // authored ball rooting depth into the head
 const OVERRIDE = {
-  body: { a: [0.11, 1.00, 0], b: [0.11, 1.20, 0], r: 0.20 }, // bottom raised off the crotch (was 0.90 -> cap at knee height)
+  body: { a: [0.11, 1.00, 0], b: [0.11, 1.20, 0], r: 0.18 }, // bottom raised off the crotch; r 0.20 -> 0.18 buys the ARM corridor (and more slim)
   neck: { a: [0.11, 1.20, 0], b: [0.05, 1.40, 0], r: 0.09 },
   head: { a: HEAD, r: HEAD_R },
-  thigh_l: { a: [0.11, 0.92, 0.13], b: [0.03, 0.45, 0.14], r: 0.085, kPrim: THIGH_K },
-  thigh_r: { a: [0.11, 0.92, -0.13], b: [0.03, 0.45, -0.14], r: 0.085, kPrim: THIGH_K },
+  thigh_l: { a: [0.11, 0.92, 0.11], b: [0.03, 0.45, 0.14], r: 0.085, kPrim: THIGH_K }, // hip z in: shrinks the flare the arm must clear
+  thigh_r: { a: [0.11, 0.92, -0.11], b: [0.03, 0.45, -0.14], r: 0.085, kPrim: THIGH_K },
   leg_l: { a: [0.03, 0.45, 0.14], b: [0.11, 0.06, 0.14], r: 0.08, kPrim: SHIN_K },
   leg_r: { a: [0.03, 0.45, -0.14], b: [0.11, 0.06, -0.14], r: 0.08, kPrim: SHIN_K },
   tail: null, // removed: humanoid
@@ -93,6 +93,28 @@ const prims = strider.prims.flatMap((p) => {
   }
   return [{ ...p, ...(OVERRIDE[p.id] ?? {}) }];
 });
+// ARMS (v4): two-segment, elbow = a SHARED endpoint (the leg contract:
+// zero divergence, smooth at any k). MEASURED reality: with any torso
+// wide enough to read as a chest, a near-hanging arm WELDS through the
+// widest band — full armpit daylight would need starfish arms (elbow z
+// 0.40+) or a 0.15 torso. Shipped compromise (corridor-peak sweep):
+// torso 0.18 + mild A-pose (elbow z 0.34) => the arm separates cleanly
+// FROM THE ELBOW DOWN (weakest corridor +0.019) while the upper arm
+// rides the torso side as a deltoid mass — the darker limb tones keep
+// it readable there. (chi==2 alone is NOT a weld detector: a full-
+// length weld is a lump, not a ring; the corridor-peak profile is the
+// real one.) Prim budget: 15/16.
+const ARM_UP_R = 0.065, ARM_FORE_R = 0.055, ARM_UP_K = 0.07, ARM_FORE_K = 0.06;
+const SHOULDER = [0.11, 1.16, 0.13]; // buried in the torso top (sd -0.05 at r 0.18)
+const ELBOW = [0.13, 0.84, 0.34];    // slightly back (+x), out (+z): the mild A-pose
+const HAND = [0.06, 0.56, 0.37];     // slightly forward, ends mid-thigh height
+const mirrorZ = (v) => [v[0], v[1], -v[2]];
+prims.push(
+  { id: 'arm_l', type: 'capsule', a: SHOULDER, b: ELBOW, r: ARM_UP_R, kPrim: ARM_UP_K, color: 0x2e8478 },
+  { id: 'fore_l', type: 'capsule', a: ELBOW, b: HAND, r: ARM_FORE_R, kPrim: ARM_FORE_K, color: 0x256e63 },
+  { id: 'arm_r', type: 'capsule', a: mirrorZ(SHOULDER), b: mirrorZ(ELBOW), r: ARM_UP_R, kPrim: ARM_UP_K, color: 0x2e8478 },
+  { id: 'fore_r', type: 'capsule', a: mirrorZ(ELBOW), b: mirrorZ(HAND), r: ARM_FORE_R, kPrim: ARM_FORE_K, color: 0x256e63 },
+);
 const proto = { ...strider, prims }; // same ids/indices/step — only thigh kPrim differs
 let blendK = 0.25; // BACK to the cast default: the armpit fix moved into THIGH_K
 let cellSize = 0.02; // animation default: coarser than the static 0.015 for speed
