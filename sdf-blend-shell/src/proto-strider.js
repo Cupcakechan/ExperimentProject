@@ -67,8 +67,8 @@ const OVERRIDE = {
   body: { a: [0.11, 1.00, 0], b: [0.11, 1.20, 0], r: 0.18 }, // bottom raised off the crotch; r 0.20 -> 0.18 buys the ARM corridor (and more slim)
   neck: { a: [0.11, 1.20, 0], b: [0.05, 1.40, 0], r: 0.09 },
   head: { a: HEAD, r: HEAD_R },
-  thigh_l: { a: [0.11, 0.92, 0.11], b: [0.03, 0.45, 0.14], r: 0.085, kPrim: THIGH_K }, // hip z in: shrinks the flare the arm must clear
-  thigh_r: { a: [0.11, 0.92, -0.11], b: [0.03, 0.45, -0.14], r: 0.085, kPrim: THIGH_K },
+  thigh_l: { a: [0.11, 0.92, 0.09], b: [0.03, 0.45, 0.14], r: 0.08, kPrim: THIGH_K }, // hip z in + r 0.08: shrinks the flare the arm must clear (and zeroes the knee radius step)
+  thigh_r: { a: [0.11, 0.92, -0.09], b: [0.03, 0.45, -0.14], r: 0.08, kPrim: THIGH_K },
   leg_l: { a: [0.03, 0.45, 0.14], b: [0.11, 0.06, 0.14], r: 0.08, kPrim: SHIN_K },
   leg_r: { a: [0.03, 0.45, -0.14], b: [0.11, 0.06, -0.14], r: 0.08, kPrim: SHIN_K },
   tail: null, // removed: humanoid
@@ -95,16 +95,17 @@ const prims = strider.prims.flatMap((p) => {
 // wide enough to read as a chest, a near-hanging arm WELDS through the
 // widest band — full armpit daylight would need starfish arms (elbow z
 // 0.40+) or a 0.15 torso. Shipped compromise (corridor-peak sweep):
-// torso 0.18 + mild A-pose (elbow z 0.34) => the arm separates cleanly
-// FROM THE ELBOW DOWN (weakest corridor +0.019) while the upper arm
-// rides the torso side as a deltoid mass — the darker limb tones keep
-// it readable there. (chi==2 alone is NOT a weld detector: a full-
+// v4.1 (arms off the legs, per feedback): shoulder moved to the TORSO
+// TOP corner, hip flare pulled in (thigh z 0.09, r 0.08 — knee step now
+// zero), and the straight ray widened to 26 deg. MEASURED: the weld now
+// ends at y 0.93 — ABOVE the hip point — so the arm attaches to torso
+// only, with a +0.023 gap through the entire leg zone. (chi==2 alone is NOT a weld detector: a full-
 // length weld is a lump, not a ring; the corridor-peak profile is the
 // real one.) Prim budget: 15/16.
 const ARM_UP_R = 0.06, ARM_FORE_R = 0.055, ARM_UP_K = 0.05, ARM_FORE_K = 0.05; // elbow de-bulge (the knee treatment): halve the radius step + lower both fold k's
-const SHOULDER = [0.11, 1.16, 0.14]; // buried in the torso top (sd -0.04 at r 0.18)
-const ELBOW = [0.083, 0.84, 0.263];  // ON the shoulder->hand line: the arm lays STRAIGHT (0 deg kink; the 27 deg elbow bow read crooked). Cost, MEASURED: daylight now starts at y 0.78 (lower forearm) instead of 0.90 — the straight rod brushes the hip. Lever for more daylight: elbow z out toward 0.30.
-const HAND = [0.06, 0.56, 0.37];     // slightly forward, ends mid-thigh height (collinear with SHOULDER and ELBOW)
+const SHOULDER = [0.11, 1.20, 0.14]; // torso TOP corner (sd -0.04): higher root = the straight ray clears the hip sooner
+const ELBOW = [0.082, 0.84, 0.314];  // ON the shoulder->hand line (0 deg kink, the lay-straight ask)
+const HAND = [0.06, 0.56, 0.45];     // sweep-picked: weld ends y 0.93 (above the hip), leg-zone gap +0.023
 const mirrorZ = (v) => [v[0], v[1], -v[2]];
 prims.push(
   { id: 'arm_l', type: 'capsule', a: SHOULDER, b: ELBOW, r: ARM_UP_R, kPrim: ARM_UP_K, color: 0x2e8478 },
