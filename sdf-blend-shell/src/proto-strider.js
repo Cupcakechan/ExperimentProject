@@ -24,41 +24,56 @@ import { createWorld } from './render/world.js';
 import { CAMERA_FOV, CAMERA_START, ORBIT_TARGET, BACKGROUND_COLOR, BLEND_K } from './config.js';
 
 const strider = CREATURES.find((c) => c.id === 'strider');
-// PROTO-LOCAL HUMANOID PASS v3 (not authored into the cast; per feedback
-// the proto is deliberately veering creature -> humanoid). Explicit
-// authored values now — the v2 stand-rotation chain is collapsed into
-// its results and re-proportioned. Every value below is ONE lever.
-// vs v2: body r 0.30 -> 0.22 (side bulk), hips z 0.16 -> 0.11 and legs
-// slimmed 0.12/0.11 -> 0.11/0.10 (front hip width: leg outer edge now
-// FLUSH with the torso at 0.22), TAIL REMOVED (humanoid; it was half
-// the side-view lump), head raised a touch (1.49 -> 1.56) for length.
-// v3.1: STRAIGHT LEG COLUMN (the lower-half jut was the digitigrade
-// Z-fold: hip x 0.10 -> knee 0.00 -> foot 0.12). Hip and foot now sit
-// ALIGNED on the torso axis (x 0.11); the knee keeps a 0.06 forward
-// bias purely as the IK pole. Rest reach rises to ~0.98 — the gait
-// self-regulates near its 0.995 straight limit (MEASURED below).
-// NOTE: the knee is no longer tucked inside the slim body — on the
-// isosurface that is a FEATURE (a visible bending knee, no rims to
-// leak); the static proto SHELL toggle will now show rim artifacts at
-// knees and body — expected, the shell path is not humanoid-valid.
-const THIGH_K = 0.30; // armpit/crotch softener (was 0.34 on the fat body)
-const HEAD = [0.02, 1.56, 0]; // head center; eyes ride it at authored offsets
+// PROTO-LOCAL HUMANOID PASS v3.2 (not authored into the cast; the proto
+// is deliberately veering creature -> humanoid). Explicit values — every
+// line is one lever.
+// v3.2 changes: HEAD 0.26 -> 0.20 (was reading big on the slim body);
+// the eye group SCALES with it so the balls stay rooted EYE_ROOT into
+// the head surface and each iris keeps its exact on-ball offset (paint
+// band preserved). LEG DE-FUSE (MEASURED, three culprits): the torso
+// bottom hung to y 0.70 — knee height — so the crotch WAS at the knees;
+// the thigh k bridged the knee cluster (four capsule ends stack their
+// smin deficits); and the shins bridged at global k. Fix (sweep-picked
+// against the live field): torso bottom raised to 1.00 with the hips up
+// at 0.92 (burial -0.047), THIGH_K 0.12, SHIN_K 0.12, leg track z 0.17.
+// Rest midline field between the legs: -0.068 (v3.1) -> +0.031 = an
+// open gap. A dedicated pelvis prim was tried and measured WORSE (a
+// sphere that buries the thighs hangs into the crotch itself). Body
+// 0.22 -> 0.20, neck 0.10 -> 0.09 ride the overall slim.
+// Straight leg column kept from v3.1: hip + foot aligned at x 0.11,
+// knee 0.06 forward as the IK pole; rest reach ~0.98, the gait
+// self-regulates at its 0.995 straight limit (MEASURED).
+// NOTE: SN is the truth view; the static-proto SHELL toggle shows rim
+// artifacts at the untucked knees and slim body — expected.
+const THIGH_K = 0.12; // sweep-picked with the leg gap; 0.30 (fat-body armpit fix) bridged the knee cluster
+const SHIN_K = 0.12;  // anti-fuse: legs stop bridging each other
+const HEAD = [0.02, 1.56, 0];
+const HEAD_R = 0.20;
+const EYE_ROOT = 0.045; // authored ball rooting depth into the head
 const OVERRIDE = {
-  body: { a: [0.11, 0.90, 0], b: [0.11, 1.20, 0], r: 0.22 },
-  neck: { a: [0.11, 1.20, 0], b: [0.05, 1.40, 0], r: 0.10 },
-  head: { a: HEAD },
-  thigh_l: { a: [0.11, 0.85, 0.11], b: [0.05, 0.71, 0.12], r: 0.11, kPrim: THIGH_K },
-  thigh_r: { a: [0.11, 0.85, -0.11], b: [0.05, 0.71, -0.12], r: 0.11, kPrim: THIGH_K },
-  leg_l: { a: [0.05, 0.71, 0.12], b: [0.11, 0.06, 0.12], r: 0.10 }, // foot PLANTED, aligned under the hip
-  leg_r: { a: [0.05, 0.71, -0.12], b: [0.11, 0.06, -0.12], r: 0.10 },
+  body: { a: [0.11, 1.00, 0], b: [0.11, 1.20, 0], r: 0.20 }, // bottom raised off the crotch (was 0.90 -> cap at knee height)
+  neck: { a: [0.11, 1.20, 0], b: [0.05, 1.40, 0], r: 0.09 },
+  head: { a: HEAD, r: HEAD_R },
+  thigh_l: { a: [0.11, 0.92, 0.13], b: [0.05, 0.71, 0.17], r: 0.10, kPrim: THIGH_K },
+  thigh_r: { a: [0.11, 0.92, -0.13], b: [0.05, 0.71, -0.17], r: 0.10, kPrim: THIGH_K },
+  leg_l: { a: [0.05, 0.71, 0.17], b: [0.11, 0.06, 0.17], r: 0.09, kPrim: SHIN_K },
+  leg_r: { a: [0.05, 0.71, -0.17], b: [0.11, 0.06, -0.17], r: 0.09, kPrim: SHIN_K },
   tail: null, // removed: humanoid
 };
 const headSrc = strider.prims.find((p) => p.id === 'head');
 const prims = strider.prims.flatMap((p) => {
   if (OVERRIDE[p.id] === null) return [];
-  if (p.id.startsWith('eyeball') || p.id.startsWith('iris')) {
-    // authored offset from the head center, re-anchored on the new head
-    return [{ ...p, a: [HEAD[0] + (p.a[0] - headSrc.a[0]), HEAD[1] + (p.a[1] - headSrc.a[1]), p.a[2]] }];
+  if (p.id.startsWith('eyeball')) {
+    const o = [p.a[0] - headSrc.a[0], p.a[1] - headSrc.a[1], p.a[2] - headSrc.a[2]];
+    const s = (HEAD_R - EYE_ROOT) / Math.hypot(o[0], o[1], o[2]); // keep the rooting depth on the smaller head
+    return [{ ...p, a: [HEAD[0] + o[0] * s, HEAD[1] + o[1] * s, HEAD[2] + o[2] * s] }];
+  }
+  if (p.id.startsWith('iris')) {
+    const eye = strider.prims.find((q) => q.id === 'eyeball' + p.id.slice(4)); // iris_l -> eyeball_l
+    const o = [eye.a[0] - headSrc.a[0], eye.a[1] - headSrc.a[1], eye.a[2] - headSrc.a[2]];
+    const s = (HEAD_R - EYE_ROOT) / Math.hypot(o[0], o[1], o[2]);
+    // the scaled ball center + the EXACT authored iris-on-ball offset: paint band preserved
+    return [{ ...p, a: [HEAD[0] + o[0] * s + (p.a[0] - eye.a[0]), HEAD[1] + o[1] * s + (p.a[1] - eye.a[1]), HEAD[2] + o[2] * s + (p.a[2] - eye.a[2])] }];
   }
   return [{ ...p, ...(OVERRIDE[p.id] ?? {}) }];
 });
