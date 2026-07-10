@@ -24,14 +24,41 @@ import { createWorld } from './render/world.js';
 import { CAMERA_FOV, CAMERA_START, ORBIT_TARGET, BACKGROUND_COLOR, BLEND_K } from './config.js';
 
 const strider = CREATURES.find((c) => c.id === 'strider');
-// PROTO-LOCAL SLIMMING (not authored into the cast): the armpit crease
-// only needs softening WHERE the thighs meet the body — so the thighs
-// carry their own kPrim and the GLOBAL k returns to the cast default.
-// Global k 0.32 plumped the WHOLE creature (cubic-smin inflation grows
-// ~k*0.25, MEASURED), which is the reported chubbiness: the field was
-// fat, and the isosurface faithfully meshed it.
+// PROTO-LOCAL POSTURE + PROPORTION (not authored into the cast):
+// 1) SOFT ARMPITS: thighs carry kPrim so the GLOBAL k stays at the cast
+//    default (global 0.32 plumped the whole creature, ~k*0.25 MEASURED).
+// 2) SLIM: body r 0.34 -> 0.30. The widen was the SHELL missing-chunk
+//    fix (capless shin rims poking the silhouette); the isosurface has
+//    no donor rims, so here the widen is pure chub. (The static proto
+//    shell toggle may show the old rim chunk again at 0.30 — expected.)
+// 3) STAND STRAIGHT: the cast strider is AUTHORED forward-leaning 45deg;
+//    per feedback the proto stands vertical. Rigid-rotate the TORSO
+//    prims about the Z axis through the HIP PIVOT (thigh-top midpoint)
+//    until the body axis is +Y. Legs untouched: feet keep contact, the
+//    gait rest pose is unchanged, and the thigh tops lie ON the rotation
+//    axis so hip burial survives (knee cover -0.044 at r 0.30, MEASURED
+//    in the delivery check). Eyes/irises rotate rigidly with the head,
+//    so every decal-band relation is preserved exactly.
 const THIGH_K = 0.34; // crease sharpness ~0 by k0.36; 0.34 = soft armpits
-const prims = strider.prims.map((p) => (p.id === 'thigh_l' || p.id === 'thigh_r' ? { ...p, kPrim: THIGH_K } : p));
+const BODY_R = 0.30;
+const LEG_IDS = ['thigh_l', 'leg_l', 'thigh_r', 'leg_r'];
+const bodySrc = strider.prims.find((p) => p.id === 'body');
+const tlA = strider.prims.find((p) => p.id === 'thigh_l').a;
+const trA = strider.prims.find((p) => p.id === 'thigh_r').a;
+const PIVOT = [(tlA[0] + trA[0]) / 2, (tlA[1] + trA[1]) / 2]; // hip midpoint (x, y)
+const TH = Math.atan2(bodySrc.b[0] - bodySrc.a[0], bodySrc.b[1] - bodySrc.a[1]); // rotation that lands the body axis on +Y
+const C = Math.cos(TH), S = Math.sin(TH);
+const stand = (v) => {
+  const x = v[0] - PIVOT[0], y = v[1] - PIVOT[1];
+  return [PIVOT[0] + C * x - S * y, PIVOT[1] + S * x + C * y, v[2]];
+};
+const prims = strider.prims.map((p) => {
+  if (LEG_IDS.includes(p.id)) return p.id.startsWith('thigh') ? { ...p, kPrim: THIGH_K } : p;
+  const q = { ...p, a: stand(p.a) };
+  if (p.b) q.b = stand(p.b);
+  if (p.id === 'body') q.r = BODY_R;
+  return q;
+});
 const inflate = strider.inflate ?? 0;
 
 // --- renderer / scene / camera / stage (mirrors main.js exactly) ---
