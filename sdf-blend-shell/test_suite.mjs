@@ -2044,5 +2044,91 @@ for (const creature of CREATURES) {
   }
 }
 
+// ---------- Section R4: Surface Nets — narrow-band ≡ full grid ----------
+// The narrow-band mesher is the ANIMATION path (worker re-meshing at
+// interactive rates: MEASURED strider @0.02 full 241ms -> narrow 18ms).
+// Its license to be the DEFAULT is identity: same grid, same field math,
+// same vertices, same quads as the reference full-grid mesher — proven
+// here per creature, bit-for-bit. usedMethod is asserted because the
+// narrow path has a full-grid fallback that produces identical output at
+// full-grid speed: without the assert, a dead optimization hides behind
+// passing identity probes (it did once — the seed-clamp arity bug).
+console.log('Section R4: Surface Nets — narrow-band ≡ full grid');
+{
+  const { meshCreature } = await import('./src/render/surfaceNetsCore.js');
+  const { CREATURES } = await import('./src/data/creatures.js');
+
+  const canon = (res) => {
+    const P = res.positions;
+    const map = new Map();
+    const keys = [];
+    for (let v = 0; v < P.length / 3; v++) {
+      const key = P[v * 3] + ',' + P[v * 3 + 1] + ',' + P[v * 3 + 2];
+      keys.push(key);
+      map.set(key, v);
+    }
+    return { map, sortedPos: [...keys].sort().join(';'), unique: map.size === P.length / 3 };
+  };
+  const trisCanonical = (res, refIdx) => {
+    const I = res.indices;
+    const out = [];
+    for (let t = 0; t < I.length; t += 3) {
+      let a = refIdx(res, I[t]), b = refIdx(res, I[t + 1]), c = refIdx(res, I[t + 2]);
+      if (b < a && b <= c) { const x = a; a = b; b = c; c = x; } // rotate min-first, winding preserved
+      else if (c < a && c < b) { const x = a; a = c; c = b; b = x; }
+      out.push(a + ',' + b + ',' + c);
+    }
+    return out.sort().join(';');
+  };
+  const watertight = (res) => {
+    const I = res.indices;
+    const e = new Map();
+    const k = (a, b) => (a < b ? a * 1e7 + b : b * 1e7 + a);
+    for (let t = 0; t < I.length; t += 3) {
+      const a = I[t], b = I[t + 1], c = I[t + 2];
+      for (const [u, v] of [[a, b], [b, c], [c, a]]) e.set(k(u, v), (e.get(k(u, v)) || 0) + 1);
+    }
+    for (const c of e.values()) if (c !== 2) return false;
+    return true;
+  };
+
+  const cases = CREATURES.map((c) => [c.id + ' @0.02', c.prims, { cellSize: 0.02, blendK: 0.25, inflate: c.inflate ?? 0 }]);
+  const strider = CREATURES.find((c) => c.id === 'strider');
+  cases.push(['strider @0.015 k0.32', strider.prims, { cellSize: 0.015, blendK: 0.32, inflate: strider.inflate ?? 0 }]);
+  // Mid-stride pose (the worker's real input): left leg chain shifted by a
+  // measured gait delta — narrow-band must hold for ANIMATED prims.
+  const posed = strider.prims.map((p) => {
+    if (!['thigh_l', 'leg_l'].includes(p.id)) return p;
+    const d = [0.067, -0.029, -0.011];
+    return { ...p, a: [p.a[0] + d[0], p.a[1] + d[1], p.a[2] + d[2]], b: p.b ? [p.b[0] + d[0], p.b[1] + d[1], p.b[2] + d[2]] : undefined };
+  });
+  cases.push(['strider POSED @0.02', posed, { cellSize: 0.02, blendK: 0.32, inflate: strider.inflate ?? 0 }]);
+  // Synthetic carved creature: the cast has ZERO negatives (R3), so this is
+  // the only exercise the narrow path's inlined sdiff fold gets.
+  cases.push(['synthetic carve @0.02', [
+    { id: 'blob', a: [0, 0.4, 0], b: [0, 0.6, 0], r: 0.3 },
+    { id: 'scoop', a: [0.25, 0.5, 0], b: [0.3, 0.5, 0], r: 0.15, negative: true, kPrim: 0.1 },
+  ], { cellSize: 0.02, blendK: 0.25, inflate: 0 }]);
+
+  for (const [name, prims, opts] of cases) {
+    const full = meshCreature(prims, { ...opts, method: 'full' });
+    const nar = meshCreature(prims, { ...opts, method: 'narrow' });
+    const cf = canon(full), cn = canon(nar);
+    const keyRef = (res, idx) => cf.map.get(res.positions[idx * 3] + ',' + res.positions[idx * 3 + 1] + ',' + res.positions[idx * 3 + 2]);
+    assert(nar.usedMethod === 'narrow', `${name}: the NARROW route actually ran (no silent fallback)`);
+    assert(cf.unique && cn.unique, `${name}: vertex positions are unique (exact-key remap is sound)`);
+    assert(full.vertexCount === nar.vertexCount && full.triCount === nar.triCount, `${name}: narrow matches full counts (${nar.vertexCount} verts, ${nar.triCount} tris)`);
+    assert(cf.sortedPos === cn.sortedPos, `${name}: vertex positions BIT-IDENTICAL to the full grid`);
+    assert(trisCanonical(full, (r, i) => i) === trisCanonical(nar, keyRef), `${name}: triangle set identical (same quads, same winding)`);
+    assert(watertight(nar), `${name}: narrow-band mesh is watertight (every edge shared by exactly 2 triangles)`);
+  }
+
+  // The safety net itself: a creature whose only solid slips between
+  // lattice points seeds nothing — the narrow path must SURRENDER to the
+  // full grid and SAY SO, not return an empty mesh.
+  const tiny = meshCreature([{ id: 'speck', a: [0.5, 0.5, 0.5], r: 0.001 }], { cellSize: 0.5, padding: 1.0, blendK: 0.25, inflate: 0 });
+  assert(tiny.usedMethod === 'full-fallback', 'seedless field falls back to the full grid and reports it (usedMethod full-fallback)');
+}
+
 console.log(failures === 0 ? '\nALL PASS' : `\n${failures} FAILURE(S)`);
 process.exit(failures === 0 ? 0 : 1);

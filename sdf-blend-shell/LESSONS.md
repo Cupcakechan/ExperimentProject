@@ -675,3 +675,25 @@
   probe is not a render probe — assert face direction for hand-wound
   geometry) + creature-forge (terrain/ground recipe: wind faces up, or
   the overhead camera culls the floor).
+
+## 2026-07-10 — the narrow-band mesher silently fell back to full grid (a dead optimization hid behind passing identity probes)
+- What broke / what happened: the new narrow-band Surface Nets path produced
+  bit-identical meshes at zero speedup (~1.0x). The surface-seed scan never
+  found the surface, so EVERY bake quietly took the full-grid fallback —
+  correct output, none of the intended speed.
+- Root cause: `clampI(v, max)` called with three args (`clampI(x, 0, ny-1)`),
+  so `max` received 0 and every seed row clamped to the box's bottom edge —
+  pure empty air, no sign flip, no seed. A classic arity slip; `node --check`
+  and the identity sweep were both structurally blind to it.
+- Verification gap it exposed: OUTCOME-equality probes cannot see WHICH path
+  produced the outcome. Any optimization with a correct fallback can die
+  silently behind them — the probes certify the fallback, not the feature.
+- Plug shipped: fix (2-arg calls) + the mesher now REPORTS the taken route
+  (`usedMethod: 'narrow' | 'full-fallback' | 'full'`) + suite asserts
+  `usedMethod === 'narrow'` for every cast identity case, plus one probe that
+  proves the fallback itself fires and self-reports on a seedless field.
+  Instrumented eval-counting found it in one measurement pass — profile the
+  claim ("it should be ~10x") the moment the number disagrees.
+- Route: dev-method skill earned-rule candidate ("an optimization with a
+  correct fallback needs the taken path OBSERVABLE and asserted — outcome
+  probes alone certify the fallback, not the optimization").
