@@ -32,6 +32,11 @@ const strider = CREATURES.find((c) => c.id === 'strider');
 // slimmed 0.12/0.11 -> 0.11/0.10 (front hip width: leg outer edge now
 // FLUSH with the torso at 0.22), TAIL REMOVED (humanoid; it was half
 // the side-view lump), head raised a touch (1.49 -> 1.56) for length.
+// v3.1: STRAIGHT LEG COLUMN (the lower-half jut was the digitigrade
+// Z-fold: hip x 0.10 -> knee 0.00 -> foot 0.12). Hip and foot now sit
+// ALIGNED on the torso axis (x 0.11); the knee keeps a 0.06 forward
+// bias purely as the IK pole. Rest reach rises to ~0.98 — the gait
+// self-regulates near its 0.995 straight limit (MEASURED below).
 // NOTE: the knee is no longer tucked inside the slim body — on the
 // isosurface that is a FEATURE (a visible bending knee, no rims to
 // leak); the static proto SHELL toggle will now show rim artifacts at
@@ -42,10 +47,10 @@ const OVERRIDE = {
   body: { a: [0.11, 0.90, 0], b: [0.11, 1.20, 0], r: 0.22 },
   neck: { a: [0.11, 1.20, 0], b: [0.05, 1.40, 0], r: 0.10 },
   head: { a: HEAD },
-  thigh_l: { a: [0.10, 0.85, 0.11], b: [0.0, 0.71, 0.12], r: 0.11, kPrim: THIGH_K },
-  thigh_r: { a: [0.10, 0.85, -0.11], b: [0.0, 0.71, -0.12], r: 0.11, kPrim: THIGH_K },
-  leg_l: { a: [0.0, 0.71, 0.12], b: [0.12, 0.06, 0.12], r: 0.10 }, // feet PLANTED
-  leg_r: { a: [0.0, 0.71, -0.12], b: [0.12, 0.06, -0.12], r: 0.10 },
+  thigh_l: { a: [0.11, 0.85, 0.11], b: [0.05, 0.71, 0.12], r: 0.11, kPrim: THIGH_K },
+  thigh_r: { a: [0.11, 0.85, -0.11], b: [0.05, 0.71, -0.12], r: 0.11, kPrim: THIGH_K },
+  leg_l: { a: [0.05, 0.71, 0.12], b: [0.11, 0.06, 0.12], r: 0.10 }, // foot PLANTED, aligned under the hip
+  leg_r: { a: [0.05, 0.71, -0.12], b: [0.11, 0.06, -0.12], r: 0.10 },
   tail: null, // removed: humanoid
 };
 const headSrc = strider.prims.find((p) => p.id === 'head');
