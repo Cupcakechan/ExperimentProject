@@ -21,6 +21,7 @@ import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 import { CREATURES } from './data/creatures.js';
 import { createBlendMaterial, createSurfaceNetsMaterial } from './render/blendMaterial.js';
 import { createGait } from './gait.js';
+import { setPrimTransform } from './anim.js';
 import { createInkPass } from './render/inkPass.js';
 import { createWorld } from './render/world.js';
 import { CAMERA_FOV, CAMERA_START, ORBIT_TARGET, BACKGROUND_COLOR } from './config.js';
@@ -118,7 +119,7 @@ prims.push(
 );
 const proto = { ...strider, prims }; // same ids/indices/step — only thigh kPrim differs
 let blendK = 0.25; // BACK to the cast default: the armpit fix moved into THIGH_K
-let cellSize = 0.02; // animation default: coarser than the static 0.015 for speed
+let cellSize = 0.015; // default: the humanoid armpit corridor is ~one 0.02 cell wide, so 0.02 grids show tangency pinholes there (31/60 walk frames MEASURED; 0 at 0.015). Narrow-band makes 0.015 cheap (~33-45 Hz). Coarser dial positions = preview quality.
 
 // --- renderer / scene / camera / stage ---
 const renderer = new THREE.WebGLRenderer({ antialias: false });
@@ -144,6 +145,44 @@ snMesh.frustumCulled = false;
 scene.add(snMesh);
 
 const gait = createGait(proto); // cloned prims: gait writes land on the same indices
+
+// --- ARM SWING (walk-synced): each arm is a stiff pendulum about its
+// shoulder, swinging OPPOSITE its leg. The drive is the REAL creature-
+// space forward offset of the opposite foot, read from simMat lockstep
+// uA/uB right after gait.update, then low-passed so the quick step
+// transient becomes a smooth pendulum. Rotation is about Z through the
+// shoulder (the forward/back plane), so the MEASURED z-corridors that
+// keep the arm off the torso and legs are untouched to first order.
+const SWING_PER_UNIT = 2.2; // rad per unit of foot-forward offset (excursion ~0.15 -> ~19 deg)
+const SWING_MAX = 0.35;     // hard clamp: 20 deg
+const SWING_SMOOTH = 8;     // 1/s low-pass (pendulum feel, no step snap)
+const IDX = Object.fromEntries(prims.map((p, i) => [p.id, i]));
+const swing = { l: 0, r: 0 }; // smoothed arm angles
+const _rot = new THREE.Matrix4();
+const _toPivot = new THREE.Matrix4();
+const _m = new THREE.Matrix4();
+function swingArm(armId, foreId, pivot, theta) {
+  _rot.makeRotationZ(theta);
+  _toPivot.makeTranslation(-pivot[0], -pivot[1], -pivot[2]);
+  _m.makeTranslation(pivot[0], pivot[1], pivot[2]).multiply(_rot).multiply(_toPivot);
+  setPrimTransform(simMat, IDX[armId], prims[IDX[armId]], _m);
+  setPrimTransform(simMat, IDX[foreId], prims[IDX[foreId]], _m);
+}
+function updateArmSwing(dt) {
+  const uB = simMat.uniforms.uB.value;
+  // DIFFERENTIAL drive: d > 0 when the RIGHT foot is ahead (forward =
+  // -x). Zero-centered by construction — the absolute foot offset is
+  // one-sided (the planted foot only sweeps BACKWARD of rest), which
+  // swung both arms back and never forward (MEASURED -0.5..+19.8 deg).
+  const d = (uB[IDX.leg_l].x - uB[IDX.leg_r].x) / 2;
+  const tL = Math.max(-SWING_MAX, Math.min(SWING_MAX, -SWING_PER_UNIT * d));
+  const tR = -tL; // exact anti-phase
+  const k = Math.min(1, dt * SWING_SMOOTH);
+  swing.l += (tL - swing.l) * k;
+  swing.r += (tR - swing.r) * k;
+  swingArm('arm_l', 'fore_l', SHOULDER, swing.l);
+  swingArm('arm_r', 'fore_r', mirrorZ(SHOULDER), swing.r);
+}
 
 // --- worker ---
 const worker = new Worker(new URL('./render/surfaceNetsWorker.js', import.meta.url), { type: 'module' });
@@ -219,6 +258,7 @@ function step(nowMs) {
     pose.z = R * Math.sin(phi);
     pose.heading = Math.PI / 2 - phi; // face along the tangent (walk forward)
     gait.update(dt, pose, [simMat]); // advances the legs; keeps simMat.uA/uB current
+    updateArmSwing(dt); // arms: stiff pendulums opposite the feet the gait just placed
   }
 
   // Post the current pose to the worker only when it's idle — it meshes
