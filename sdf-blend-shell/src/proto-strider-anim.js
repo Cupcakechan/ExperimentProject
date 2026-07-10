@@ -27,7 +27,16 @@ import { CAMERA_FOV, CAMERA_START, ORBIT_TARGET, BACKGROUND_COLOR } from './conf
 
 const strider = CREATURES.find((c) => c.id === 'strider');
 const inflate = strider.inflate ?? 0;
-let blendK = 0.32; // the armpit-soft value from the static proto
+// PROTO-LOCAL SLIMMING (not authored into the cast): the armpit crease
+// only needs softening WHERE the thighs meet the body — so the thighs
+// carry their own kPrim and the GLOBAL k returns to the cast default.
+// Global k 0.32 plumped the WHOLE creature (cubic-smin inflation grows
+// ~k*0.25, MEASURED), which is the reported chubbiness: the field was
+// fat, and the isosurface faithfully meshed it.
+const THIGH_K = 0.34; // crease sharpness ~0 by k0.36; 0.34 = soft armpits
+const prims = strider.prims.map((p) => (p.id === 'thigh_l' || p.id === 'thigh_r' ? { ...p, kPrim: THIGH_K } : p));
+const proto = { ...strider, prims }; // same ids/indices/step — only thigh kPrim differs
+let blendK = 0.25; // BACK to the cast default: the armpit fix moved into THIGH_K
 let cellSize = 0.02; // animation default: coarser than the static 0.015 for speed
 
 // --- renderer / scene / camera / stage ---
@@ -46,14 +55,14 @@ createWorld(scene);
 
 // --- sim material (gait sink — advances every frame, NEVER rendered) +
 //     display SN mesh (set to the last MESHED snapshot) ---
-const simMat = createBlendMaterial(strider.prims, strider.inflate, strider.step?.knees);
-const snMat = createSurfaceNetsMaterial(strider.prims, strider.inflate);
+const simMat = createBlendMaterial(prims, strider.inflate, strider.step?.knees);
+const snMat = createSurfaceNetsMaterial(prims, strider.inflate);
 snMat.uniforms.uK.value = blendK;
 const snMesh = new THREE.Mesh(new THREE.BufferGeometry(), snMat);
 snMesh.frustumCulled = false;
 scene.add(snMesh);
 
-const gait = createGait(strider);
+const gait = createGait(proto); // cloned prims: gait writes land on the same indices
 
 // --- worker ---
 const worker = new Worker(new URL('./render/surfaceNetsWorker.js', import.meta.url), { type: 'module' });
@@ -69,7 +78,7 @@ let displayReady = false;
 function snapshotPrims() {
   const uA = simMat.uniforms.uA.value;
   const uB = simMat.uniforms.uB.value;
-  return strider.prims.map((p, i) => ({
+  return prims.map((p, i) => ({ // cloned prims: the worker must see THIGH_K
     type: p.type,
     r: p.r,
     kCap: p.kCap,

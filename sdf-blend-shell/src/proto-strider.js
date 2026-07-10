@@ -24,6 +24,14 @@ import { createWorld } from './render/world.js';
 import { CAMERA_FOV, CAMERA_START, ORBIT_TARGET, BACKGROUND_COLOR, BLEND_K } from './config.js';
 
 const strider = CREATURES.find((c) => c.id === 'strider');
+// PROTO-LOCAL SLIMMING (not authored into the cast): the armpit crease
+// only needs softening WHERE the thighs meet the body — so the thighs
+// carry their own kPrim and the GLOBAL k returns to the cast default.
+// Global k 0.32 plumped the WHOLE creature (cubic-smin inflation grows
+// ~k*0.25, MEASURED), which is the reported chubbiness: the field was
+// fat, and the isosurface faithfully meshed it.
+const THIGH_K = 0.34; // crease sharpness ~0 by k0.36; 0.34 = soft armpits
+const prims = strider.prims.map((p) => (p.id === 'thigh_l' || p.id === 'thigh_r' ? { ...p, kPrim: THIGH_K } : p));
 const inflate = strider.inflate ?? 0;
 
 // --- renderer / scene / camera / stage (mirrors main.js exactly) ---
@@ -44,13 +52,13 @@ controls.enableDamping = true;
 createWorld(scene);
 
 // --- SHELL strider (fixed geometry; the field follows uK in the shader) ---
-const shellMat = createBlendMaterial(strider.prims, strider.inflate, strider.step?.knees);
-const shellMesh = new THREE.Mesh(buildShellGeometry(strider.prims, strider.step?.knees), shellMat);
+const shellMat = createBlendMaterial(prims, strider.inflate, strider.step?.knees);
+const shellMesh = new THREE.Mesh(buildShellGeometry(prims, strider.step?.knees), shellMat);
 shellMesh.frustumCulled = false; // shell vertices move in the shader
 scene.add(shellMesh);
 
 // --- SURFACE NETS strider (re-baked when the blend changes) ---
-const snMat = createSurfaceNetsMaterial(strider.prims, strider.inflate);
+const snMat = createSurfaceNetsMaterial(prims, strider.inflate);
 const snMesh = new THREE.Mesh(new THREE.BufferGeometry(), snMat);
 scene.add(snMesh);
 
@@ -58,7 +66,7 @@ let blendK = BLEND_K;
 let lastBake = { verts: 0, tris: 0, ms: 0 };
 function rebakeSN(k) {
   const t0 = performance.now();
-  const sn = buildSurfaceNetsGeometry(strider.prims, { inflate, blendK: k });
+  const sn = buildSurfaceNetsGeometry(prims, { inflate, blendK: k }); // dial moves the GLOBAL k; thighs stay pinned at THIGH_K
   lastBake = { verts: sn.vertexCount, tris: sn.triCount, ms: performance.now() - t0 };
   snMesh.geometry.dispose(); // the old bake's buffers are done
   snMesh.geometry = sn.geometry;
