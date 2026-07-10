@@ -105,9 +105,9 @@ const prims = strider.prims.flatMap((p) => {
 // length weld is a lump, not a ring; the corridor-peak profile is the
 // real one.) Prim budget: 15/16.
 const ARM_UP_R = 0.06, ARM_FORE_R = 0.055, ARM_UP_K = 0.05, ARM_FORE_K = 0.05; // elbow de-bulge (the knee treatment): halve the radius step + lower both fold k's
-const SHOULDER = [0.11, 1.16, 0.13]; // buried in the torso top (sd -0.05 at r 0.18)
-const ELBOW = [0.13, 0.84, 0.34];    // slightly back (+x), out (+z): the mild A-pose
-const HAND = [0.06, 0.56, 0.37];     // slightly forward, ends mid-thigh height
+const SHOULDER = [0.11, 1.16, 0.14]; // buried in the torso top (sd -0.04 at r 0.18)
+const ELBOW = [0.083, 0.84, 0.263];  // ON the shoulder->hand line: the arm lays STRAIGHT (0 deg kink; the 27 deg elbow bow read crooked). Cost, MEASURED: daylight now starts at y 0.78 (lower forearm) instead of 0.90 — the straight rod brushes the hip. Lever for more daylight: elbow z out toward 0.30.
+const HAND = [0.06, 0.56, 0.37];     // slightly forward, ends mid-thigh height (collinear with SHOULDER and ELBOW)
 const mirrorZ = (v) => [v[0], v[1], -v[2]];
 prims.push(
   { id: 'arm_l', type: 'capsule', a: SHOULDER, b: ELBOW, r: ARM_UP_R, kPrim: ARM_UP_K, color: 0x2e8478 },
