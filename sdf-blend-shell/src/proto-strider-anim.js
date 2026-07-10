@@ -27,39 +27,63 @@ import { CAMERA_FOV, CAMERA_START, ORBIT_TARGET, BACKGROUND_COLOR } from './conf
 
 const strider = CREATURES.find((c) => c.id === 'strider');
 const inflate = strider.inflate ?? 0;
-// PROTO-LOCAL POSTURE + PROPORTION (not authored into the cast):
-// 1) SOFT ARMPITS: thighs carry kPrim so the GLOBAL k stays at the cast
+// PROTO-LOCAL PROPORTION PASS v2 (not authored into the cast):
+// 1) SOFT ARMPITS: thighs carry kPrim; the GLOBAL k stays at the cast
 //    default (global 0.32 plumped the whole creature, ~k*0.25 MEASURED).
-// 2) SLIM: body r 0.34 -> 0.30. The widen was the SHELL missing-chunk
-//    fix (capless shin rims poking the silhouette); the isosurface has
-//    no donor rims, so here the widen is pure chub. (The static proto
-//    shell toggle may show the old rim chunk again at 0.30 — expected.)
-// 3) STAND STRAIGHT: the cast strider is AUTHORED forward-leaning 45deg;
-//    per feedback the proto stands vertical. Rigid-rotate the TORSO
-//    prims about the Z axis through the HIP PIVOT (thigh-top midpoint)
-//    until the body axis is +Y. Legs untouched: feet keep contact, the
-//    gait rest pose is unchanged, and the thigh tops lie ON the rotation
-//    axis so hip burial survives (knee cover -0.044 at r 0.30, MEASURED
-//    in the delivery check). Eyes/irises rotate rigidly with the head,
-//    so every decal-band relation is preserved exactly.
+// 2) SLIM: body r 0.34 -> 0.30 (the widen was the SHELL missing-chunk
+//    fix; the isosurface has no donor rims to hide).
+// 3) STAND: torso rigid-rotated about the hip pivot until the body axis
+//    is vertical (the cast strider is AUTHORED leaning 45deg).
+// 4) LONGER LEGS / SHORTER TORSO (the still-chubby fix): hips + thighs
+//    raised by RAISE with the feet PLANTED (the shins lengthen to reach)
+//    and the torso bottom pulled up to TORSO_BOTTOM_Y. Visible leg goes
+//    ~0.25 -> ~0.53 while total height stays ~1.75: same width + more
+//    leg = the thinner read. Rest knee reach 0.949 < the gait straight
+//    limit 0.995 (MEASURED in the delivery check).
+// 5) EYES FORWARD: the stand rotation left the eyes pointing 45deg up;
+//    eyes + irises instead keep their AUTHORED offset from the head
+//    center (a rigid counter-rotation reduces to exactly that), so they
+//    face -X again with every decal relation preserved.
+// 6) TAIL: re-hung off the new torso bottom at its authored
+//    body-relative offset, horizontal again — standing up had swung it
+//    into a droop that read as a hip growth.
 const THIGH_K = 0.34; // crease sharpness ~0 by k0.36; 0.34 = soft armpits
 const BODY_R = 0.30;
-const LEG_IDS = ['thigh_l', 'leg_l', 'thigh_r', 'leg_r'];
+const RAISE = 0.25; // hips + knees up by this; feet stay planted
+const TORSO_BOTTOM_Y = 0.90; // body a-end (was 0.614 after the stand): shorter torso, longer visible leg
 const bodySrc = strider.prims.find((p) => p.id === 'body');
+const headSrc = strider.prims.find((p) => p.id === 'head');
 const tlA = strider.prims.find((p) => p.id === 'thigh_l').a;
 const trA = strider.prims.find((p) => p.id === 'thigh_r').a;
 const PIVOT = [(tlA[0] + trA[0]) / 2, (tlA[1] + trA[1]) / 2]; // hip midpoint (x, y)
-const TH = Math.atan2(bodySrc.b[0] - bodySrc.a[0], bodySrc.b[1] - bodySrc.a[1]); // rotation that lands the body axis on +Y
+const TH = Math.atan2(bodySrc.b[0] - bodySrc.a[0], bodySrc.b[1] - bodySrc.a[1]); // lands the body axis on +Y
 const C = Math.cos(TH), S = Math.sin(TH);
 const stand = (v) => {
   const x = v[0] - PIVOT[0], y = v[1] - PIVOT[1];
   return [PIVOT[0] + C * x - S * y, PIVOT[1] + S * x + C * y, v[2]];
 };
+const headC = stand(headSrc.a); // stood-up head center: the eye anchor
 const prims = strider.prims.map((p) => {
-  if (LEG_IDS.includes(p.id)) return p.id.startsWith('thigh') ? { ...p, kPrim: THIGH_K } : p;
-  const q = { ...p, a: stand(p.a) };
+  if (p.id === 'thigh_l' || p.id === 'thigh_r') {
+    return { ...p, kPrim: THIGH_K, a: [p.a[0], p.a[1] + RAISE, p.a[2]], b: [p.b[0], p.b[1] + RAISE, p.b[2]] };
+  }
+  if (p.id === 'leg_l' || p.id === 'leg_r') {
+    return { ...p, a: [p.a[0], p.a[1] + RAISE, p.a[2]] }; // knee rides up; foot b stays PLANTED
+  }
+  if (p.id === 'body') {
+    const a = stand(p.a), b = stand(p.b);
+    return { ...p, r: BODY_R, a: [a[0], TORSO_BOTTOM_Y, a[2]], b };
+  }
+  if (p.id === 'tail') {
+    const bx = stand(bodySrc.a)[0]; // authored offsets off body.a: root +0.06/+0.10, axis +0.40/-0.12
+    const a = [bx + 0.06, TORSO_BOTTOM_Y + 0.10, 0];
+    return { ...p, a, b: [a[0] + 0.40, a[1] - 0.12, 0] };
+  }
+  if (p.id.startsWith('eyeball') || p.id.startsWith('iris')) {
+    return { ...p, a: [headC[0] + (p.a[0] - headSrc.a[0]), headC[1] + (p.a[1] - headSrc.a[1]), p.a[2]] };
+  }
+  const q = { ...p, a: stand(p.a) }; // neck + head: stood up
   if (p.b) q.b = stand(p.b);
-  if (p.id === 'body') q.r = BODY_R;
   return q;
 });
 const proto = { ...strider, prims }; // same ids/indices/step — only thigh kPrim differs
