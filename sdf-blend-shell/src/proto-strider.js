@@ -42,7 +42,12 @@ const strider = CREATURES.find((c) => c.id === 'strider');
 // thighs splayed hip 0.13 -> knee 0.17 and read as an upper-leg bulge
 // (outer 0.27 vs torso 0.20). Sweep-picked replacement buys the gap
 // from slimmer legs (r 0.09/0.08) + tighter fold k instead of track
-// width: outer now 0.23, splay 0.01. A dedicated pelvis prim was tried and measured WORSE (a
+// width: outer now 0.23, splay 0.01.
+// v3.4 KNEE HEIGHT: kneecaps lowered 0.71 -> 0.40 (per screenshot; the
+// old knee sat right under the crotch). Thigh is now the long bone.
+// Knee forward bias 0.06 -> 0.08 keeps rest reach at 0.982 (a mid-leg
+// joint has less path overhead, so the same bias would have crept to
+// 0.990 against the 0.995 straight limit). A dedicated pelvis prim was tried and measured WORSE (a
 // sphere that buries the thighs hangs into the crotch itself). Body
 // 0.22 -> 0.20, neck 0.10 -> 0.09 ride the overall slim.
 // Straight leg column kept from v3.1: hip + foot aligned at x 0.11,
@@ -59,10 +64,10 @@ const OVERRIDE = {
   body: { a: [0.11, 1.00, 0], b: [0.11, 1.20, 0], r: 0.20 }, // bottom raised off the crotch (was 0.90 -> cap at knee height)
   neck: { a: [0.11, 1.20, 0], b: [0.05, 1.40, 0], r: 0.09 },
   head: { a: HEAD, r: HEAD_R },
-  thigh_l: { a: [0.11, 0.92, 0.13], b: [0.05, 0.71, 0.14], r: 0.09, kPrim: THIGH_K },
-  thigh_r: { a: [0.11, 0.92, -0.13], b: [0.05, 0.71, -0.14], r: 0.09, kPrim: THIGH_K },
-  leg_l: { a: [0.05, 0.71, 0.14], b: [0.11, 0.06, 0.14], r: 0.08, kPrim: SHIN_K },
-  leg_r: { a: [0.05, 0.71, -0.14], b: [0.11, 0.06, -0.14], r: 0.08, kPrim: SHIN_K },
+  thigh_l: { a: [0.11, 0.92, 0.13], b: [0.03, 0.40, 0.14], r: 0.09, kPrim: THIGH_K },
+  thigh_r: { a: [0.11, 0.92, -0.13], b: [0.03, 0.40, -0.14], r: 0.09, kPrim: THIGH_K },
+  leg_l: { a: [0.03, 0.40, 0.14], b: [0.11, 0.06, 0.14], r: 0.08, kPrim: SHIN_K },
+  leg_r: { a: [0.03, 0.40, -0.14], b: [0.11, 0.06, -0.14], r: 0.08, kPrim: SHIN_K },
   tail: null, // removed: humanoid
 };
 const headSrc = strider.prims.find((p) => p.id === 'head');
