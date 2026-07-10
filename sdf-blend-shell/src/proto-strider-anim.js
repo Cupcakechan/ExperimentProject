@@ -27,64 +27,38 @@ import { CAMERA_FOV, CAMERA_START, ORBIT_TARGET, BACKGROUND_COLOR } from './conf
 
 const strider = CREATURES.find((c) => c.id === 'strider');
 const inflate = strider.inflate ?? 0;
-// PROTO-LOCAL PROPORTION PASS v2 (not authored into the cast):
-// 1) SOFT ARMPITS: thighs carry kPrim; the GLOBAL k stays at the cast
-//    default (global 0.32 plumped the whole creature, ~k*0.25 MEASURED).
-// 2) SLIM: body r 0.34 -> 0.30 (the widen was the SHELL missing-chunk
-//    fix; the isosurface has no donor rims to hide).
-// 3) STAND: torso rigid-rotated about the hip pivot until the body axis
-//    is vertical (the cast strider is AUTHORED leaning 45deg).
-// 4) LONGER LEGS / SHORTER TORSO (the still-chubby fix): hips + thighs
-//    raised by RAISE with the feet PLANTED (the shins lengthen to reach)
-//    and the torso bottom pulled up to TORSO_BOTTOM_Y. Visible leg goes
-//    ~0.25 -> ~0.53 while total height stays ~1.75: same width + more
-//    leg = the thinner read. Rest knee reach 0.949 < the gait straight
-//    limit 0.995 (MEASURED in the delivery check).
-// 5) EYES FORWARD: the stand rotation left the eyes pointing 45deg up;
-//    eyes + irises instead keep their AUTHORED offset from the head
-//    center (a rigid counter-rotation reduces to exactly that), so they
-//    face -X again with every decal relation preserved.
-// 6) TAIL: re-hung off the new torso bottom at its authored
-//    body-relative offset, horizontal again — standing up had swung it
-//    into a droop that read as a hip growth.
-const THIGH_K = 0.34; // crease sharpness ~0 by k0.36; 0.34 = soft armpits
-const BODY_R = 0.30;
-const RAISE = 0.25; // hips + knees up by this; feet stay planted
-const TORSO_BOTTOM_Y = 0.90; // body a-end (was 0.614 after the stand): shorter torso, longer visible leg
-const bodySrc = strider.prims.find((p) => p.id === 'body');
-const headSrc = strider.prims.find((p) => p.id === 'head');
-const tlA = strider.prims.find((p) => p.id === 'thigh_l').a;
-const trA = strider.prims.find((p) => p.id === 'thigh_r').a;
-const PIVOT = [(tlA[0] + trA[0]) / 2, (tlA[1] + trA[1]) / 2]; // hip midpoint (x, y)
-const TH = Math.atan2(bodySrc.b[0] - bodySrc.a[0], bodySrc.b[1] - bodySrc.a[1]); // lands the body axis on +Y
-const C = Math.cos(TH), S = Math.sin(TH);
-const stand = (v) => {
-  const x = v[0] - PIVOT[0], y = v[1] - PIVOT[1];
-  return [PIVOT[0] + C * x - S * y, PIVOT[1] + S * x + C * y, v[2]];
+// PROTO-LOCAL HUMANOID PASS v3 (not authored into the cast; per feedback
+// the proto is deliberately veering creature -> humanoid). Explicit
+// authored values now — the v2 stand-rotation chain is collapsed into
+// its results and re-proportioned. Every value below is ONE lever.
+// vs v2: body r 0.30 -> 0.22 (side bulk), hips z 0.16 -> 0.11 and legs
+// slimmed 0.12/0.11 -> 0.11/0.10 (front hip width: leg outer edge now
+// FLUSH with the torso at 0.22), TAIL REMOVED (humanoid; it was half
+// the side-view lump), head raised a touch (1.49 -> 1.56) for length.
+// NOTE: the knee is no longer tucked inside the slim body — on the
+// isosurface that is a FEATURE (a visible bending knee, no rims to
+// leak); the static proto SHELL toggle will now show rim artifacts at
+// knees and body — expected, the shell path is not humanoid-valid.
+const THIGH_K = 0.30; // armpit/crotch softener (was 0.34 on the fat body)
+const HEAD = [0.02, 1.56, 0]; // head center; eyes ride it at authored offsets
+const OVERRIDE = {
+  body: { a: [0.11, 0.90, 0], b: [0.11, 1.20, 0], r: 0.22 },
+  neck: { a: [0.11, 1.20, 0], b: [0.05, 1.40, 0], r: 0.10 },
+  head: { a: HEAD },
+  thigh_l: { a: [0.10, 0.85, 0.11], b: [0.0, 0.71, 0.12], r: 0.11, kPrim: THIGH_K },
+  thigh_r: { a: [0.10, 0.85, -0.11], b: [0.0, 0.71, -0.12], r: 0.11, kPrim: THIGH_K },
+  leg_l: { a: [0.0, 0.71, 0.12], b: [0.12, 0.06, 0.12], r: 0.10 }, // feet PLANTED
+  leg_r: { a: [0.0, 0.71, -0.12], b: [0.12, 0.06, -0.12], r: 0.10 },
+  tail: null, // removed: humanoid
 };
-const headC = stand(headSrc.a); // stood-up head center: the eye anchor
-const prims = strider.prims.map((p) => {
-  if (p.id === 'thigh_l' || p.id === 'thigh_r') {
-    return { ...p, kPrim: THIGH_K, a: [p.a[0], p.a[1] + RAISE, p.a[2]], b: [p.b[0], p.b[1] + RAISE, p.b[2]] };
-  }
-  if (p.id === 'leg_l' || p.id === 'leg_r') {
-    return { ...p, a: [p.a[0], p.a[1] + RAISE, p.a[2]] }; // knee rides up; foot b stays PLANTED
-  }
-  if (p.id === 'body') {
-    const a = stand(p.a), b = stand(p.b);
-    return { ...p, r: BODY_R, a: [a[0], TORSO_BOTTOM_Y, a[2]], b };
-  }
-  if (p.id === 'tail') {
-    const bx = stand(bodySrc.a)[0]; // authored offsets off body.a: root +0.06/+0.10, axis +0.40/-0.12
-    const a = [bx + 0.06, TORSO_BOTTOM_Y + 0.10, 0];
-    return { ...p, a, b: [a[0] + 0.40, a[1] - 0.12, 0] };
-  }
+const headSrc = strider.prims.find((p) => p.id === 'head');
+const prims = strider.prims.flatMap((p) => {
+  if (OVERRIDE[p.id] === null) return [];
   if (p.id.startsWith('eyeball') || p.id.startsWith('iris')) {
-    return { ...p, a: [headC[0] + (p.a[0] - headSrc.a[0]), headC[1] + (p.a[1] - headSrc.a[1]), p.a[2]] };
+    // authored offset from the head center, re-anchored on the new head
+    return [{ ...p, a: [HEAD[0] + (p.a[0] - headSrc.a[0]), HEAD[1] + (p.a[1] - headSrc.a[1]), p.a[2]] }];
   }
-  const q = { ...p, a: stand(p.a) }; // neck + head: stood up
-  if (p.b) q.b = stand(p.b);
-  return q;
+  return [{ ...p, ...(OVERRIDE[p.id] ?? {}) }];
 });
 const proto = { ...strider, prims }; // same ids/indices/step — only thigh kPrim differs
 let blendK = 0.25; // BACK to the cast default: the armpit fix moved into THIGH_K
