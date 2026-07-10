@@ -38,9 +38,14 @@ const inflate = strider.inflate ?? 0;
 // the thigh k bridged the knee cluster (four capsule ends stack their
 // smin deficits); and the shins bridged at global k. Fix (sweep-picked
 // against the live field): torso bottom raised to 1.00 with the hips up
-// at 0.92 (burial -0.047), THIGH_K 0.12, SHIN_K 0.12, leg track z 0.17.
-// Rest midline field between the legs: -0.068 (v3.1) -> +0.031 = an
-// open gap. A dedicated pelvis prim was tried and measured WORSE (a
+// at 0.92 (burial -0.047), THIGH_K 0.10, SHIN_K 0.08, leg track z 0.14.
+// Walk midline field between the legs: -0.068 (v3.1) -> +0.021 = an
+// open gap through the whole stride (0/240 frames fused, MEASURED).
+// v3.3 BULGE FIX: the de-fuse first shipped with track z 0.17 — the
+// thighs splayed hip 0.13 -> knee 0.17 and read as an upper-leg bulge
+// (outer 0.27 vs torso 0.20). Sweep-picked replacement buys the gap
+// from slimmer legs (r 0.09/0.08) + tighter fold k instead of track
+// width: outer now 0.23, splay 0.01. A dedicated pelvis prim was tried and measured WORSE (a
 // sphere that buries the thighs hangs into the crotch itself). Body
 // 0.22 -> 0.20, neck 0.10 -> 0.09 ride the overall slim.
 // Straight leg column kept from v3.1: hip + foot aligned at x 0.11,
@@ -48,8 +53,8 @@ const inflate = strider.inflate ?? 0;
 // self-regulates at its 0.995 straight limit (MEASURED).
 // NOTE: SN is the truth view; the static-proto SHELL toggle shows rim
 // artifacts at the untucked knees and slim body — expected.
-const THIGH_K = 0.12; // sweep-picked with the leg gap; 0.30 (fat-body armpit fix) bridged the knee cluster
-const SHIN_K = 0.12;  // anti-fuse: legs stop bridging each other
+const THIGH_K = 0.10; // sweep-picked with the leg gap; 0.30 (fat-body armpit fix) bridged the knee cluster
+const SHIN_K = 0.08; // anti-fuse: legs stop bridging each other
 const HEAD = [0.02, 1.56, 0];
 const HEAD_R = 0.20;
 const EYE_ROOT = 0.045; // authored ball rooting depth into the head
@@ -57,10 +62,10 @@ const OVERRIDE = {
   body: { a: [0.11, 1.00, 0], b: [0.11, 1.20, 0], r: 0.20 }, // bottom raised off the crotch (was 0.90 -> cap at knee height)
   neck: { a: [0.11, 1.20, 0], b: [0.05, 1.40, 0], r: 0.09 },
   head: { a: HEAD, r: HEAD_R },
-  thigh_l: { a: [0.11, 0.92, 0.13], b: [0.05, 0.71, 0.17], r: 0.10, kPrim: THIGH_K },
-  thigh_r: { a: [0.11, 0.92, -0.13], b: [0.05, 0.71, -0.17], r: 0.10, kPrim: THIGH_K },
-  leg_l: { a: [0.05, 0.71, 0.17], b: [0.11, 0.06, 0.17], r: 0.09, kPrim: SHIN_K },
-  leg_r: { a: [0.05, 0.71, -0.17], b: [0.11, 0.06, -0.17], r: 0.09, kPrim: SHIN_K },
+  thigh_l: { a: [0.11, 0.92, 0.13], b: [0.05, 0.71, 0.14], r: 0.09, kPrim: THIGH_K },
+  thigh_r: { a: [0.11, 0.92, -0.13], b: [0.05, 0.71, -0.14], r: 0.09, kPrim: THIGH_K },
+  leg_l: { a: [0.05, 0.71, 0.14], b: [0.11, 0.06, 0.14], r: 0.08, kPrim: SHIN_K },
+  leg_r: { a: [0.05, 0.71, -0.14], b: [0.11, 0.06, -0.14], r: 0.08, kPrim: SHIN_K },
   tail: null, // removed: humanoid
 };
 const headSrc = strider.prims.find((p) => p.id === 'head');
