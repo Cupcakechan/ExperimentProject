@@ -230,7 +230,7 @@ const _hRx = new THREE.Matrix4(), _hRy = new THREE.Matrix4(), _hT = new THREE.Ma
 // IK) while uR fattens by 1/sqrt(lengthScale) to preserve volume.
 // The head and arms ride the compression via their premultiplied
 // matrices but keep their own shapes — squash the mass, not the face.
-const SQUASH_AMP = 0.07;     // 7% target compression per impact
+const SQUASH_AMP = 0.04;     // 4% target compression per impact (0.07 read too bouncy — the spring dips PAST the target on entry, so the felt dip is ~1.3x this)
 const SQUASH_PULSE_T = 0.09; // s the impact target holds before releasing
 const squashSpring = createSecondOrder(4, 0.4, 1, 0); // fast + underdamped: dip, REBOUND past rest (the stretch), settle
 let squashPulse = 0;
