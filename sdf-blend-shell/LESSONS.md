@@ -768,3 +768,22 @@
 - Route: creature-forge (animation section — the staircase warning, the
   spring-lag-as-phase-corrector tool, and the assert-shape-not-amplitude
   rule).
+
+## 2026-07-11 — a stabilizer must OUT-BANDWIDTH the disturbance it cancels (the head spring amplified)
+- What broke / what happened: the Pass C head stabilizer at the research-
+  recommended f 0.8 Hz made the head yaw WORSE at stride reversals —
+  worst instantaneous ratio 1.22 (net > raw), RMS barely reduced (0.84).
+  The spring lagged so far behind the ~0.9 Hz body oscillation that at
+  reversals it was still undoing the OLD direction, adding to the new one.
+- Root cause: canceling a periodic disturbance is a bandwidth problem —
+  a corrector slower than the signal is an amplifier near reversals. The
+  f 0.7-1.0 guidance was for slow gaze-holding targets, not cancellation.
+- Verification gap it exposed: worst-case alone is also the wrong metric —
+  the pick needs RMS AND worst-instantaneous together (the sweep table:
+  f0.8 -> 0.84/1.22, f2.2 -> 0.48/0.73, monotone).
+- Plug shipped: HEAD_F 2.2 (RMS halved, no amplification anywhere), sweep
+  table in the code comment; the residual ~50% motion plus lag is what
+  keeps the moving-hold read.
+- Route: creature-forge (animation section — stabilizer frequency rule:
+  cancellation springs sit ABOVE the disturbance frequency; lag is for
+  character, not for the canceling axis).
