@@ -697,3 +697,74 @@
 - Route: dev-method skill earned-rule candidate ("an optimization with a
   correct fallback needs the taken path OBSERVABLE and asserted — outcome
   probes alone certify the fallback, not the optimization").
+
+## 2026-07-10 — "holes" conflated two defect classes with opposite severities (boundary vs pinch)
+- What broke / what happened: the swinging-arm walk showed "27/60 frames with
+  holes" at the display cell size — read as a watertightness regression and
+  nearly drove a geometry rework. Separating the metric showed ZERO true
+  holes: every flagged edge was a non-manifold PINCH (edge count > 2), a
+  closed surface kissing itself where the armpit corridor tangents — the
+  known benign tangency class. Boundary edges (count === 1) are the only
+  visible defect.
+- Root cause: the delivery-cert metric counted `count !== 2`, a single scalar
+  lumping open holes (render as pinholes; a defect) with closed pinches
+  (render as touching surfaces; cosmetic).
+- Verification gap it exposed: delivery-cert metrics live OUTSIDE the suite
+  and had never received the probe-invariant discipline — a metric that sums
+  two classes with different severities can only mislead in both directions.
+- Plug shipped: certs report the classes separately (boundary = the defect
+  bar, pinch = a note); the animated-pose sweeps assert boundary === 0 and
+  tolerate pinches.
+- Route: creature-forge (verification patterns — the two-class watertight
+  metric); dev-method earned-rule candidate ("a metric that sums defect
+  classes of different severities is not a metric").
+
+## 2026-07-10 — threshold-triggered gait forms ASYMMETRIC limit cycles (two independent instances in one day)
+- What broke / what happened: the humanoid walk limped. Twice, for two
+  different reasons. (a) With rest reach 0.982, the legs ran pinned to the
+  0.995 straight-leg clamp ~83% of the walk, and the step trigger + saturated
+  reach settled into a stretched-leg / catch-up-leg cycle — straight-line air
+  frames 414/270. (b) After the headroom fix, the R=1.2 circle's rotational
+  drift bias pushed the INNER foot into a stable double-step cycle — steps
+  L/R 35/67 over 38s ("right leg bends more" was step RATE, not depth: knee
+  bend means differed only 6%).
+- Root cause: threshold-triggered stepping plus any saturation or bias forms
+  stable asymmetric attractors. Symmetric geometry does NOT imply symmetric
+  gait — nothing in the trigger re-symmetrizes a leg that falls into a role.
+- Verification gap it exposed: every gait cert (fuse, reach, mesh) was
+  symmetry-BLIND; per-leg statistics did not exist. Also: both systems are
+  sharply nonlinear — partial reach headroom measured WORSE than either
+  extreme, and the circle cycle bifurcates cleanly at R ≈ 2.0 (35/67 at 1.2,
+  36/36 at 2.0) — so fixes must clear the bifurcation with margin, never
+  split the difference.
+- Plug shipped: reach headroom 0.982 -> 0.949 (knee x -0.03) + walk radius
+  2.5; the per-leg instrument (step rate, air frames, clamp frames, on
+  circle AND straight) is now cert vocabulary.
+- Route: creature-forge (gait section — biped symmetry is a MEASURED
+  property; ship the per-leg instrument recipe and the two bifurcation
+  numbers).
+
+## 2026-07-10 — foot-state signals beat phase clocks — but they are STAIRCASES, not sinusoids
+- What broke / what happened: two body-motion drives failed measurement
+  before the third shipped. The airborne-lift differential starved (sway
+  reached ±0.009 of the ±0.04 target — it pulses one step-time per step with
+  long double-support zeros). The d-derivative gave 2x/stride sway with
+  coin-flip stance sign — because d (fore-aft foot differential) is FLAT
+  during double support (both planted feet drift together) and ramps only
+  during swings: a rounded staircase, not the assumed cosine.
+- Root cause: sinusoid mental models applied to gait-derived signals. Gait
+  state is piecewise (plant/swing), so every derived signal inherits
+  staircase shape.
+- Verification gap it exposed: signal SHAPE claims (frequency per stride,
+  phase vs stance, sign convention) were never probed before wiring —
+  amplitude alone passed while frequency and sign were wrong.
+- Plug shipped: the working pattern — target = saturated foot-state function
+  (toward the front foot, -sign(d)), and the smoothing spring's OWN phase
+  lag (~75 deg at stride frequency) is the phase corrector that lands the
+  peak at mid-stance. Shipped cert asserts peaks-per-stride and
+  toward-stance sign (7 peaks/8s, 39/39), not just amplitude. Deriving from
+  foot STATE (not a parallel phase clock) stays the right call: it cannot
+  drift through turns or speed changes.
+- Route: creature-forge (animation section — the staircase warning, the
+  spring-lag-as-phase-corrector tool, and the assert-shape-not-amplitude
+  rule).
