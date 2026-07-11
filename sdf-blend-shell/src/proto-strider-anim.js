@@ -201,9 +201,32 @@ const YAW_AMP = 4 * Math.PI / 180;   // pelvic rotation, swing side forward
 const PELVIS = [0.11, 0.92, 0];      // rotation center: the hip line
 const D_SOFT = 0.10; // d saturates here: most of the stride sits at the +-0.16 extremes
 const swaySpring = createSecondOrder(1.2, 0.9, 1, 0); // rounds the staircase AND phase-lags the peak to mid-stance
+// --- PASS C (animation principles): counter-rotation + the moving hold.
+// A vertical capsule torso is rotationally near-invisible, so the
+// counter-rotation is carried by what SHOWS it: the ARMS (shoulder
+// line) get a chest-centered counter-yaw composed over the pelvis
+// matrix — shoulders visibly twist against the hips. The HEAD group
+// (head + eyes) gets its own stabilizer about the neck top: a near-
+// critical spring UNDOES most of the pelvis tilt/yaw with a lag, so
+// the head reads calm while the body moves (the moving hold). The
+// NECK stays on the pelvis matrix: neck.a === body.b is a shared
+// point and must transform identically; the neck-to-head region is
+// blended (no shared point), so small relative rotation is absorbed.
+const COUNTER_GAIN = 1.5;         // net shoulder yaw = -(GAIN-1) x pelvis yaw
+const CHEST = [0.11, 1.10, 0];    // counter-rotation center (mid-torso)
+const HEAD_STAB = 0.8;            // fraction of pelvis rotation the head undoes
+const NECK_TOP = [0.05, 1.40, 0]; // head-stabilizer pivot
+const HEAD_F = 2.2; // MEASURED sweep: f0.8 AMPLIFIED at reversals (RMS 0.84, worst 1.22 — a stabilizer must out-bandwidth the ~0.9 Hz stride); f2.2 halves the motion with no amplification (RMS 0.48, worst 0.73) while the lag keeps the late-arrival read
+const headTiltSpring = createSecondOrder(HEAD_F, 0.9, 1, 0); // near-critical: heads do not wobble
+const headYawSpring = createSecondOrder(HEAD_F, 0.9, 1, 0);
+const _chestM = new THREE.Matrix4();
+const _headM = new THREE.Matrix4();
+const _cR = new THREE.Matrix4(), _cT = new THREE.Matrix4();
+const _hRx = new THREE.Matrix4(), _hRy = new THREE.Matrix4(), _hT = new THREE.Matrix4();
 const _bodyM = new THREE.Matrix4(); // identity until the first update (frame-0 safe)
 const _bRx = new THREE.Matrix4(), _bRy = new THREE.Matrix4(), _bT = new THREE.Matrix4();
-const UPPER = prims.filter((p) => p.id === 'body' || p.id === 'neck' || p.id === 'head' || p.id.startsWith('eyeball') || p.id.startsWith('iris')).map((p) => p.id);
+const TORSO_GROUP = ['body', 'neck']; // shared point body.b === neck.a: one matrix
+const HEAD_GROUP = prims.filter((p) => p.id === 'head' || p.id.startsWith('eyeball') || p.id.startsWith('iris')).map((p) => p.id);
 function updateBodyBob() {
   // d ~ D_NORM*cos(2 pi phase), so d^2 is the 2x/stride signal: HIGH at
   // mid-stance (feet passing, d ~ 0), LOW at double support (|d| max).
@@ -226,7 +249,19 @@ function updateBodyMotion(dt) {
   _bRy.makeRotationY(yaw);
   _bT.makeTranslation(-PELVIS[0], -PELVIS[1], -PELVIS[2]);
   _bodyM.makeTranslation(PELVIS[0], PELVIS[1], PELVIS[2] + sway).multiply(_bRx).multiply(_bRy).multiply(_bT);
-  for (const id of UPPER) setPrimTransform(simMat, IDX[id], prims[IDX[id]], _bodyM);
+  // chest counter-yaw for the shoulder line (arms compose this one)
+  _cR.makeRotationY(-COUNTER_GAIN * yaw);
+  _cT.makeTranslation(-CHEST[0], -CHEST[1], -CHEST[2]);
+  _chestM.makeTranslation(CHEST[0], CHEST[1], CHEST[2]).multiply(_cR).multiply(_cT).premultiply(_bodyM);
+  // head stabilizer: spring-lagged UNDO of the pelvis rotation (moving hold)
+  const hT = headTiltSpring.update(-HEAD_STAB * tilt, dt);
+  const hY = headYawSpring.update(-HEAD_STAB * yaw, dt);
+  _hRx.makeRotationX(hT);
+  _hRy.makeRotationY(hY);
+  _hT.makeTranslation(-NECK_TOP[0], -NECK_TOP[1], -NECK_TOP[2]);
+  _headM.makeTranslation(NECK_TOP[0], NECK_TOP[1], NECK_TOP[2]).multiply(_hRx).multiply(_hRy).multiply(_hT).premultiply(_bodyM);
+  for (const id of TORSO_GROUP) setPrimTransform(simMat, IDX[id], prims[IDX[id]], _bodyM);
+  for (const id of HEAD_GROUP) setPrimTransform(simMat, IDX[id], prims[IDX[id]], _headM);
 }
 const _rot = new THREE.Matrix4();
 const _toPivot = new THREE.Matrix4();
@@ -244,9 +279,9 @@ function swingArm(armId, foreId, pivotS, pivotE, theta, rel) {
   _rotE.makeRotationZ(rel);
   _toPivotE.makeTranslation(-pivotE[0], -pivotE[1], -pivotE[2]);
   _m2.makeTranslation(pivotE[0], pivotE[1], pivotE[2]).multiply(_rotE).multiply(_toPivotE).premultiply(_m);
-  // arms ride the body: swing in pelvis space, then the Pass B body motion
-  _m.premultiply(_bodyM);
-  _m2.premultiply(_bodyM);
+  // arms ride the CHEST: swing in pelvis space, then body motion + counter-yaw
+  _m.premultiply(_chestM);
+  _m2.premultiply(_chestM);
   setPrimTransform(simMat, IDX[armId], prims[IDX[armId]], _m);
   setPrimTransform(simMat, IDX[foreId], prims[IDX[foreId]], _m2);
 }
