@@ -158,15 +158,33 @@ const SWING_MAX = 0.35;     // hard clamp: 20 deg
 const SWING_SMOOTH = 8;     // 1/s low-pass (pendulum feel, no step snap)
 const IDX = Object.fromEntries(prims.map((p, i) => [p.id, i]));
 const swing = { l: 0, r: 0 }; // smoothed arm angles
+const swingFore = { l: 0, r: 0 }; // LAGGED copy of swing: the lag difference is the elbow sway
+// Forearm follow-through: the forearm WORLD angle chases the shoulder
+// swing through a slower low-pass; (lagged - swing) becomes the elbow-
+// relative angle so the arm reads as a loose double pendulum, not a
+// stick. Clamped like a real elbow: flexes forward, barely hyperextends.
+const FORE_SMOOTH = 4;       // slower than SWING_SMOOTH 8 => visible lag
+const FORE_GAIN = 1.6;       // amplifies the lag into readable sway
+const FORE_FLEX_MAX = 0.30;  // forward flex clamp (17 deg)
+const FORE_HYPER_MAX = 0.06; // backward clamp (3 deg): elbows do not bend backward
 const _rot = new THREE.Matrix4();
 const _toPivot = new THREE.Matrix4();
 const _m = new THREE.Matrix4();
-function swingArm(armId, foreId, pivot, theta) {
+const _rotE = new THREE.Matrix4();
+const _toPivotE = new THREE.Matrix4();
+const _m2 = new THREE.Matrix4();
+function swingArm(armId, foreId, pivotS, pivotE, theta, rel) {
   _rot.makeRotationZ(theta);
-  _toPivot.makeTranslation(-pivot[0], -pivot[1], -pivot[2]);
-  _m.makeTranslation(pivot[0], pivot[1], pivot[2]).multiply(_rot).multiply(_toPivot);
+  _toPivot.makeTranslation(-pivotS[0], -pivotS[1], -pivotS[2]);
+  _m.makeTranslation(pivotS[0], pivotS[1], pivotS[2]).multiply(_rot).multiply(_toPivot);
+  // forearm = shoulder transform COMPOSED with an elbow-relative rotation;
+  // the rest elbow is fixed under its own pivot rotation, so the joint
+  // stays exactly shared with the upper arm after both transforms.
+  _rotE.makeRotationZ(rel);
+  _toPivotE.makeTranslation(-pivotE[0], -pivotE[1], -pivotE[2]);
+  _m2.makeTranslation(pivotE[0], pivotE[1], pivotE[2]).multiply(_rotE).multiply(_toPivotE).premultiply(_m);
   setPrimTransform(simMat, IDX[armId], prims[IDX[armId]], _m);
-  setPrimTransform(simMat, IDX[foreId], prims[IDX[foreId]], _m);
+  setPrimTransform(simMat, IDX[foreId], prims[IDX[foreId]], _m2);
 }
 function updateArmSwing(dt) {
   const uB = simMat.uniforms.uB.value;
@@ -180,8 +198,13 @@ function updateArmSwing(dt) {
   const k = Math.min(1, dt * SWING_SMOOTH);
   swing.l += (tL - swing.l) * k;
   swing.r += (tR - swing.r) * k;
-  swingArm('arm_l', 'fore_l', SHOULDER, swing.l);
-  swingArm('arm_r', 'fore_r', mirrorZ(SHOULDER), swing.r);
+  const kf = Math.min(1, dt * FORE_SMOOTH);
+  swingFore.l += (swing.l - swingFore.l) * kf;
+  swingFore.r += (swing.r - swingFore.r) * kf;
+  const relL = Math.max(-FORE_FLEX_MAX, Math.min(FORE_HYPER_MAX, FORE_GAIN * (swingFore.l - swing.l)));
+  const relR = Math.max(-FORE_FLEX_MAX, Math.min(FORE_HYPER_MAX, FORE_GAIN * (swingFore.r - swing.r)));
+  swingArm('arm_l', 'fore_l', SHOULDER, ELBOW, swing.l, relL);
+  swingArm('arm_r', 'fore_r', mirrorZ(SHOULDER), mirrorZ(ELBOW), swing.r, relR);
 }
 
 // --- worker ---
