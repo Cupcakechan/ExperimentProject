@@ -326,7 +326,7 @@ worker.onmessage = (e) => {
 };
 
 // --- the walk: a circle centered on the origin so it stays in frame ---
-const R = 1.2; // circle radius
+const R = 2.5; // walk-circle radius. NOT cosmetic: at R 1.2 the curvature drift pushed the inner foot into a stable DOUBLE-STEP cycle (steps L/R 35/67 over 38s MEASURED = the visible limp); the limit cycle bifurcates sharply at R ~2.0 (36/36) — 2.5 gives margin.
 const SPEED = 0.35; // walk speed (units/s)
 let phi = 0; // angle around the circle
 let paused = false;
