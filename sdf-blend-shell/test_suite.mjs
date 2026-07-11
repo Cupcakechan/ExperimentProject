@@ -2236,5 +2236,171 @@ console.log('Section SN-ACTOR: surfaceNetsActor scheduling + snapshot fidelity')
   _resetSchedulerForTests();
 }
 
+
+// ---------- Section RIG: the biped animation rig (Passes A-D, extracted) ----------
+// createBipedRig lifted the proto's animation stack into src/bipedRig.js
+// (plan-of-record item 1) with a BIT-EXACT parity trace (156,960/156,960
+// numbers over 1440 fixed-dt frames). These probes pin the MEASURED
+// behaviors so the rig survives future refactors: every anchor below was
+// measured on this driver before being encoded (2026-07-11).
+console.log('Section RIG: biped rig measured behaviors');
+{
+  const { buildHumanoidProto } = await import('./src/data/humanoidProto.js');
+  const { createBipedRig } = await import('./src/bipedRig.js');
+  const { createGait } = await import('./src/gait.js');
+  const { createBlendMaterial } = await import('./src/render/blendMaterial.js');
+
+  const proto = buildHumanoidProto();
+  const prims = proto.prims;
+  const simMat = createBlendMaterial(prims, proto.inflate, proto.step?.knees);
+  const gait = createGait(proto);
+  const rig = createBipedRig(proto, simMat);
+  const IDX = Object.fromEntries(prims.map((p, i) => [p.id, i]));
+
+  // Derived anchors: the skeleton carries its rig anchors. For the v4.2
+  // humanoid the derivation must reproduce the old hand literals EXACTLY
+  // (float-exact — (1.00+1.20)/2 === 1.10 in doubles).
+  const A = rig.anchors;
+  assert(A.pelvis[0] === 0.11 && A.pelvis[1] === 0.92 && A.pelvis[2] === 0, 'derived pelvis anchor === the v4.2 hand literal [0.11, 0.92, 0] (hip midpoint)');
+  assert(A.chest[0] === 0.11 && A.chest[1] === 1.10 && A.chest[2] === 0, 'derived chest anchor === [0.11, 1.10, 0] (torso midpoint, float-exact)');
+  assert(A.neckTop[0] === 0.05 && A.neckTop[1] === 1.40 && A.neckTop[2] === 0, 'derived neck-top anchor === [0.05, 1.40, 0] (neck.b)');
+
+  // Drive the proto's exact walk (R 2.5, SPEED 0.35, dt 1/60): 8s
+  // transient, then a 16s measure window. All anchors below are the
+  // 2026-07-11 measured values on this driver.
+  const DT = 1 / 60, TRANSIENT = 480, MEASURE = 960, R = 2.5, SPEED = 0.35;
+  let phi = 0;
+  const pose = { x: 0, y: 0, z: 0, heading: 0 };
+  const S = { d: [], bob: [], sway: [], yaw: [], tilt: [], hY: [], hT: [], squash: [], thL: [], thR: [], shYaw: [], single: [], plantedZ: [], uRBody: [] };
+  let steps = 0;
+  const prevSwing = gait.feet.map(() => -1);
+  for (let f = 0; f < TRANSIENT + MEASURE; f++) {
+    phi += (SPEED / R) * DT;
+    pose.x = R * Math.cos(phi); pose.z = R * Math.sin(phi); pose.heading = Math.PI / 2 - phi;
+    rig.updateBob(pose);
+    gait.update(DT, pose, [simMat]);
+    rig.update(DT);
+    if (f < TRANSIENT) { gait.feet.forEach((ft, i) => { prevSwing[i] = ft.swingT; }); continue; }
+    gait.feet.forEach((ft, i) => { if (prevSwing[i] < 0 && ft.swingT >= 0) steps++; prevSwing[i] = ft.swingT; });
+    const g = rig.debug;
+    S.d.push(g.d); S.bob.push(g.bobY); S.sway.push(g.sway); S.yaw.push(g.yaw); S.tilt.push(g.tilt);
+    S.hY.push(g.hY); S.hT.push(g.hT); S.squash.push(g.squash); S.thL.push(g.thL); S.thR.push(g.thR);
+    const uA = simMat.uniforms.uA.value;
+    S.shYaw.push(Math.atan2(uA[IDX.arm_l].x - uA[IDX.arm_r].x, uA[IDX.arm_l].z - uA[IDX.arm_r].z));
+    const swinging = gait.feet.filter((ft) => ft.swingT >= 0);
+    S.single.push(swinging.length === 1);
+    S.plantedZ.push(swinging.length === 1 ? gait.feet.find((ft) => ft.swingT < 0).b0.z : 0);
+    S.uRBody.push(simMat.uniforms.uR.value[IDX.body]);
+  }
+  assert(steps >= 28 && steps <= 34, `gait produced a steady walk in the window (steps=${steps}, measured 31 = 0.97 Hz stride)`);
+
+  // PASS B: bob is the 2x/stride signal, HIGH at mid-stance. Peak count
+  // equals STEP count (2 bob peaks per stride = 1 per step), and at every
+  // bob maximum the feet are passing (|d| small; measured max 0.016 vs
+  // dNorm 0.16).
+  const bobMin = Math.min(...S.bob), bobMax = Math.max(...S.bob);
+  const bobFloor = bobMin + 0.5 * (bobMax - bobMin);
+  let bobPk = 0, dAtBobMaxOK = true;
+  for (let i = 1; i < S.bob.length - 1; i++) {
+    if (S.bob[i] > S.bob[i - 1] && S.bob[i] >= S.bob[i + 1] && S.bob[i] > bobFloor) {
+      bobPk++;
+      if (Math.abs(S.d[i]) > 0.4 * rig.config.dNorm) dAtBobMaxOK = false;
+    }
+  }
+  assert(Math.abs(bobPk - steps) <= 1, `bob peaks 2x/stride: ${bobPk} peaks vs ${steps} steps (measured 31/31 exact)`);
+  assert(dAtBobMaxOK, 'bob maxima land at mid-stance: |d| < 0.4*dNorm at every bob peak (measured max 0.1*dNorm)');
+
+  // PASS B: sway is 1x/stride and TOWARD THE STANCE FOOT at its extrema
+  // during single support (the spring's ~75 deg lag is the phase
+  // corrector). Measured: 15 positive peaks vs 15.5 strides, 15/15
+  // toward-stance.
+  let swayPk = 0;
+  for (let i = 1; i < S.sway.length - 1; i++) if (S.sway[i] > S.sway[i - 1] && S.sway[i] >= S.sway[i + 1] && S.sway[i] > 0) swayPk++;
+  assert(Math.abs(swayPk - steps / 2) <= 1, `sway peaks 1x/stride: ${swayPk} positive peaks vs ${(steps / 2).toFixed(1)} strides`);
+  let towardOK = 0, towardN = 0;
+  for (let i = 1; i < S.sway.length - 1; i++) {
+    const ext = (S.sway[i] > S.sway[i - 1] && S.sway[i] >= S.sway[i + 1]) || (S.sway[i] < S.sway[i - 1] && S.sway[i] <= S.sway[i + 1]);
+    if (ext && S.single[i] && Math.abs(S.sway[i]) > 0.01) {
+      towardN++;
+      if (Math.sign(S.sway[i]) === Math.sign(S.plantedZ[i])) towardOK++;
+    }
+  }
+  assert(towardN > 0 && towardOK === towardN, `sway extrema in single support point toward the planted foot: ${towardOK}/${towardN} (measured 15/15; guard-the-guard: n > 0)`);
+
+  // PASS A: mirrored targets into identical linear springs => the applied
+  // shoulder angles are EXACTLY anti-phase (bitwise: IEEE negation is
+  // exact through +,-,*,/ and symmetric clamps). Measured max |thL+thR| = 0.
+  let apMax = 0;
+  for (let i = 0; i < S.thL.length; i++) apMax = Math.max(apMax, Math.abs(S.thL[i] + S.thR[i]));
+  assert(apMax === 0, `arms are EXACTLY anti-phase: max|thL+thR| = ${apMax} (bitwise mirror)`);
+  // The left arm TRACKS its drive (-swingPerUnit*d) through the spring's
+  // phase lag: Pearson corr measured 0.61 on this driver (the lag at the
+  // ~1 Hz stride is what de-stiffens the read — corr 1.0 would mean a
+  // rigid tie, the old low-pass failure).
+  const tgt = S.d.map((d) => -rig.config.swingPerUnit * d);
+  const mean = (a) => a.reduce((s, v) => s + v, 0) / a.length;
+  const mT = mean(tgt), mL = mean(S.thL);
+  let num = 0, dT = 0, dL = 0;
+  for (let i = 0; i < tgt.length; i++) { num += (tgt[i] - mT) * (S.thL[i] - mL); dT += (tgt[i] - mT) ** 2; dL += (S.thL[i] - mL) ** 2; }
+  const corr = num / Math.sqrt(dT * dL);
+  assert(corr > 0.5, `left arm tracks its leg drive through the spring lag: corr = ${corr.toFixed(3)} (measured 0.61)`);
+
+  // PASS C: net shoulder yaw = -(counterGain-1) x pelvis yaw = -0.5x,
+  // measured THROUGH THE JOINTS (uA of both shoulder roots) at saturated
+  // pelvis yaw. Measured band on this driver: [-0.5008, -0.5003].
+  let ratioMin = Infinity, ratioMax = -Infinity, ratioN = 0;
+  for (let i = 0; i < S.yaw.length; i++) {
+    if (Math.abs(S.yaw[i]) > 0.8 * rig.config.yawAmp) {
+      const r = S.shYaw[i] / S.yaw[i];
+      ratioMin = Math.min(ratioMin, r); ratioMax = Math.max(ratioMax, r); ratioN++;
+    }
+  }
+  assert(ratioN > 0 && ratioMin > -0.51 && ratioMax < -0.49, `shoulder/pelvis counter-rotation ratio in [-0.51, -0.49] through the joints (measured [${ratioMin.toFixed(4)}, ${ratioMax.toFixed(4)}], n=${ratioN})`);
+
+  // PASS C: the head stabilizer HALVES the pelvis rotation with NO
+  // amplification (the f0.8 failure mode) on both channels. Measured:
+  // yaw RMS ratio 0.497 / worst 0.488; tilt 0.445 / 0.432.
+  const rms = (a) => Math.sqrt(a.reduce((s, v) => s + v * v, 0) / a.length);
+  const netY = S.yaw.map((y, i) => y + S.hY[i]);
+  const netT = S.tilt.map((t, i) => t + S.hT[i]);
+  const worstOf = (net, base) => Math.max(...net.map(Math.abs)) / Math.max(...base.map(Math.abs));
+  assert(rms(netY) / rms(S.yaw) < 0.6 && worstOf(netY, S.yaw) < 0.6, `head stabilizer halves pelvis YAW, no amplification (RMS ratio ${(rms(netY) / rms(S.yaw)).toFixed(3)}, worst ${worstOf(netY, S.yaw).toFixed(3)})`);
+  assert(rms(netT) / rms(S.tilt) < 0.6 && worstOf(netT, S.tilt) < 0.6, `head stabilizer halves pelvis TILT, no amplification (RMS ratio ${(rms(netT) / rms(S.tilt)).toFixed(3)}, worst ${worstOf(netT, S.tilt).toFixed(3)})`);
+
+  // PASS D: the underdamped squash spring dips PAST the -amp target on
+  // entry (measured 1.33x amp) and REBOUNDS past rest (the stretch);
+  // uR preserves volume algebraically: lenS * radS^2 === 1 (measured
+  // deviation 4.4e-16).
+  const sqMin = Math.min(...S.squash), sqMax = Math.max(...S.squash);
+  assert(sqMin < -1.05 * rig.config.squashAmp && sqMin > -1.8 * rig.config.squashAmp, `squash dips past its target: min ${sqMin.toFixed(5)} = ${(-sqMin / rig.config.squashAmp).toFixed(2)}x amp (measured 1.33x)`);
+  assert(sqMax > 0, `squash REBOUNDS past rest (the stretch): max ${sqMax.toFixed(5)} > 0`);
+  const restRBody = prims[IDX.body].r;
+  let volMax = 0;
+  for (let i = 0; i < S.squash.length; i++) {
+    const lenS = 1 + S.squash[i];
+    if (lenS >= 0.5) volMax = Math.max(volMax, Math.abs(lenS * (S.uRBody[i] / restRBody) ** 2 - 1));
+  }
+  assert(volMax < 1e-12, `squash preserves volume: max |lenS * radS^2 - 1| = ${volMax.toExponential(2)} (r scales by 1/sqrt(length))`);
+
+  // Pause-safety (the proto pauses by SKIPPING updates; the rig's own
+  // contract): update(0) recomputes every uniform from held spring state
+  // — the sink must come out BIT-IDENTICAL. And updateBob is idempotent
+  // at held feet (its one-time refresh onto the newest feet then holds).
+  const uA = simMat.uniforms.uA.value, uB = simMat.uniforms.uB.value, uR = simMat.uniforms.uR.value;
+  const snap = [];
+  for (let i = 0; i < prims.length; i++) snap.push(uA[i].x, uA[i].y, uA[i].z, uB[i].x, uB[i].y, uB[i].z, uR[i]);
+  for (let k = 0; k < 10; k++) rig.update(0);
+  let uniSame = true, j = 0;
+  for (let i = 0; i < prims.length; i++) { uniSame = uniSame && snap[j++] === uA[i].x && snap[j++] === uA[i].y && snap[j++] === uA[i].z && snap[j++] === uB[i].x && snap[j++] === uB[i].y && snap[j++] === uB[i].z && snap[j++] === uR[i]; }
+  assert(uniSame, 'pause-safety: 10x update(0) leaves every sink uniform bit-identical');
+  rig.updateBob(pose); const y1 = pose.y;
+  rig.updateBob(pose); const y2 = pose.y;
+  assert(y1 === y2, 'updateBob is idempotent at held feet (paused bob holds exactly)');
+
+  // No NaN anywhere after the full run + pause probes.
+  let finite = true;
+  for (let i = 0; i < prims.length; i++) if (![uA[i].x, uA[i].y, uA[i].z, uB[i].x, uB[i].y, uB[i].z, uR[i]].every(Number.isFinite)) finite = false;
+  assert(finite, 'all sink uniforms finite after 24s of walk + pause probes (NaN guard)');
+}
 console.log(failures === 0 ? '\nALL PASS' : `\n${failures} FAILURE(S)`);
 process.exit(failures === 0 ? 0 : 1);
