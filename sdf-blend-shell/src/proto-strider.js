@@ -67,10 +67,10 @@ const OVERRIDE = {
   body: { a: [0.11, 1.00, 0], b: [0.11, 1.20, 0], r: 0.18 }, // bottom raised off the crotch; r 0.20 -> 0.18 buys the ARM corridor (and more slim)
   neck: { a: [0.11, 1.20, 0], b: [0.05, 1.40, 0], r: 0.09 },
   head: { a: HEAD, r: HEAD_R },
-  thigh_l: { a: [0.11, 0.92, 0.09], b: [0.03, 0.45, 0.14], r: 0.08, kPrim: THIGH_K }, // hip z in + r 0.08: shrinks the flare the arm must clear (and zeroes the knee radius step)
-  thigh_r: { a: [0.11, 0.92, -0.09], b: [0.03, 0.45, -0.14], r: 0.08, kPrim: THIGH_K },
-  leg_l: { a: [0.03, 0.45, 0.14], b: [0.11, 0.06, 0.14], r: 0.08, kPrim: SHIN_K },
-  leg_r: { a: [0.03, 0.45, -0.14], b: [0.11, 0.06, -0.14], r: 0.08, kPrim: SHIN_K },
+  thigh_l: { a: [0.11, 0.92, 0.09], b: [-0.03, 0.45, 0.14], r: 0.08, kPrim: THIGH_K }, // hip z in + r 0.08: shrinks the flare the arm must clear (and zeroes the knee radius step). Knee x -0.03 (v4.2): reach headroom 0.949 — at 0.982 the legs ran pinned to the 0.995 straight-leg clamp ~83% of the walk, and the step trigger + saturated reach formed an ASYMMETRIC LIMIT CYCLE (one leg stretched, one catch-up stepping = the left-leg drag; straight-line air frames 414/270 MEASURED). With headroom: 216/216, clamp ~0. Partial headroom is WORSE (nonlinear limit cycle) — do not split the difference.
+  thigh_r: { a: [0.11, 0.92, -0.09], b: [-0.03, 0.45, -0.14], r: 0.08, kPrim: THIGH_K },
+  leg_l: { a: [-0.03, 0.45, 0.14], b: [0.11, 0.06, 0.14], r: 0.08, kPrim: SHIN_K },
+  leg_r: { a: [-0.03, 0.45, -0.14], b: [0.11, 0.06, -0.14], r: 0.08, kPrim: SHIN_K },
   tail: null, // removed: humanoid
 };
 const headSrc = strider.prims.find((p) => p.id === 'head');
