@@ -170,6 +170,64 @@ const FORE_FLEX_MAX = 0.30;  // forward flex clamp (17 deg)
 const FORE_HYPER_MAX = 0.06; // backward clamp (3 deg): elbows do not bend backward
 const armSpring = { l: createSecondOrder(SHOULDER_F, SHOULDER_Z, 1, 0), r: createSecondOrder(SHOULDER_F, SHOULDER_Z, 1, 0) };
 const foreSpring = { l: createSecondOrder(FORE_F, FORE_Z, 1, 0), r: createSecondOrder(FORE_F, FORE_Z, 1, 0) };
+
+// --- PASS B (animation principles): gait-phase BODY MOTION — secondary
+// action, the missing mass of the walk. All signals derive ALGEBRAICALLY
+// from actual foot state (no parallel phase clock => structurally sync-
+// proof through turns and speed changes):
+//   d = fore-aft foot differential. NOT a cosine: during double support
+//   both feet are planted and drift together, so d is FLAT there and
+//   ramps only while a foot swings — a rounded staircase. Two drives
+//   failed measurement before this one: the airborne-lift differential
+//   (starved: +-0.009 of the +-0.04 sway target — pulses with long
+//   double-support zeros) and d-dot (per-step alternating pulses, not
+//   quadrature: 2x/stride sway with coin-flip stance sign). The shipped
+//   drive: sway target = toward the FRONT foot, -sign(d) saturated, and
+//   the sway spring itself is the PHASE CORRECTOR — its ~75 deg lag at
+//   stride frequency lands the sway peak at mid-stance (MEASURED: 7
+//   peaks in 8s = 1x/stride, toward-stance 39/39 in single support).
+// Vertical bob rides pose.y — the gait was BUILT for a rig-level bob
+// (planted feet IK-compensate), so the legs absorb it like real legs.
+// Sway/tilt/yaw apply as ONE pelvis-centered matrix on the upper body,
+// and the arm matrices COMPOSE it, so every measured arm-torso corridor
+// is preserved by construction. Biomech floors: bob 2x/stride high at
+// mid-stance (Orendurff), pelvis drops ~5 deg to the swing side and
+// yaws ~4 deg forward on the swing side (Saunders/Inman/Eberhart).
+const D_NORM = 0.16;                 // measured fore-aft foot excursion
+const BOB_AMP = 0.022;               // ~2.5% leg length
+const SWAY_AMP = 0.04;               // ~5% leg: shift over the stance foot
+const TILT_AMP = 5 * Math.PI / 180;  // pelvic drop toward the swing side
+const YAW_AMP = 4 * Math.PI / 180;   // pelvic rotation, swing side forward
+const PELVIS = [0.11, 0.92, 0];      // rotation center: the hip line
+const D_SOFT = 0.10; // d saturates here: most of the stride sits at the +-0.16 extremes
+const swaySpring = createSecondOrder(1.2, 0.9, 1, 0); // rounds the staircase AND phase-lags the peak to mid-stance
+const _bodyM = new THREE.Matrix4(); // identity until the first update (frame-0 safe)
+const _bRx = new THREE.Matrix4(), _bRy = new THREE.Matrix4(), _bT = new THREE.Matrix4();
+const UPPER = prims.filter((p) => p.id === 'body' || p.id === 'neck' || p.id === 'head' || p.id.startsWith('eyeball') || p.id.startsWith('iris')).map((p) => p.id);
+function updateBodyBob() {
+  // d ~ D_NORM*cos(2 pi phase), so d^2 is the 2x/stride signal: HIGH at
+  // mid-stance (feet passing, d ~ 0), LOW at double support (|d| max).
+  const uB = simMat.uniforms.uB.value;
+  const d = (uB[IDX.leg_l].x - uB[IDX.leg_r].x) / 2;
+  pose.y = BOB_AMP * (1 - 2 * Math.min(1, (d / D_NORM) * (d / D_NORM)));
+}
+function updateBodyMotion(dt) {
+  const uB = simMat.uniforms.uB.value;
+  const d = (uB[IDX.leg_l].x - uB[IDX.leg_r].x) / 2;
+  // front foot = smaller x = the incoming stance: sway toward it is
+  // -sign(d). The spring's lag then holds that sway through the single
+  // support. Tilt drops toward the SWING side = opposite the sway
+  // (Rx(+) lowers +z, so tilt takes the negated normalized sway).
+  const swayTarget = -SWAY_AMP * Math.max(-1, Math.min(1, d / D_SOFT));
+  const sway = swaySpring.update(swayTarget, dt);
+  const tilt = -TILT_AMP * (sway / SWAY_AMP);
+  const yaw = YAW_AMP * Math.max(-1, Math.min(1, d / D_NORM)); // Ry(-) sends +z forward; d<0 = left forward
+  _bRx.makeRotationX(tilt);
+  _bRy.makeRotationY(yaw);
+  _bT.makeTranslation(-PELVIS[0], -PELVIS[1], -PELVIS[2]);
+  _bodyM.makeTranslation(PELVIS[0], PELVIS[1], PELVIS[2] + sway).multiply(_bRx).multiply(_bRy).multiply(_bT);
+  for (const id of UPPER) setPrimTransform(simMat, IDX[id], prims[IDX[id]], _bodyM);
+}
 const _rot = new THREE.Matrix4();
 const _toPivot = new THREE.Matrix4();
 const _m = new THREE.Matrix4();
@@ -186,6 +244,9 @@ function swingArm(armId, foreId, pivotS, pivotE, theta, rel) {
   _rotE.makeRotationZ(rel);
   _toPivotE.makeTranslation(-pivotE[0], -pivotE[1], -pivotE[2]);
   _m2.makeTranslation(pivotE[0], pivotE[1], pivotE[2]).multiply(_rotE).multiply(_toPivotE).premultiply(_m);
+  // arms ride the body: swing in pelvis space, then the Pass B body motion
+  _m.premultiply(_bodyM);
+  _m2.premultiply(_bodyM);
   setPrimTransform(simMat, IDX[armId], prims[IDX[armId]], _m);
   setPrimTransform(simMat, IDX[foreId], prims[IDX[foreId]], _m2);
 }
@@ -281,8 +342,10 @@ function step(nowMs) {
     pose.x = R * Math.cos(phi);
     pose.z = R * Math.sin(phi);
     pose.heading = Math.PI / 2 - phi; // face along the tangent (walk forward)
+    updateBodyBob(); // reads last-frame feet -> pose.y BEFORE the gait consumes the pose
     gait.update(dt, pose, [simMat]); // advances the legs; keeps simMat.uA/uB current
-    updateArmSwing(dt); // arms: stiff pendulums opposite the feet the gait just placed
+    updateBodyMotion(dt); // sway/tilt/yaw onto the upper body (this frame's feet)
+    updateArmSwing(dt); // arms: springs opposite the feet, riding the body matrix
   }
 
   // Post the current pose to the worker only when it's idle — it meshes
