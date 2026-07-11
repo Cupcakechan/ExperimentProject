@@ -23,6 +23,7 @@ import { createInkPass } from './render/inkPass.js';
 import { updateAnim, animEntries, breathInflate } from './anim.js';
 import { createControls } from './ui/controls.js';
 import { createRoam } from './roam.js';
+import { createSurfaceNetsActor } from './render/surfaceNetsActor.js';
 import { createGait } from './gait.js';
 import { createHop } from './hop.js';
 import { createBlink } from './blink.js';
@@ -91,14 +92,29 @@ let currentK = BLEND_K;
 
 function spawnActor(creature, roamTotal = actors.length + 1) {
   const i = actors.length; // live index: seeds, phases, spawn ring slot
-  const geometry = buildShellGeometry(creature.prims, creature.step?.knees);
-  const material = createBlendMaterial(creature.prims, creature.inflate, creature.step?.knees);
+  // SN-rendered creatures (render: 'sn'): the field is meshed on a shared
+  // worker instead of shell-snapped — exposed joints allowed, shell
+  // validity NOT required. The sink material slots in as actor.material,
+  // so every write path (gait/anim/blink — they all take a materials
+  // list) works unchanged and cannot tell the renderers apart.
+  const sn = creature.render === 'sn' ? createSurfaceNetsActor(creature, { blendK: currentK }) : null;
+  let material;
+  let bodyMesh;
+  if (sn) {
+    material = sn.simMat;
+    sn.setK(currentK);
+    bodyMesh = sn.mesh;
+  } else {
+    const geometry = buildShellGeometry(creature.prims, creature.step?.knees);
+    material = createBlendMaterial(creature.prims, creature.inflate, creature.step?.knees);
+    bodyMesh = new THREE.Mesh(geometry, material);
+  }
   material.uniforms.uK.value = currentK; // late spawns join the CURRENT field mood
-  const shell = new THREE.Mesh(geometry, material);
-  // Vertices move in the shader, so CPU-side bounds are wrong — never cull.
-  shell.frustumCulled = false;
+  // Vertices move in the shader (shell) or the geometry is re-baked (SN),
+  // so CPU-side bounds are wrong either way — never cull.
+  bodyMesh.frustumCulled = false;
   const rig = new THREE.Group();
-  rig.add(shell);
+  rig.add(bodyMesh);
   // Banking rolls about the creature's FORWARD axis, which is LOCAL X
   // (creatures face -X). Order YXZ applies heading first, then the roll
   // happens in the already-yawed frame.
@@ -108,6 +124,7 @@ function spawnActor(creature, roamTotal = actors.length + 1) {
     creature,
     material,
     rig,
+    sn, // null for shell actors
     roam: createRoam(i, roamTotal, creature.idle), // seed = index; count-spaced spawn ring; per-creature idle
     // A hopping creature's feet belong to the HOP state machine — running
     // the reactive gait underneath it would fight over the same anchors.
@@ -148,6 +165,7 @@ const ui = createControls({
     currentK = v; // remembered for actors spawned AFTER the drag
     for (const a of actors) {
       a.material.uniforms.uK.value = v; // one draw now — the ink has no field to follow
+      if (a.sn) a.sn.setK(v); // SN: re-bake the field at the new k
     }
   },
   // C1 creature I/O — controls owns the DOM, main owns the data:
@@ -234,7 +252,9 @@ renderer.setAnimationLoop(() => {
 
     // Breathing (A2): the field itself inhales. Non-breathers keep their
     // build-time uInflate — no write, no cost.
-    if (actor.creature.breath) {
+    if (actor.creature.breath && !actor.sn) {
+      // SN actors skip breath THIS pass: an inflate change is a field change
+      // = constant idle re-meshing. Shader-side breath is the queued follow-up.
       actor.material.uniforms.uInflate.value = breathInflate(tAnim, actor.creature, actor.bobPhase);
     }
 
@@ -290,6 +310,9 @@ renderer.setAnimationLoop(() => {
     // SIGN CHECK (flagged): positive omega should bank INTO the turn —
     // if the field reads as leaning OUT of turns, flip this one sign.
     actor.rig.rotation.x = actor.lean;
+    // SN: enqueue a bake carrying everything this frame wrote (v1 always-
+    // dirty round-robin; idle-skip is a measured follow-up).
+    if (actor.sn) { actor.sn.markDirty(); actor.sn.update(); }
   }
 
   shadows.update(actors); // every rig's DISPLAYED pose is final for the frame — one pass over the field

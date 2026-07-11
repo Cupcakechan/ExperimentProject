@@ -456,6 +456,7 @@ export const CREATURES = [
   },
   {
     id: 'strider',
+    render: 'sn', // SN-into-main proof creature: shell-valid, so the two renderers can be A/B'd on the same body (delete this line to compare)
     // Forward-leaning BIPED WALKER (append-only cast addition). Two kneed
     // legs with alternating step groups [[0],[1]] — at most one foot
     // airborne, so one is always planted: a WALK, not the hopper's hop.

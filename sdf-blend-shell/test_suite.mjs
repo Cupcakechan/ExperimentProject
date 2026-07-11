@@ -2169,5 +2169,72 @@ console.log('Section A: second-order spring behaviors');
   assert(s.value === held, 'dt <= 0 holds the value exactly (pause contract)');
 }
 
+// ---------- Section SN-ACTOR: the shared-worker SN actor for main ----------
+// createSurfaceNetsActor packages the proto's sink+worker+swap pattern for
+// spawnActor. These probes drive it with an INJECTED FAKE worker (manual
+// deliver()) so the queue lifecycle is deterministic and headless.
+console.log('Section SN-ACTOR: surfaceNetsActor scheduling + snapshot fidelity');
+{
+  const { createSurfaceNetsActor, _resetSchedulerForTests } = await import('./src/render/surfaceNetsActor.js');
+  const { meshCreature } = await import('./src/render/surfaceNetsCore.js');
+  const strider = CREATURES.find((c) => c.id === 'strider');
+  const fake = {
+    posted: [],
+    onmessage: null,
+    postMessage(msg) { this.posted.push(msg); },
+    deliver() {
+      const job = this.posted.shift();
+      const res = meshCreature(job.prims, job.opts);
+      this.onmessage({ data: { positions: res.positions, indices: res.indices, vertexCount: res.vertexCount, ms: 1 } });
+      return job;
+    },
+  };
+  _resetSchedulerForTests();
+  const mk = () => createSurfaceNetsActor(strider, { blendK: 0.25, workerFactory: () => fake });
+
+  const a = mk();
+  assert(a.mesh.geometry.getAttribute('position') === undefined, 'a fresh SN actor has an empty placeholder geometry');
+  a.update();
+  assert(fake.posted.length === 1, 'spawned = dirty: the first update() posts a bake');
+  // live-uniform fidelity: move a prim + squash a radius in the SINK, re-dirty, deliver the stale job first
+  fake.deliver();
+  a.simMat.uniforms.uA.value[0].y += 0.05;
+  a.simMat.uniforms.uR.value[0] *= 1.1;
+  a.markDirty();
+  a.update();
+  const job = fake.posted[0];
+  assert(Math.abs(job.prims[0].a[1] - a.simMat.uniforms.uA.value[0].y) < 1e-12, 'the snapshot carries the LIVE uA, not rest');
+  assert(Math.abs(job.prims[0].r - a.simMat.uniforms.uR.value[0]) < 1e-12, 'the snapshot carries the LIVE uR (the Pass D squash contract)');
+  // shade-with-the-snapshot: write the sink AGAIN mid-flight; the swap must apply the OLD values
+  const snapY = job.prims[0].a[1];
+  a.simMat.uniforms.uA.value[0].y += 0.5; // newer sink state the geometry has NOT seen
+  fake.deliver();
+  assert(a.mesh.geometry.getAttribute('position').count > 0, 'the swap installed real geometry');
+  assert(Math.abs(a.mesh.material.uniforms.uA.value[0].y - snapY) < 1e-12, 'the swap shades with the SNAPSHOT that produced the geometry, not the newer sink state');
+  assert(a.stats.bakes === 2 && a.stats.verts > 0, 'stats count bakes and verts');
+  // queue gating
+  a.markDirty(); a.update(); a.update(); a.update();
+  assert(fake.posted.length === 1, 'queued actors do not double-post (update is idempotent in flight)');
+  fake.deliver();
+  a.update();
+  assert(fake.posted.length === 0, 'a clean actor posts nothing (idle-skip works when nothing marks dirty)');
+  a.setK(0.3);
+  a.update();
+  assert(Math.abs(fake.deliver().opts.blendK - 0.3) < 1e-12 && Math.abs(a.mesh.material.uniforms.uK.value - 0.3) < 1e-12, 'setK re-bakes at the new k and updates the display uniform');
+  // round-robin fairness across three actors
+  _resetSchedulerForTests();
+  fake.posted.length = 0;
+  const trio = [mk(), mk(), mk()];
+  trio.forEach((t) => t.update());
+  const order1 = [];
+  for (let i = 0; i < 3; i++) { fake.deliver(); order1.push(trio.findIndex((t) => t.stats.bakes === 1 && !order1.includes(trio.indexOf(t)))); }
+  trio.forEach((t) => { t.markDirty(); t.update(); });
+  let fair = true;
+  for (let i = 0; i < 3; i++) { fake.deliver(); }
+  fair = trio.every((t) => t.stats.bakes === 2);
+  assert(fair, 'round-robin: three dirty actors each get exactly one bake per cycle (no starvation)');
+  _resetSchedulerForTests();
+}
+
 console.log(failures === 0 ? '\nALL PASS' : `\n${failures} FAILURE(S)`);
 process.exit(failures === 0 ? 0 : 1);
