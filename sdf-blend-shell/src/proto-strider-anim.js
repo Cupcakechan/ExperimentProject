@@ -22,6 +22,7 @@ import { CREATURES } from './data/creatures.js';
 import { createBlendMaterial, createSurfaceNetsMaterial } from './render/blendMaterial.js';
 import { createGait } from './gait.js';
 import { setPrimTransform } from './anim.js';
+import { createSecondOrder } from './secondOrder.js';
 import { createInkPass } from './render/inkPass.js';
 import { createWorld } from './render/world.js';
 import { CAMERA_FOV, CAMERA_START, ORBIT_TARGET, BACKGROUND_COLOR } from './config.js';
@@ -154,19 +155,21 @@ const gait = createGait(proto); // cloned prims: gait writes land on the same in
 // shoulder (the forward/back plane), so the MEASURED z-corridors that
 // keep the arm off the torso and legs are untouched to first order.
 const SWING_PER_UNIT = 2.2; // rad per unit of foot-forward offset (excursion ~0.15 -> ~19 deg)
-const SWING_MAX = 0.35;     // hard clamp: 20 deg
-const SWING_SMOOTH = 8;     // 1/s low-pass (pendulum feel, no step snap)
+const SWING_MAX = 0.35;     // hard rail: 20 deg (clamps the APPLIED angle, not the spring state)
 const IDX = Object.fromEntries(prims.map((p, i) => [p.id, i]));
-const swing = { l: 0, r: 0 }; // smoothed arm angles
-const swingFore = { l: 0, r: 0 }; // LAGGED copy of swing: the lag difference is the elbow sway
-// Forearm follow-through: the forearm WORLD angle chases the shoulder
-// swing through a slower low-pass; (lagged - swing) becomes the elbow-
-// relative angle so the arm reads as a loose double pendulum, not a
-// stick. Clamped like a real elbow: flexes forward, barely hyperextends.
-const FORE_SMOOTH = 4;       // slower than SWING_SMOOTH 8 => visible lag
-const FORE_GAIN = 1.6;       // amplifies the lag into readable sway
+// PASS A (animation principles): SECOND-ORDER SPRINGS replace the old
+// first-order low-passes. A low-pass has no velocity memory — it turns
+// instantly at target reversals, the measured mechanism of the stiff
+// read. The shoulder spring overshoots ~9% and settles (follow-through,
+// slow in/out); the forearm spring CHASES THE SHOULDER OUTPUT, so the
+// elbow lag + catch-up emerge from the chain (overlapping action).
+const SHOULDER_F = 1.2, SHOULDER_Z = 0.6; // Hz / damping (z 0.6 => ~9% overshoot, suite-anchored)
+const FORE_F = 1.0, FORE_Z = 0.5;         // slower + looser than the shoulder => natural drag
+const FORE_GAIN = 1.6;                    // scales the chain lag into readable elbow sway
 const FORE_FLEX_MAX = 0.30;  // forward flex clamp (17 deg)
 const FORE_HYPER_MAX = 0.06; // backward clamp (3 deg): elbows do not bend backward
+const armSpring = { l: createSecondOrder(SHOULDER_F, SHOULDER_Z, 1, 0), r: createSecondOrder(SHOULDER_F, SHOULDER_Z, 1, 0) };
+const foreSpring = { l: createSecondOrder(FORE_F, FORE_Z, 1, 0), r: createSecondOrder(FORE_F, FORE_Z, 1, 0) };
 const _rot = new THREE.Matrix4();
 const _toPivot = new THREE.Matrix4();
 const _m = new THREE.Matrix4();
@@ -189,22 +192,20 @@ function swingArm(armId, foreId, pivotS, pivotE, theta, rel) {
 function updateArmSwing(dt) {
   const uB = simMat.uniforms.uB.value;
   // DIFFERENTIAL drive: d > 0 when the RIGHT foot is ahead (forward =
-  // -x). Zero-centered by construction — the absolute foot offset is
-  // one-sided (the planted foot only sweeps BACKWARD of rest), which
-  // swung both arms back and never forward (MEASURED -0.5..+19.8 deg).
+  // -x). Zero-centered by construction; mirrored targets into identical
+  // linear springs => outputs are exactly anti-phase.
   const d = (uB[IDX.leg_l].x - uB[IDX.leg_r].x) / 2;
-  const tL = Math.max(-SWING_MAX, Math.min(SWING_MAX, -SWING_PER_UNIT * d));
-  const tR = -tL; // exact anti-phase
-  const k = Math.min(1, dt * SWING_SMOOTH);
-  swing.l += (tL - swing.l) * k;
-  swing.r += (tR - swing.r) * k;
-  const kf = Math.min(1, dt * FORE_SMOOTH);
-  swingFore.l += (swing.l - swingFore.l) * kf;
-  swingFore.r += (swing.r - swingFore.r) * kf;
-  const relL = Math.max(-FORE_FLEX_MAX, Math.min(FORE_HYPER_MAX, FORE_GAIN * (swingFore.l - swing.l)));
-  const relR = Math.max(-FORE_FLEX_MAX, Math.min(FORE_HYPER_MAX, FORE_GAIN * (swingFore.r - swing.r)));
-  swingArm('arm_l', 'fore_l', SHOULDER, ELBOW, swing.l, relL);
-  swingArm('arm_r', 'fore_r', mirrorZ(SHOULDER), mirrorZ(ELBOW), swing.r, relR);
+  const target = -SWING_PER_UNIT * d;
+  const swL = armSpring.l.update(target, dt);
+  const swR = armSpring.r.update(-target, dt);
+  const thL = Math.max(-SWING_MAX, Math.min(SWING_MAX, swL));
+  const thR = Math.max(-SWING_MAX, Math.min(SWING_MAX, swR));
+  // the forearm chases the UNCLAMPED shoulder spring: the chain lag IS
+  // the elbow sway; the elbow rail clamps only the applied angle
+  const relL = Math.max(-FORE_FLEX_MAX, Math.min(FORE_HYPER_MAX, FORE_GAIN * (foreSpring.l.update(swL, dt) - swL)));
+  const relR = Math.max(-FORE_FLEX_MAX, Math.min(FORE_HYPER_MAX, FORE_GAIN * (foreSpring.r.update(swR, dt) - swR)));
+  swingArm('arm_l', 'fore_l', SHOULDER, ELBOW, thL, relL);
+  swingArm('arm_r', 'fore_r', mirrorZ(SHOULDER), mirrorZ(ELBOW), thR, relR);
 }
 
 // --- worker ---

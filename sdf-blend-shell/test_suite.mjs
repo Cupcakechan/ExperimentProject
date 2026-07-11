@@ -2130,5 +2130,44 @@ console.log('Section R4: Surface Nets — narrow-band ≡ full grid');
   assert(tiny.usedMethod === 'full-fallback', 'seedless field falls back to the full grid and reports it (usedMethod full-fallback)');
 }
 
+// ---------- Section A: second-order spring (the de-stiffening primitive) ----------
+// createSecondOrder is the animation-principles workhorse: follow-through
+// (overshoot + settle), overlapping action (chained lag), slow in / slow
+// out, and anticipation (r < 0) from one integrator. These probes pin the
+// BEHAVIORS the rig relies on, with hand-checkable anchors: the ζ=0.6
+// overshoot is theory e^(−πζ/√(1−ζ²)) ≈ 9.5% (measured 8.9% discrete).
+console.log('Section A: second-order spring behaviors');
+{
+  const { createSecondOrder } = await import('./src/secondOrder.js');
+  const step = (f, z, r, dt, T) => {
+    const s = createSecondOrder(f, z, r, 0);
+    let mx = -1e9, mn = 1e9, y = 0;
+    for (let t = 0; t < T; t += dt) { y = s.update(1, dt); mx = Math.max(mx, y); mn = Math.min(mn, y); }
+    return { final: y, max: mx, min: mn, s };
+  };
+  const crit = step(1, 1, 0, 1 / 120, 6);
+  assert(Math.abs(crit.final - 1) < 1e-4, 'step response converges to the target (f1 z1 r0, 6s)');
+  assert(crit.max <= 1 + 1e-6, 'critically damped NEVER overshoots (z=1 monotone approach)');
+  const under = step(1, 0.6, 0, 1 / 120, 8);
+  assert(under.max > 1.05 && under.max < 1.12, `underdamped z0.6 overshoots ~9% (theory 9.5%, measured ${((under.max - 1) * 100).toFixed(1)}%) — FOLLOW-THROUGH exists`);
+  assert(Math.abs(under.final - 1) < 1e-4, 'underdamped overshoot SETTLES back to the target (no ringing residue)');
+  const antic = step(1, 1, -1, 1 / 120, 6);
+  assert(antic.min < -0.1, 'r=-1 winds up OPPOSITE first (procedural anticipation, dips ~-0.21)');
+  assert(Math.abs(antic.final - 1) < 1e-4, 'anticipation still converges to the target');
+  const wild = step(8, 0.3, 1, 0.1, 10);
+  assert(Math.max(Math.abs(wild.max), Math.abs(wild.min)) < 3 && Math.abs(wild.final - 1) < 1e-3, 'stability clamp: an f=8Hz spring at dt=0.1 (5x undersampled) stays bounded and converges instead of exploding');
+  const a60 = step(1, 1, 1, 1 / 60, 2).final, a240 = step(1, 1, 1, 1 / 240, 2).final;
+  assert(Math.abs(a60 - a240) < 0.005, 'framerate consistency: dt 1/60 vs 1/240 agree at t=2s');
+  const s = createSecondOrder(1.5, 0.7, 1, 0);
+  for (let t = 0; t < 6; t += 1 / 60) s.update(0.5, 1 / 60);
+  const settled = s.value;
+  for (let i = 0; i < 100; i++) s.update(0.5, 1 / 60);
+  assert(Math.abs(s.value - settled) < 1e-9, 'pause-safety: a settled spring on a frozen target does not drift');
+  assert(Math.abs(s.velocity) < 1e-4, 'velocity reads ~0 after settle (the getter is truthful)');
+  const held = s.value;
+  s.update(0.9, 0);
+  assert(s.value === held, 'dt <= 0 holds the value exactly (pause contract)');
+}
+
 console.log(failures === 0 ? '\nALL PASS' : `\n${failures} FAILURE(S)`);
 process.exit(failures === 0 ? 0 : 1);
