@@ -223,6 +223,20 @@ const _chestM = new THREE.Matrix4();
 const _headM = new THREE.Matrix4();
 const _cR = new THREE.Matrix4(), _cT = new THREE.Matrix4();
 const _hRx = new THREE.Matrix4(), _hRy = new THREE.Matrix4(), _hT = new THREE.Matrix4();
+// --- PASS D (animation principles): footfall SQUASH & STRETCH — the
+// SDF signature move. Each landing pulses a fast bouncy spring; its
+// output compresses the torso VERTICALLY ABOUT THE PELVIS (the mass
+// settles onto the planted leg; hips stay put so the legs hold their
+// IK) while uR fattens by 1/sqrt(lengthScale) to preserve volume.
+// The head and arms ride the compression via their premultiplied
+// matrices but keep their own shapes — squash the mass, not the face.
+const SQUASH_AMP = 0.07;     // 7% target compression per impact
+const SQUASH_PULSE_T = 0.09; // s the impact target holds before releasing
+const squashSpring = createSecondOrder(4, 0.4, 1, 0); // fast + underdamped: dip, REBOUND past rest (the stretch), settle
+let squashPulse = 0;
+const footWasAir = { l: false, r: false };
+const REST_R = { body: prims[IDX.body].r, neck: prims[IDX.neck].r };
+const _bS = new THREE.Matrix4();
 const _bodyM = new THREE.Matrix4(); // identity until the first update (frame-0 safe)
 const _bRx = new THREE.Matrix4(), _bRy = new THREE.Matrix4(), _bT = new THREE.Matrix4();
 const TORSO_GROUP = ['body', 'neck']; // shared point body.b === neck.a: one matrix
@@ -241,6 +255,19 @@ function updateBodyMotion(dt) {
   // -sign(d). The spring's lag then holds that sway through the single
   // support. Tilt drops toward the SWING side = opposite the sway
   // (Rx(+) lowers +z, so tilt takes the negated normalized sway).
+  // footfall: an airborne -> planted transition of either foot pulses the squash
+  for (const side of ['l', 'r']) {
+    const li = IDX['leg_' + side], oi = IDX['leg_' + (side === 'l' ? 'r' : 'l')];
+    const air = uB[li].y > uB[oi].y + 0.005;
+    if (footWasAir[side] && !air) squashPulse = SQUASH_PULSE_T;
+    footWasAir[side] = air;
+  }
+  squashPulse = Math.max(0, squashPulse - dt);
+  const squash = squashSpring.update(squashPulse > 0 ? -SQUASH_AMP : 0, dt);
+  const lenS = 1 + squash;
+  const radS = 1 / Math.sqrt(Math.max(0.5, lenS)); // volume: r scales by 1/sqrt(length)
+  simMat.uniforms.uR.value[IDX.body] = REST_R.body * radS;
+  simMat.uniforms.uR.value[IDX.neck] = REST_R.neck * radS;
   const swayTarget = -SWAY_AMP * Math.max(-1, Math.min(1, d / D_SOFT));
   const sway = swaySpring.update(swayTarget, dt);
   const tilt = -TILT_AMP * (sway / SWAY_AMP);
@@ -248,7 +275,8 @@ function updateBodyMotion(dt) {
   _bRx.makeRotationX(tilt);
   _bRy.makeRotationY(yaw);
   _bT.makeTranslation(-PELVIS[0], -PELVIS[1], -PELVIS[2]);
-  _bodyM.makeTranslation(PELVIS[0], PELVIS[1], PELVIS[2] + sway).multiply(_bRx).multiply(_bRy).multiply(_bT);
+  _bS.makeScale(1, lenS, 1); // pelvis-anchored vertical squash (T(-P) is applied first)
+  _bodyM.makeTranslation(PELVIS[0], PELVIS[1], PELVIS[2] + sway).multiply(_bRx).multiply(_bRy).multiply(_bS).multiply(_bT);
   // chest counter-yaw for the shoulder line (arms compose this one)
   _cR.makeRotationY(-COUNTER_GAIN * yaw);
   _cT.makeTranslation(-CHEST[0], -CHEST[1], -CHEST[2]);
@@ -318,9 +346,10 @@ let displayReady = false;
 function snapshotPrims() {
   const uA = simMat.uniforms.uA.value;
   const uB = simMat.uniforms.uB.value;
+  const uR = simMat.uniforms.uR.value;
   return prims.map((p, i) => ({ // cloned prims: the worker must see THIGH_K
     type: p.type,
-    r: p.r,
+    r: uR[i], // LIVE radius, not rest: Pass D squash modulates uR and the worker must mesh it
     kCap: p.kCap,
     kPrim: p.kPrim,
     paint: p.paint,
