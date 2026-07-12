@@ -787,3 +787,31 @@
 - Route: creature-forge (animation section — stabilizer frequency rule:
   cancellation springs sit ABOVE the disturbance frequency; lag is for
   character, not for the canceling axis).
+
+## 2026-07-11 — decompose a failing COMPOUND probe before diagnosing (the pause "failure" was the probe)
+- What broke / what happened: during Section RIG development, the pause-
+  safety probe reported FAIL — one boolean AND-ing two claims (sink
+  uniforms unchanged after 10x update(0), AND pose.y unchanged after
+  updateBob). Near-miss: it read as a rig pause-safety defect minutes
+  after a bit-exact parity certification. Decomposed, the uniforms were
+  bit-identical; the failing conjunct was pose.y — updateBob after a
+  completed frame reads POST-gait feet (its in-loop read is pre-gait),
+  so the first paused call refreshes pose.y ONCE onto the newest feet,
+  then holds exactly (second call === first).
+- Root cause: the compound assertion collapsed two different contracts
+  into one bit, and the probe itself encoded a framing assumption —
+  that a pre-gait bob value should equal a post-gait re-read. The rig
+  was correct; the probe's model of "unchanged" was wrong.
+- Verification gap it exposed: a conjunction reports one bit for N
+  claims — the failing claim is unidentifiable without splitting; and
+  probe scaffolding is code that can be wrong in ways that mimic real
+  defects (the same failure shape as lesson 2026-07-07 "probes encode
+  assumptions", now at probe-STRUCTURE level).
+- Plug shipped: Section RIG encodes the contracts separately — "10x
+  update(0) leaves every sink uniform bit-identical" and "updateBob is
+  idempotent at held feet" — both PASS (suite 1443). One probe, one
+  claim.
+- Route: dev-method (testing discipline — compound-probe corollary to
+  the probe-invariant rule: when a multi-claim probe fails, decompose
+  it and identify the failing claim before concluding anything about
+  the code under test).
