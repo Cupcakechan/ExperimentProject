@@ -13,7 +13,7 @@
 // ============================================================
 
 import { readdirSync, statSync } from 'node:fs';
-import { join } from 'node:path';
+import { join, basename } from 'node:path';
 import { pathToFileURL } from 'node:url';
 
 let failures = 0;
@@ -47,7 +47,7 @@ function walk(dir, out = []) {
   return out;
 }
 
-const modules = walk('src').filter((p) => !p.endsWith('main.js') && !p.split('/').pop().startsWith('proto-') && !p.endsWith('Worker.js')); // main.js + proto-* pages + *Worker.js need a real canvas/worker context
+const modules = walk('src').filter((p) => !p.endsWith('main.js') && !basename(p).startsWith('proto-') && !p.endsWith('Worker.js')); // main.js + proto-* pages + *Worker.js need a real canvas/worker context. basename(), not split('/'): Windows join() emits backslashes, so the split never matched there and the proto pages leaked into the import walk
 for (const modPath of modules) {
   try {
     await import(pathToFileURL(modPath).href);
