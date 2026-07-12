@@ -1,14 +1,17 @@
 # LESSONS.md — error record (feeds the dev-method)
 
-> **HARVESTED — 2026-07-11 (through pass 23).** Every entry below through
+> **HARVESTED — 2026-07-12 (through pass 28).** Every entry below through
 > "2026-07-11 — decompose a failing COMPOUND probe before diagnosing" is
 > processed: the original 20 per the 2026-07-07 harvest; the post-07-07
 > dev-method routes encoded in pass 23 (fallback observability,
 > mixed-severity metrics, one-probe-one-claim); the creature-forge routes
 > ARCHIVED in this file — which is now their canonical home (the
 > creature-forge skill is LOST; dev-method routes creature work at this
-> repo). Entries AFTER the compound-probe one are the unharvested queue —
-> currently the 2026-07-11 path-separator lesson.
+> repo). The 2026-07-11 path-separator lesson this header previously
+> queued was never written as an entry (a casualty of the recovery
+> session); it was harvested 2026-07-12 as **pass 28** directly from its
+> committed evidence — the `basename()` why-comment in `test_suite.mjs`
+> and the skill project's handoff record. The unharvested queue is EMPTY.
 
 ## 2026-07-03 — backtick inside a GLSL template literal
 - What broke / what happened: a backtick in a shader comment terminated the JS
