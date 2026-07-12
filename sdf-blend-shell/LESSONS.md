@@ -1,13 +1,14 @@
 # LESSONS.md — error record (feeds the dev-method)
 
-> **HARVESTED — 2026-07-07.** Every entry below through
-> "2026-07-07 — probes encode assumptions; refine the invariant, don't
-> delete the probe" (the original 20) has been included downstream:
-> process lessons (17 certified provenance, 18 edit-script discipline,
-> 20 probe-invariant refinement) into the dev-method skill; content
-> lessons (including 19, the displayed-read rule) into the
-> creature-forge skill. Entries AFTER that one are NEW since the
-> harvest — the unharvested queue starts there.
+> **HARVESTED — 2026-07-11 (through pass 23).** Every entry below through
+> "2026-07-11 — decompose a failing COMPOUND probe before diagnosing" is
+> processed: the original 20 per the 2026-07-07 harvest; the post-07-07
+> dev-method routes encoded in pass 23 (fallback observability,
+> mixed-severity metrics, one-probe-one-claim); the creature-forge routes
+> ARCHIVED in this file — which is now their canonical home (the
+> creature-forge skill is LOST; dev-method routes creature work at this
+> repo). Entries AFTER the compound-probe one are the unharvested queue —
+> currently the 2026-07-11 path-separator lesson.
 
 ## 2026-07-03 — backtick inside a GLSL template literal
 - What broke / what happened: a backtick in a shader comment terminated the JS
